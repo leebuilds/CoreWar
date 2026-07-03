@@ -51,6 +51,35 @@ does not carry into future games.
 - Multiple valuable roles and playstyles
 - Replayability through classes, traps, upgrades, maps, and dynamic events
 
+## Getting Started (Unity)
+
+This repository is a Unity project (built against Unity 6; any Unity 6.x
+version should work — if Unity Hub asks, pick your installed 6000.x editor).
+
+1. Open Unity Hub, choose **Add project from disk**, and select this folder.
+2. Open the project and let Unity import the assets.
+3. Open `Assets/Scenes/MainMenu.unity` and press Play.
+4. Click **PLAY** in the menu to load the voxel playing field.
+
+In the field scene:
+
+- WASD to move
+- Mouse to look
+- Space to jump
+- Left click to place a voxel on the grid
+- Right click to remove only voxels you placed
+- Esc to return to the menu
+
+The menu UI and the voxel field are generated from code at runtime:
+
+- `Assets/Scripts/MainMenuController.cs` – minimalist main menu
+- `Assets/Scripts/VoxelFieldBuilder.cs` – flat 32x32 grid of white voxels
+  with overhead directional lighting and cast shadows
+- `Assets/Scripts/SimpleFlyCamera.cs` – first-person physics controller
+  (movement, jump, and grid building)
+- `Assets/Scripts/PenInkShadowEffect.cs` + `Assets/Scripts/PenInkShadowPost.shader`
+  – pen-and-ink crosshatch post effect for shadows
+
 ## Documentation
 
 See the [full game design document](docs/Third_Person_Shooter_Game_Design_v2.md)
