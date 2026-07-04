@@ -8,6 +8,13 @@ using UnityEngine.SceneManagement;
 [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
 public class ThirdPersonController : MonoBehaviour
 {
+    enum HotbarSlot
+    {
+        Gun,
+        Hammer,
+        Blueprint
+    }
+
     static readonly VoxelLightingWorld.BuildPieceType[] BuildPieceOptions =
     {
         VoxelLightingWorld.BuildPieceType.Wall,
@@ -60,6 +67,17 @@ public class ThirdPersonController : MonoBehaviour
     public int buildSnapRadius = 2;
     public int rectangleMaxCells = 12;
 
+    [Header("Tools")]
+    public float hammerRangeVoxels = 1f;
+    public float bulletSpeed = 95f;
+    public float bulletGravity = 3.5f;
+    public float bulletLifetime = 4f;
+    public float bulletLandedLifetime = 2.5f;
+    public float gunRecoilVerticalRandomness = 3.2f;
+    public float gunRecoilHorizontalRandomness = 0.18f;
+    public float gunRecoilKickDuration = 0.11f;
+    public float gunMuzzleForwardOffset = 0.55f;
+
     [Header("Reticle")]
     public float crosshairGap = 5f;
     public float crosshairLength = 10f;
@@ -78,17 +96,31 @@ public class ThirdPersonController : MonoBehaviour
     float _yaw;
     float _pitch;
     bool _grounded;
-    bool _buildMode;
     bool _selectorOpen;
     Vector2 _selectorDirection;
+    HotbarSlot _selectedHotbarSlot = HotbarSlot.Gun;
     VoxelLightingWorld.BuildPieceType _selectedPiece = VoxelLightingWorld.BuildPieceType.Wall;
     VoxelLightingWorld.BuildPieceCandidate _buildCandidate;
     bool _hasBuildCandidate;
+    bool _orientationLocked;
     bool _scrollTargetLocked;
     Vector3Int _scrollLockedCell;
     bool _mouseMovedThisFrame;
+    GameObject _gunRoot;
+    GameObject _hammerRoot;
+    GameObject _blueprintRoot;
+    GameObject _muzzleFlashRoot;
+    float _gunKickTimer;
+    float _muzzleFlashTimer;
+    float _hammerSwingTimer;
+    Vector2 _gunRecoilPeak;
+    Vector2 _gunRecoilResidual;
+    float _gunRecoilKickTimer;
+    bool _gunRecoilAimApplied;
     readonly List<GameObject> _previewRoots = new List<GameObject>();
     readonly List<VoxelLightingWorld.BuildPieceCandidate> _rectangleCandidates =
+        new List<VoxelLightingWorld.BuildPieceCandidate>();
+    readonly List<VoxelLightingWorld.BuildPieceCandidate> _rectanglePlaceCandidates =
         new List<VoxelLightingWorld.BuildPieceCandidate>();
     bool[] _rectangleValidFlags = new bool[0];
     bool _rectangleDragActive;
@@ -101,6 +133,8 @@ public class ThirdPersonController : MonoBehaviour
     Texture2D _radialTexture;
     VoxelLightingWorld.BuildPieceType _radialTexturePiece;
     PhysicsMaterial _slipperyMaterial;
+
+    bool BuildModeActive => _selectedHotbarSlot == HotbarSlot.Blueprint;
 
     void Awake()
     {
@@ -131,6 +165,7 @@ public class ThirdPersonController : MonoBehaviour
     void LateUpdate()
     {
         UpdateCameraTransform();
+        UpdateHeldToolVisuals();
         UpdateCharacterAim();
         UpdateBuildPreview();
     }
@@ -149,6 +184,9 @@ public class ThirdPersonController : MonoBehaviour
                 renderer.enabled = false;
             }
         }
+
+        CreateHeldToolVisuals();
+        RefreshHeldToolVisibility();
     }
 
     void Update()
@@ -162,8 +200,8 @@ public class ThirdPersonController : MonoBehaviour
         }
 
         HandleLook();
-        HandleBuildModeToggle();
-        HandleBuildingInput();
+        HandleHotbarInput();
+        HandleSelectedToolInput();
 
         if (Input.GetButtonDown("Jump") && CanJump())
         {
@@ -204,7 +242,62 @@ public class ThirdPersonController : MonoBehaviour
         cameraYawPivot.rotation = Quaternion.Euler(0f, _yaw, 0f);
         cameraPitchPivot.localRotation = Quaternion.Euler(_pitch, 0f, 0f);
         viewCamera.transform.localPosition = firstPersonCameraOffset;
-        viewCamera.transform.localRotation = Quaternion.identity;
+        viewCamera.transform.localRotation = CurrentGunRecoilRotation();
+    }
+
+    Quaternion CurrentGunRecoilRotation()
+    {
+        if (_gunRecoilKickTimer <= 0f || _gunRecoilPeak.sqrMagnitude <= 0.0001f)
+        {
+            return Quaternion.identity;
+        }
+
+        float duration = Mathf.Max(0.001f, gunRecoilKickDuration);
+        float normalizedTime = 1f - Mathf.Clamp01(_gunRecoilKickTimer / duration);
+        float verticalScale = RecoilVerticalVisualScale(normalizedTime);
+        float horizontalScale = RecoilHorizontalVisualScale(normalizedTime);
+        return Quaternion.Euler(
+            -_gunRecoilPeak.y * verticalScale,
+            _gunRecoilPeak.x * horizontalScale,
+            0f);
+    }
+
+    float RecoilVerticalVisualScale(float normalizedTime)
+    {
+        if (normalizedTime <= 0.5f)
+        {
+            return Mathf.Sin(normalizedTime * Mathf.PI);
+        }
+
+        float peakY = Mathf.Max(0.001f, _gunRecoilPeak.y);
+        float settleRatio = _gunRecoilResidual.y / peakY;
+        float downT = (normalizedTime - 0.5f) * 2f;
+        return Mathf.Lerp(1f, settleRatio, downT);
+    }
+
+    float RecoilHorizontalVisualScale(float normalizedTime)
+    {
+        if (normalizedTime <= 0.5f)
+        {
+            return Mathf.Sin(normalizedTime * Mathf.PI);
+        }
+
+        return 1f;
+    }
+
+    Ray BuildCenterAimRay()
+    {
+        Vector3 origin = cameraYawPivot != null
+            ? cameraYawPivot.position
+            : transform.position + Vector3.up * eyeHeight;
+        Vector3 forward = Quaternion.Euler(0f, _yaw, 0f) * Quaternion.Euler(_pitch, 0f, 0f) * Vector3.forward;
+        return new Ray(origin, forward);
+    }
+
+    void ApplyGunRecoilToAim()
+    {
+        _yaw += _gunRecoilResidual.x;
+        _pitch = Mathf.Clamp(_pitch - _gunRecoilResidual.y, minPitch, maxPitch);
     }
 
     void UpdateCharacterAim()
@@ -310,6 +403,160 @@ public class ThirdPersonController : MonoBehaviour
         return direction;
     }
 
+    void HandleHotbarInput()
+    {
+        float scroll = Input.mouseScrollDelta.y;
+        if (scroll > 0.01f)
+        {
+            SelectHotbarSlot(NextHotbarSlot(1));
+        }
+        else if (scroll < -0.01f)
+        {
+            SelectHotbarSlot(NextHotbarSlot(-1));
+        }
+
+        if (Input.GetKeyDown(KeyCode.Alpha1))
+        {
+            SelectHotbarSlot(HotbarSlot.Gun);
+        }
+        else if (Input.GetKeyDown(KeyCode.Alpha2))
+        {
+            SelectHotbarSlot(HotbarSlot.Hammer);
+        }
+        else if (Input.GetKeyDown(KeyCode.Alpha3))
+        {
+            SelectHotbarSlot(HotbarSlot.Blueprint);
+        }
+    }
+
+    HotbarSlot NextHotbarSlot(int direction)
+    {
+        const int slotCount = 3;
+        int next = ((int)_selectedHotbarSlot + direction + slotCount) % slotCount;
+        return (HotbarSlot)next;
+    }
+
+    void SelectHotbarSlot(HotbarSlot slot)
+    {
+        if (_selectedHotbarSlot == slot)
+        {
+            return;
+        }
+
+        bool wasBuilding = BuildModeActive;
+        _selectedHotbarSlot = slot;
+        if (wasBuilding || BuildModeActive)
+        {
+            ClearBuildInteractionState();
+        }
+
+        RefreshHeldToolVisibility();
+    }
+
+    void HandleSelectedToolInput()
+    {
+        switch (_selectedHotbarSlot)
+        {
+            case HotbarSlot.Gun:
+                HandleGunInput();
+                break;
+            case HotbarSlot.Hammer:
+                HandleHammerInput();
+                break;
+            case HotbarSlot.Blueprint:
+                HandleBuildingInput();
+                break;
+        }
+    }
+
+    void HandleGunInput()
+    {
+        if (Input.GetMouseButtonDown(0))
+        {
+            FireGun();
+        }
+    }
+
+    void FireGun()
+    {
+        if (viewCamera == null)
+        {
+            return;
+        }
+
+        Ray shotRay = BuildCenterAimRay();
+        Vector3 spawnPosition = BulletSpawnPosition(shotRay);
+        var bullet = new GameObject("Projectile Bullet");
+        bullet.transform.position = spawnPosition;
+        bullet.transform.rotation = Quaternion.LookRotation(shotRay.direction, Vector3.up);
+        bullet.AddComponent<ProjectileBullet>().Initialize(
+            shotRay.direction * bulletSpeed,
+            bulletGravity,
+            bulletLifetime,
+            bulletLandedLifetime);
+
+        _gunKickTimer = 0.08f;
+        _muzzleFlashTimer = 0.045f;
+        _gunRecoilPeak = new Vector2(
+            UnityEngine.Random.Range(-gunRecoilHorizontalRandomness, gunRecoilHorizontalRandomness),
+            UnityEngine.Random.Range(gunRecoilVerticalRandomness * 0.55f, gunRecoilVerticalRandomness));
+        float verticalRetention = UnityEngine.Random.Range(0.35f, 0.58f);
+        _gunRecoilResidual = new Vector2(_gunRecoilPeak.x, _gunRecoilPeak.y * verticalRetention);
+        _gunRecoilKickTimer = gunRecoilKickDuration;
+        _gunRecoilAimApplied = false;
+    }
+
+    Vector3 BulletSpawnPosition(Ray ray)
+    {
+        float desiredOffset = Mathf.Max(0.05f, gunMuzzleForwardOffset);
+        Vector3 desiredSpawn = ray.origin + (ray.direction * desiredOffset);
+        if (Physics.Raycast(ray.origin, ray.direction, out var hit, desiredOffset,
+            Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        {
+            return ray.origin + (ray.direction * Mathf.Max(0.02f, hit.distance - 0.03f));
+        }
+
+        return desiredSpawn;
+    }
+
+    void HandleHammerInput()
+    {
+        if (Input.GetMouseButtonDown(0))
+        {
+            SwingHammer();
+        }
+    }
+
+    void SwingHammer()
+    {
+        _hammerSwingTimer = 0.18f;
+        if (viewCamera == null || voxelWorld == null)
+        {
+            return;
+        }
+
+        Ray ray = viewCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+        if (!Physics.Raycast(ray, out var hit, buildRange, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        {
+            return;
+        }
+
+        float hammerRange = Mathf.Max(0.1f, hammerRangeVoxels * (voxelWorld != null ? voxelWorld.VoxelSize : 1f));
+        Vector3 closestBodyPoint = _capsule != null
+            ? _capsule.ClosestPoint(hit.point)
+            : transform.position;
+        if (Vector3.Distance(closestBodyPoint, hit.point) > hammerRange)
+        {
+            return;
+        }
+
+        var marker = hit.collider.GetComponentInParent<PlayerBuiltVoxel>();
+        if (marker != null)
+        {
+            voxelWorld.TryRemovePlayerBuiltObject(marker);
+        }
+    }
+
     void HandleBuildingInput()
     {
         if (viewCamera == null || voxelWorld == null)
@@ -317,10 +564,9 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        if (!_buildMode)
+        if (!BuildModeActive)
         {
-            _hasBuildCandidate = false;
-            _scrollTargetLocked = false;
+            ClearBuildInteractionState();
             return;
         }
 
@@ -345,22 +591,14 @@ public class ThirdPersonController : MonoBehaviour
         }
     }
 
-    void HandleBuildModeToggle()
+    void ClearBuildInteractionState()
     {
-        if (!Input.GetKeyDown(KeyCode.F))
-        {
-            return;
-        }
-
-        _buildMode = !_buildMode;
         _selectorOpen = false;
         _hasBuildCandidate = false;
         _rectangleDragActive = false;
         _scrollTargetLocked = false;
-        if (!_buildMode)
-        {
-            DestroyPreviewRootsFrom(0);
-        }
+        _orientationLocked = false;
+        DestroyPreviewRootsFrom(0);
     }
 
     void HandleBuildOrientationInput()
@@ -370,16 +608,15 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        float scroll = Input.mouseScrollDelta.y;
-        if (scroll > 0.01f)
+        if (Input.GetKeyDown(KeyCode.Z))
+        {
+            _orientationLocked = !_orientationLocked;
+        }
+
+        if (Input.GetKeyDown(KeyCode.X))
         {
             TryLockScrollTarget();
             _buildOrientationIndex = (_buildOrientationIndex + 1) % BuildFaceNormals.Length;
-        }
-        else if (scroll < -0.01f)
-        {
-            TryLockScrollTarget();
-            _buildOrientationIndex = (_buildOrientationIndex + BuildFaceNormals.Length - 1) % BuildFaceNormals.Length;
         }
     }
 
@@ -441,7 +678,7 @@ public class ThirdPersonController : MonoBehaviour
         {
             if (_rectangleAllValid)
             {
-                voxelWorld.TryPlaceBuildPieceBatch(_rectangleCandidates);
+                voxelWorld.TryPlaceBuildPieceBatch(_rectanglePlaceCandidates);
                 UpdateBuildCandidate();
             }
 
@@ -615,10 +852,9 @@ public class ThirdPersonController : MonoBehaviour
         }
 
         Vector3Int startCell = rawCandidate.Cell + visibleNormal;
-        bool orientationLocked = Input.GetKey(KeyCode.LeftShift);
-        Vector3Int faceNormal = orientationLocked ? rawCandidate.FaceNormal : visibleNormal;
+        Vector3Int faceNormal = _orientationLocked ? rawCandidate.FaceNormal : visibleNormal;
         var marker = hit.collider.GetComponentInParent<PlayerBuiltVoxel>();
-        if (!orientationLocked && marker != null && marker.IsPanelPiece && marker.FaceNormal.y == 0)
+        if (!_orientationLocked && marker != null && marker.IsPanelPiece && marker.FaceNormal.y == 0)
         {
             startCell = marker.Cell + visibleNormal;
             faceNormal = marker.FaceNormal;
@@ -783,6 +1019,7 @@ public class ThirdPersonController : MonoBehaviour
     void RebuildRectangleCandidates()
     {
         _rectangleCandidates.Clear();
+        _rectanglePlaceCandidates.Clear();
 
         if (!_rectangleStartCandidate.HasTarget || !_rectangleEndCandidate.HasTarget)
         {
@@ -845,18 +1082,35 @@ public class ThirdPersonController : MonoBehaviour
             }
         }
 
-        if (_rectangleValidFlags.Length < _rectangleCandidates.Count)
+        if (_rectangleValidFlags.Length < _rectanglePlaceCandidates.Count)
         {
-            _rectangleValidFlags = new bool[_rectangleCandidates.Count];
+            _rectangleValidFlags = new bool[_rectanglePlaceCandidates.Count];
         }
 
-        _rectangleAllValid = voxelWorld.ValidateBuildPieceBatch(_rectangleCandidates, _rectangleValidFlags);
+        _rectangleAllValid =
+            _rectanglePlaceCandidates.Count > 0 &&
+            voxelWorld.ValidateBuildPieceBatch(_rectanglePlaceCandidates, _rectangleValidFlags) &&
+            RectangleCandidatesHaveLineOfSight();
+    }
+
+    bool RectangleCandidatesHaveLineOfSight()
+    {
+        for (int i = 0; i < _rectanglePlaceCandidates.Count; i++)
+        {
+            if (!HasLineOfSightToBuildCandidate(_rectanglePlaceCandidates[i]))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     void AddRectangleCandidate(Vector3Int cell, Vector3Int faceNormal)
     {
         if (voxelWorld.TryCreateBuildPieceCandidate(_selectedPiece, cell, faceNormal, out var candidate))
         {
+            _rectangleCandidates.Add(candidate);
             if (voxelWorld.IsBuildSurfaceOccupied(candidate))
             {
                 return;
@@ -867,7 +1121,7 @@ public class ThirdPersonController : MonoBehaviour
                 candidate.CanPlace = false;
             }
 
-            _rectangleCandidates.Add(candidate);
+            _rectanglePlaceCandidates.Add(candidate);
         }
     }
 
@@ -878,7 +1132,7 @@ public class ThirdPersonController : MonoBehaviour
 
     void UpdateBuildPreview()
     {
-        if (!_buildMode)
+        if (!BuildModeActive)
         {
             HidePreviewRoots();
             return;
@@ -909,6 +1163,117 @@ public class ThirdPersonController : MonoBehaviour
 
         UpdatePreviewRoot(0, _buildCandidate, _buildCandidate.CanPlace);
         HidePreviewRootsFrom(1);
+    }
+
+    void CreateHeldToolVisuals()
+    {
+        if (viewCamera == null || _gunRoot != null)
+        {
+            return;
+        }
+
+        Material gunMaterial = CreateHeldToolMaterial("Held Gun Material", new Color(0.08f, 0.08f, 0.09f, 1f));
+        Material hammerMaterial = CreateHeldToolMaterial("Held Hammer Material", new Color(0.32f, 0.23f, 0.14f, 1f));
+        Material metalMaterial = CreateHeldToolMaterial("Held Hammer Head Material", new Color(0.62f, 0.62f, 0.64f, 1f));
+        Material blueprintMaterial = CreateHeldToolMaterial("Held Blueprint Material", new Color(0.08f, 0.28f, 0.9f, 1f));
+        Material flashMaterial = CreateHeldToolMaterial("Muzzle Flash Material", new Color(1f, 0.72f, 0.16f, 1f));
+
+        _gunRoot = new GameObject("Held Gun");
+        _gunRoot.transform.SetParent(viewCamera.transform, false);
+        _gunRoot.transform.localPosition = new Vector3(0.34f, -0.26f, 0.62f);
+        _gunRoot.transform.localRotation = Quaternion.Euler(0f, -5f, 0f);
+        CreateHeldCube(_gunRoot.transform, "Gun Body", new Vector3(0f, 0f, 0f), new Vector3(0.24f, 0.16f, 0.28f), gunMaterial);
+        CreateHeldCube(_gunRoot.transform, "Gun Barrel", new Vector3(0.04f, 0.03f, 0.28f), new Vector3(0.1f, 0.1f, 0.42f), gunMaterial);
+        CreateHeldCube(_gunRoot.transform, "Gun Grip", new Vector3(-0.04f, -0.17f, -0.04f), new Vector3(0.08f, 0.26f, 0.1f), gunMaterial);
+        _muzzleFlashRoot = CreateHeldCube(_gunRoot.transform, "Muzzle Flash", new Vector3(0.04f, 0.03f, 0.52f), new Vector3(0.18f, 0.18f, 0.08f), flashMaterial);
+        _muzzleFlashRoot.SetActive(false);
+
+        _hammerRoot = new GameObject("Held Hammer");
+        _hammerRoot.transform.SetParent(viewCamera.transform, false);
+        _hammerRoot.transform.localPosition = new Vector3(0.34f, -0.31f, 0.58f);
+        CreateHeldCube(_hammerRoot.transform, "Hammer Handle", new Vector3(0f, -0.08f, 0f), new Vector3(0.06f, 0.38f, 0.06f), hammerMaterial);
+        CreateHeldCube(_hammerRoot.transform, "Hammer Head", new Vector3(0f, 0.14f, 0.02f), new Vector3(0.3f, 0.1f, 0.12f), metalMaterial);
+
+        _blueprintRoot = new GameObject("Held Blueprint");
+        _blueprintRoot.transform.SetParent(viewCamera.transform, false);
+        _blueprintRoot.transform.localPosition = new Vector3(0.3f, -0.24f, 0.54f);
+        _blueprintRoot.transform.localRotation = Quaternion.Euler(65f, -8f, -8f);
+        CreateHeldCube(_blueprintRoot.transform, "Blueprint Page", Vector3.zero, new Vector3(0.42f, 0.02f, 0.3f), blueprintMaterial);
+    }
+
+    GameObject CreateHeldCube(Transform parent, string objectName, Vector3 localPosition, Vector3 localScale, Material material)
+    {
+        var cube = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        cube.name = objectName;
+        cube.transform.SetParent(parent, false);
+        cube.transform.localPosition = localPosition;
+        cube.transform.localScale = localScale;
+        cube.GetComponent<MeshRenderer>().sharedMaterial = material;
+        Destroy(cube.GetComponent<Collider>());
+        return cube;
+    }
+
+    void RefreshHeldToolVisibility()
+    {
+        if (_gunRoot != null)
+        {
+            _gunRoot.SetActive(_selectedHotbarSlot == HotbarSlot.Gun);
+        }
+        if (_hammerRoot != null)
+        {
+            _hammerRoot.SetActive(_selectedHotbarSlot == HotbarSlot.Hammer);
+        }
+        if (_blueprintRoot != null)
+        {
+            _blueprintRoot.SetActive(_selectedHotbarSlot == HotbarSlot.Blueprint);
+        }
+    }
+
+    void UpdateHeldToolVisuals()
+    {
+        if (_gunRoot == null || _hammerRoot == null)
+        {
+            return;
+        }
+
+        if (_muzzleFlashTimer > 0f)
+        {
+            _muzzleFlashTimer = Mathf.Max(0f, _muzzleFlashTimer - Time.deltaTime);
+        }
+        if (_gunRecoilKickTimer > 0f)
+        {
+            _gunRecoilKickTimer = Mathf.Max(0f, _gunRecoilKickTimer - Time.deltaTime);
+            if (_gunRecoilKickTimer <= 0f && !_gunRecoilAimApplied)
+            {
+                ApplyGunRecoilToAim();
+                _gunRecoilAimApplied = true;
+                _gunRecoilPeak = Vector2.zero;
+            }
+        }
+        if (_gunKickTimer > 0f)
+        {
+            _gunKickTimer = Mathf.Max(0f, _gunKickTimer - Time.deltaTime);
+        }
+        if (_hammerSwingTimer > 0f)
+        {
+            _hammerSwingTimer = Mathf.Max(0f, _hammerSwingTimer - Time.deltaTime);
+        }
+
+        float kickProgress = _gunKickTimer > 0f
+            ? Mathf.Sin((1f - (_gunKickTimer / 0.08f)) * Mathf.PI)
+            : 0f;
+        _gunRoot.transform.localPosition = new Vector3(0.34f, -0.26f, 0.62f - (0.08f * kickProgress));
+        if (_muzzleFlashRoot != null)
+        {
+            _muzzleFlashRoot.SetActive(_muzzleFlashTimer > 0f && _selectedHotbarSlot == HotbarSlot.Gun);
+            float flashPulse = _muzzleFlashTimer > 0f ? UnityEngine.Random.Range(0.85f, 1.25f) : 1f;
+            _muzzleFlashRoot.transform.localScale = new Vector3(0.18f, 0.18f, 0.08f) * flashPulse;
+        }
+
+        float swingProgress = _hammerSwingTimer > 0f
+            ? Mathf.Sin((1f - (_hammerSwingTimer / 0.18f)) * Mathf.PI)
+            : 0f;
+        _hammerRoot.transform.localRotation = Quaternion.Euler(-55f * swingProgress, 0f, -10f);
     }
 
     void UpdatePreviewRoot(int index, VoxelLightingWorld.BuildPieceCandidate candidate, bool valid)
@@ -1026,10 +1391,11 @@ public class ThirdPersonController : MonoBehaviour
             normal = { textColor = new Color(0.15f, 0.15f, 0.15f) }
         };
         GUI.Label(new Rect(12, 8, 1100, 24),
-            _buildMode
+            BuildModeActive
                 ? BuildModeHelpText()
-                : "WASD: move   Mouse: look   Space: jump   F: build mode   Esc: menu",
+                : "WASD: move   Mouse: look   Space: jump   Mouse Wheel/1-3: hotbar   Left Click: use tool   Esc: menu",
             style);
+        DrawHotbar();
         DrawCrosshair();
         DrawBuildSelector();
     }
@@ -1055,6 +1421,41 @@ public class ThirdPersonController : MonoBehaviour
         GUI.DrawTexture(
             new Rect(centerX - halfThickness, centerY + crosshairGap, crosshairThickness, crosshairLength),
             Texture2D.whiteTexture);
+
+        GUI.color = previousColor;
+    }
+
+    void DrawHotbar()
+    {
+        const int slotCount = 3;
+        const float slotSize = 72f;
+        const float slotGap = 10f;
+        float totalWidth = (slotCount * slotSize) + ((slotCount - 1) * slotGap);
+        float startX = (Screen.width - totalWidth) * 0.5f;
+        float y = Screen.height - slotSize - 22f;
+
+        var labelStyle = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.MiddleCenter,
+            fontSize = 13,
+            fontStyle = FontStyle.Bold,
+            normal = { textColor = Color.black }
+        };
+
+        Color previousColor = GUI.color;
+        for (int i = 0; i < slotCount; i++)
+        {
+            var slot = (HotbarSlot)i;
+            bool selected = slot == _selectedHotbarSlot;
+            GUI.color = selected
+                ? new Color(0.2f, 0.85f, 0.3f, 0.9f)
+                : new Color(0.96f, 0.96f, 0.96f, 0.72f);
+
+            var rect = new Rect(startX + (i * (slotSize + slotGap)), y, slotSize, slotSize);
+            GUI.Box(rect, string.Empty);
+            GUI.color = Color.white;
+            GUI.Label(rect, $"{i + 1}\n{DisplayName(slot)}", labelStyle);
+        }
 
         GUI.color = previousColor;
     }
@@ -1149,6 +1550,21 @@ public class ThirdPersonController : MonoBehaviour
                 return "Trap Door";
             default:
                 return pieceType.ToString();
+        }
+    }
+
+    static string DisplayName(HotbarSlot slot)
+    {
+        switch (slot)
+        {
+            case HotbarSlot.Gun:
+                return "Gun";
+            case HotbarSlot.Hammer:
+                return "Hammer";
+            case HotbarSlot.Blueprint:
+                return "Blueprint";
+            default:
+                return slot.ToString();
         }
     }
 
@@ -1252,7 +1668,7 @@ public class ThirdPersonController : MonoBehaviour
 
         if (HasBuildOrientation(_selectedPiece))
         {
-            return $"Scroll: rotate {OrientationLabel()}";
+            return $"X: rotate {OrientationLabel()}";
         }
 
         return string.Empty;
@@ -1264,7 +1680,7 @@ public class ThirdPersonController : MonoBehaviour
             ? "   Ctrl+Left Drag: line/rectangle"
             : string.Empty;
         string lockHelp = HasBuildOrientation(_selectedPiece)
-            ? "   Hold Left Shift: lock orientation"
+            ? $"   Z: orientation lock {(_orientationLocked ? "ON" : "OFF")}"
             : string.Empty;
         string orientationHelp = OrientationHelpText();
         if (!string.IsNullOrEmpty(orientationHelp))
@@ -1272,7 +1688,7 @@ public class ThirdPersonController : MonoBehaviour
             orientationHelp = $"   {orientationHelp}";
         }
 
-        return $"BUILD MODE ({_selectedPiece})   F: exit   Left Click: place{dragHelp}{orientationHelp}{lockHelp}   Right Click + Mouse Direction: select   Esc: menu";
+        return $"BLUEPRINT ({_selectedPiece})   Mouse Wheel/1-3: hotbar   Left Click: place{dragHelp}{orientationHelp}{lockHelp}   Right Click + Mouse Direction: select   Esc: menu";
     }
 
     static Vector3Int PerpendicularHorizontalAxis(Vector3Int axis)
@@ -1302,6 +1718,21 @@ public class ThirdPersonController : MonoBehaviour
         }
 
         return normal.z >= 0f ? new Vector3Int(0, 0, 1) : new Vector3Int(0, 0, -1);
+    }
+
+    static Material CreateHeldToolMaterial(string materialName, Color color)
+    {
+        var shader = Shader.Find("Standard");
+        if (shader == null)
+        {
+            shader = Shader.Find("Unlit/Color");
+        }
+
+        return new Material(shader)
+        {
+            name = materialName,
+            color = color
+        };
     }
 
     static Material CreateTransparentMaterial(string materialName, Color color)

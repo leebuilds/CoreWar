@@ -195,6 +195,29 @@ public class VoxelLightingWorld : MonoBehaviour
         return false;
     }
 
+    public bool TryRemovePlayerBuiltObject(PlayerBuiltVoxel marker)
+    {
+        if (marker == null)
+        {
+            return false;
+        }
+
+        if (!marker.IsPanelPiece)
+        {
+            return TryRemovePlayerVoxel(marker);
+        }
+
+        var slot = new BuildPieceSlot(marker.Cell, marker.FaceNormal, marker.PieceType);
+        if (_buildPieces.TryGetValue(slot, out var go))
+        {
+            _buildPieces.Remove(slot);
+            Destroy(go);
+            return true;
+        }
+
+        return false;
+    }
+
     public bool TryGetBuildPieceCandidate(Ray ray, float range, BuildPieceType pieceType, out BuildPieceCandidate candidate)
     {
         return TryGetBuildPieceCandidate(ray, range, pieceType, Vector3Int.zero, out candidate);
