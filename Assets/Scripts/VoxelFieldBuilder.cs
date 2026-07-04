@@ -72,6 +72,11 @@ public class VoxelFieldBuilder : MonoBehaviour
 
     void CreatePlayer(VoxelLightingWorld voxelWorld)
     {
+        if (!GameSession.HasTeamSelected)
+        {
+            GameSession.BeginMatch(GameSession.Team.Red);
+        }
+
         var player = new GameObject("Player");
         player.transform.position = new Vector3(0f, 1.1f, -5f);
 
@@ -85,14 +90,19 @@ public class VoxelFieldBuilder : MonoBehaviour
         rb.constraints = RigidbodyConstraints.FreezeRotation;
         rb.interpolation = RigidbodyInterpolation.Interpolate;
 
-        var cameraPivot = new GameObject("Camera Pivot");
-        cameraPivot.transform.SetParent(player.transform, false);
-        cameraPivot.transform.localPosition = new Vector3(0f, 1.62f, 0f);
+        var visualRoot = new GameObject("Character Visual");
+        visualRoot.transform.SetParent(player.transform, false);
+        var robot = visualRoot.AddComponent<CapsuleRobotVisual>();
+        robot.Build(GameSession.SelectedTeam, GameSession.JerseyNumber);
+
+        var cameraRoot = new GameObject("Camera Rig");
+        var yawPivot = new GameObject("Camera Yaw Pivot");
+        var pitchPivot = new GameObject("Camera Pitch Pivot");
+        yawPivot.transform.SetParent(cameraRoot.transform, false);
+        pitchPivot.transform.SetParent(yawPivot.transform, false);
 
         var camObject = new GameObject("Main Camera") { tag = "MainCamera" };
-        camObject.transform.SetParent(cameraPivot.transform, false);
-        camObject.transform.localPosition = Vector3.zero;
-        camObject.transform.localRotation = Quaternion.identity;
+        camObject.transform.SetParent(pitchPivot.transform, false);
 
         var cam = camObject.AddComponent<Camera>();
         cam.clearFlags = CameraClearFlags.SolidColor;
@@ -112,9 +122,11 @@ public class VoxelFieldBuilder : MonoBehaviour
         effect.inkColor = new Color(0.34f, 0.34f, 0.36f, 1f);
         effect.paperTint = new Color(0.985f, 0.985f, 0.985f, 1f);
 
-        var controller = player.AddComponent<SimpleFlyCamera>();
+        var controller = player.AddComponent<ThirdPersonController>();
         controller.viewCamera = cam;
-        controller.cameraPivot = cameraPivot.transform;
+        controller.cameraYawPivot = yawPivot.transform;
+        controller.cameraPitchPivot = pitchPivot.transform;
+        controller.characterVisual = visualRoot.transform;
         controller.voxelWorld = voxelWorld;
     }
 

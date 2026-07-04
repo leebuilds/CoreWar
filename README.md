@@ -1,6 +1,6 @@
 # CoreWar
 
-CoreWar is a fast-paced, objective-driven third-person shooter set in a
+CoreWar is a fast-paced, objective-driven first-person shooter prototype set in a
 minimalist voxel world. Teams attack enemy mining operations while defending
 their own, making positioning, sabotage, and teamwork more important than
 simply collecting eliminations.
@@ -59,24 +59,41 @@ version should work — if Unity Hub asks, pick your installed 6000.x editor).
 1. Open Unity Hub, choose **Add project from disk**, and select this folder.
 2. Open the project and let Unity import the assets.
 3. Open `Assets/Scenes/MainMenu.unity` and press Play.
-4. Click **PLAY** in the menu to load the voxel playing field.
+4. Pick a team (Red, Blue, Yellow, or Green), then click **PLAY AS …** to load the arena.
 
 In the field scene:
 
-- WASD to move
-- Mouse to look
+- WASD to move (camera-relative)
+- Mouse to look (first-person camera)
 - Space to jump
-- Left click to place a voxel on the grid
-- Right click to remove only voxels you placed
+- F to toggle build mode
+- In build mode, left click places the selected build piece
+- In build mode, right click and move the mouse to choose a build piece
+- In build mode, Ctrl + left-drag places a wall/window/door rectangle or
+  one-axis ceiling strip
+- Mouse wheel rotates wall/window/door orientation in build mode
 - Esc to return to the menu
+
+Your robot gets a random jersey number (1–99) each match, with pen-and-ink
+shading on the torn team jersey and the number on the back.
+
+Build pieces currently include walls, windows, ceilings, doors, trap doors, and
+ladders. Placement previews snap toward nearby valid visible positions, require
+line of sight, avoid occupied slots, and show red when the full requested shape
+cannot be placed.
 
 The menu UI and the voxel field are generated from code at runtime:
 
-- `Assets/Scripts/MainMenuController.cs` – minimalist main menu
+- `Assets/Scripts/MainMenuController.cs` – team picker + play flow
+- `Assets/Scripts/GameSession.cs` – carries team and jersey number into the game
 - `Assets/Scripts/VoxelFieldBuilder.cs` – flat 32x32 grid of white voxels
   with overhead directional lighting and cast shadows
-- `Assets/Scripts/SimpleFlyCamera.cs` – first-person physics controller
-  (movement, jump, and grid building)
+- `Assets/Scripts/ThirdPersonController.cs` – first-person physics controller
+  with build-mode placement tools
+- `Assets/Scripts/CapsuleRobotVisual.cs` + `Assets/Scripts/JerseyInkUtility.cs`
+  – capsule robot with pen-and-ink jersey
+- `Assets/Scripts/VoxelLightingWorld.cs` – voxel occupancy and build-piece
+  placement rules
 - `Assets/Scripts/PenInkShadowEffect.cs` + `Assets/Scripts/PenInkShadowPost.shader`
   – pen-and-ink crosshatch post effect for shadows
 
