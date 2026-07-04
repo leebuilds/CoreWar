@@ -280,6 +280,33 @@ public class VoxelLightingWorld : MonoBehaviour
             return false;
         }
 
+        PlaceBuildPieceUnchecked(candidate);
+        return true;
+    }
+
+    public bool TryPlaceBuildPieceBatch(IReadOnlyList<BuildPieceCandidate> candidates)
+    {
+        if (candidates == null || candidates.Count == 0)
+        {
+            return false;
+        }
+
+        var validFlags = new bool[candidates.Count];
+        if (!ValidateBuildPieceBatch(candidates, validFlags))
+        {
+            return false;
+        }
+
+        for (int i = 0; i < candidates.Count; i++)
+        {
+            PlaceBuildPieceUnchecked(candidates[i]);
+        }
+
+        return true;
+    }
+
+    void PlaceBuildPieceUnchecked(BuildPieceCandidate candidate)
+    {
         var slot = new BuildPieceSlot(candidate.Cell, candidate.FaceNormal, candidate.PieceType);
         var root = new GameObject($"Built {candidate.PieceType} ({candidate.Cell.x},{candidate.Cell.y},{candidate.Cell.z})");
         root.transform.SetParent(_builtRoot, false);
@@ -303,7 +330,6 @@ public class VoxelLightingWorld : MonoBehaviour
         var marker = root.AddComponent<PlayerBuiltVoxel>();
         marker.InitializePanel(candidate.Cell, candidate.FaceNormal, candidate.PieceType);
         _buildPieces[slot] = root;
-        return true;
     }
 
     public bool CanBuildAt(Vector3Int cell)

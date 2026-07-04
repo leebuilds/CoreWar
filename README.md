@@ -69,9 +69,12 @@ In the field scene:
 - F to toggle build mode
 - In build mode, left click places the selected build piece
 - In build mode, right click and move the mouse to choose a build piece
-- In build mode, Ctrl + left-drag places a wall/window/door rectangle or
-  one-axis ceiling strip
+- In build mode, Ctrl + left-drag places a wall/window rectangle or
+  horizontal ceiling rectangle
 - Mouse wheel rotates wall/window/door orientation in build mode
+- Scrolling without moving the mouse keeps the targeted voxel fixed while
+  cycling orientations
+- Hold Left Shift to lock wall/window/door orientation in build mode
 - Esc to return to the menu
 
 Your robot gets a random jersey number (1–99) each match, with pen-and-ink

@@ -84,6 +84,9 @@ public class ThirdPersonController : MonoBehaviour
     VoxelLightingWorld.BuildPieceType _selectedPiece = VoxelLightingWorld.BuildPieceType.Wall;
     VoxelLightingWorld.BuildPieceCandidate _buildCandidate;
     bool _hasBuildCandidate;
+    bool _scrollTargetLocked;
+    Vector3Int _scrollLockedCell;
+    bool _mouseMovedThisFrame;
     readonly List<GameObject> _previewRoots = new List<GameObject>();
     readonly List<VoxelLightingWorld.BuildPieceCandidate> _rectangleCandidates =
         new List<VoxelLightingWorld.BuildPieceCandidate>();
@@ -178,13 +181,16 @@ public class ThirdPersonController : MonoBehaviour
 
     void HandleLook()
     {
+        Vector2 lookDelta = new Vector2(Input.GetAxisRaw("Mouse X"), Input.GetAxisRaw("Mouse Y"));
+        _mouseMovedThisFrame = lookDelta.sqrMagnitude > 0.0001f;
+
         if (_selectorOpen)
         {
             return;
         }
 
-        _yaw += Input.GetAxisRaw("Mouse X") * lookSensitivity;
-        _pitch = Mathf.Clamp(_pitch - Input.GetAxisRaw("Mouse Y") * lookSensitivity, minPitch, maxPitch);
+        _yaw += lookDelta.x * lookSensitivity;
+        _pitch = Mathf.Clamp(_pitch - lookDelta.y * lookSensitivity, minPitch, maxPitch);
     }
 
     void UpdateCameraTransform()
@@ -314,7 +320,13 @@ public class ThirdPersonController : MonoBehaviour
         if (!_buildMode)
         {
             _hasBuildCandidate = false;
+            _scrollTargetLocked = false;
             return;
+        }
+
+        if (_mouseMovedThisFrame)
+        {
+            _scrollTargetLocked = false;
         }
 
         HandleBuildOrientationInput();
@@ -344,6 +356,7 @@ public class ThirdPersonController : MonoBehaviour
         _selectorOpen = false;
         _hasBuildCandidate = false;
         _rectangleDragActive = false;
+        _scrollTargetLocked = false;
         if (!_buildMode)
         {
             DestroyPreviewRootsFrom(0);
@@ -352,7 +365,7 @@ public class ThirdPersonController : MonoBehaviour
 
     void HandleBuildOrientationInput()
     {
-        if (!IsRectangleBuildPiece(_selectedPiece))
+        if (!HasBuildOrientation(_selectedPiece))
         {
             return;
         }
@@ -360,17 +373,30 @@ public class ThirdPersonController : MonoBehaviour
         float scroll = Input.mouseScrollDelta.y;
         if (scroll > 0.01f)
         {
+            TryLockScrollTarget();
             _buildOrientationIndex = (_buildOrientationIndex + 1) % BuildFaceNormals.Length;
         }
         else if (scroll < -0.01f)
         {
+            TryLockScrollTarget();
             _buildOrientationIndex = (_buildOrientationIndex + BuildFaceNormals.Length - 1) % BuildFaceNormals.Length;
         }
     }
 
+    void TryLockScrollTarget()
+    {
+        if (_mouseMovedThisFrame || _scrollTargetLocked || !_hasBuildCandidate || !_buildCandidate.HasTarget)
+        {
+            return;
+        }
+
+        _scrollLockedCell = _buildCandidate.Cell;
+        _scrollTargetLocked = true;
+    }
+
     bool HandleRectangleBuildInput()
     {
-        if (!IsRectangleBuildPiece(_selectedPiece))
+        if (!SupportsRectangleDrag(_selectedPiece))
         {
             _rectangleDragActive = false;
             return false;
@@ -394,7 +420,7 @@ public class ThirdPersonController : MonoBehaviour
             _rectangleEndCandidate = _buildCandidate;
             _rectangleFaceNormal = _buildCandidate.FaceNormal;
             _rectangleWidthAxis = _selectedPiece == VoxelLightingWorld.BuildPieceType.Ceiling
-                ? CameraForwardHorizontalAxis()
+                ? Vector3Int.zero
                 : CameraPreferredWidthAxis(_rectangleFaceNormal);
             RebuildRectangleCandidates();
             return true;
@@ -415,10 +441,7 @@ public class ThirdPersonController : MonoBehaviour
         {
             if (_rectangleAllValid)
             {
-                for (int i = 0; i < _rectangleCandidates.Count; i++)
-                {
-                    voxelWorld.TryPlaceBuildPiece(_rectangleCandidates[i]);
-                }
+                voxelWorld.TryPlaceBuildPieceBatch(_rectangleCandidates);
                 UpdateBuildCandidate();
             }
 
@@ -458,17 +481,40 @@ public class ThirdPersonController : MonoBehaviour
     void SelectPieceFromDirection(Vector2 direction)
     {
         float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
-        _selectedPiece = PieceFromRadialAngle(angle);
+        var nextPiece = PieceFromRadialAngle(angle);
+        if (nextPiece != _selectedPiece)
+        {
+            _scrollTargetLocked = false;
+            _selectedPiece = nextPiece;
+        }
     }
 
     void UpdateBuildCandidate()
     {
-        Vector3Int faceNormal = IsRectangleBuildPiece(_selectedPiece)
+        Vector3Int faceNormal = HasBuildOrientation(_selectedPiece)
             ? BuildFaceNormals[_buildOrientationIndex]
             : Vector3Int.zero;
+        Ray buildRay = viewCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
+
+        if (_scrollTargetLocked && HasBuildOrientation(_selectedPiece))
+        {
+            _hasBuildCandidate = voxelWorld.TryCreateBuildPieceCandidate(
+                _selectedPiece,
+                _scrollLockedCell,
+                faceNormal,
+                out _buildCandidate);
+
+            if (_hasBuildCandidate && _buildCandidate.HasTarget &&
+                _buildCandidate.CanPlace &&
+                !HasLineOfSightToBuildCandidate(_buildCandidate))
+            {
+                _buildCandidate.CanPlace = false;
+            }
+            return;
+        }
 
         _hasBuildCandidate = voxelWorld.TryGetBuildPieceCandidate(
-            viewCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f)),
+            buildRay,
             buildRange,
             _selectedPiece,
             faceNormal,
@@ -476,7 +522,8 @@ public class ThirdPersonController : MonoBehaviour
 
         if (_hasBuildCandidate && _buildCandidate.HasTarget &&
             (!_buildCandidate.CanPlace || !HasLineOfSightToBuildCandidate(_buildCandidate)) &&
-            TryFindSnappedBuildCandidate(_buildCandidate, out var snappedCandidate))
+            (TryFindVisibleSideBuildCandidate(buildRay, _buildCandidate, out var snappedCandidate) ||
+            TryFindSnappedBuildCandidate(_buildCandidate, out snappedCandidate)))
         {
             _buildCandidate = snappedCandidate;
         }
@@ -542,6 +589,149 @@ public class ThirdPersonController : MonoBehaviour
         return found;
     }
 
+    bool TryFindVisibleSideBuildCandidate(
+        Ray buildRay,
+        VoxelLightingWorld.BuildPieceCandidate rawCandidate,
+        out VoxelLightingWorld.BuildPieceCandidate snappedCandidate)
+    {
+        snappedCandidate = rawCandidate;
+
+        if (!CanUseVisibleSideSuggestion(rawCandidate.PieceType) ||
+            !Physics.Raycast(buildRay, out var hit, buildRange, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore))
+        {
+            return false;
+        }
+
+        Vector3Int visibleNormal = QuantizeNormal(hit.normal);
+        if (rawCandidate.PieceType == VoxelLightingWorld.BuildPieceType.Ceiling ||
+            rawCandidate.PieceType == VoxelLightingWorld.BuildPieceType.TrapDoor)
+        {
+            return TryFindVisibleSideHorizontalCandidate(rawCandidate, visibleNormal, out snappedCandidate);
+        }
+
+        if (visibleNormal.y != 0)
+        {
+            return false;
+        }
+
+        Vector3Int startCell = rawCandidate.Cell + visibleNormal;
+        bool orientationLocked = Input.GetKey(KeyCode.LeftShift);
+        Vector3Int faceNormal = orientationLocked ? rawCandidate.FaceNormal : visibleNormal;
+        var marker = hit.collider.GetComponentInParent<PlayerBuiltVoxel>();
+        if (!orientationLocked && marker != null && marker.IsPanelPiece && marker.FaceNormal.y == 0)
+        {
+            startCell = marker.Cell + visibleNormal;
+            faceNormal = marker.FaceNormal;
+        }
+
+        Vector3Int widthAxis = faceNormal.x != 0 ? new Vector3Int(0, 0, 1) : Vector3Int.right;
+        return TrySearchVisibleSideCandidates(
+            rawCandidate.PieceType,
+            startCell,
+            faceNormal,
+            visibleNormal,
+            widthAxis,
+            true,
+            out snappedCandidate);
+    }
+
+    bool TryFindVisibleSideHorizontalCandidate(
+        VoxelLightingWorld.BuildPieceCandidate rawCandidate,
+        Vector3Int visibleNormal,
+        out VoxelLightingWorld.BuildPieceCandidate snappedCandidate)
+    {
+        snappedCandidate = rawCandidate;
+
+        Vector3Int startCell = rawCandidate.Cell;
+        Vector3Int towardPlayer = Vector3Int.zero;
+        Vector3Int sideAxis = Vector3Int.right;
+        if (visibleNormal.y == 0)
+        {
+            startCell += visibleNormal;
+            towardPlayer = visibleNormal;
+            sideAxis = PerpendicularHorizontalAxis(visibleNormal);
+        }
+
+        return TrySearchVisibleSideCandidates(
+            rawCandidate.PieceType,
+            startCell,
+            Vector3Int.up,
+            towardPlayer,
+            sideAxis,
+            false,
+            out snappedCandidate);
+    }
+
+    bool TrySearchVisibleSideCandidates(
+        VoxelLightingWorld.BuildPieceType pieceType,
+        Vector3Int startCell,
+        Vector3Int faceNormal,
+        Vector3Int towardPlayerAxis,
+        Vector3Int sideSearchAxis,
+        bool includeVerticalOffsets,
+        out VoxelLightingWorld.BuildPieceCandidate snappedCandidate)
+    {
+        snappedCandidate = default;
+
+        int radius = Mathf.Max(0, buildSnapRadius);
+        int towardPlayerSteps = towardPlayerAxis == Vector3Int.zero ? 0 : Mathf.Max(1, radius + 1);
+
+        float bestDistance = float.MaxValue;
+        int bestTowardPlayerStep = int.MaxValue;
+        bool found = false;
+
+        for (int step = 0; step <= towardPlayerSteps; step++)
+        {
+            for (int sideOffset = -radius; sideOffset <= radius; sideOffset++)
+            {
+                int minY = includeVerticalOffsets ? -radius : 0;
+                int maxY = includeVerticalOffsets ? radius : 0;
+                for (int yOffset = minY; yOffset <= maxY; yOffset++)
+                {
+                    Vector3Int cell = startCell + (towardPlayerAxis * step);
+
+                    if (includeVerticalOffsets)
+                    {
+                        cell += sideSearchAxis * sideOffset;
+                        cell += Vector3Int.up * yOffset;
+                    }
+                    else
+                    {
+                        cell += sideSearchAxis * sideOffset;
+                    }
+
+                    if (!TryUseSuggestedCandidate(pieceType, cell, faceNormal, out var candidate))
+                    {
+                        continue;
+                    }
+
+                    float distance = CrosshairDistance(candidate);
+                    if (distance < bestDistance ||
+                        (Mathf.Approximately(distance, bestDistance) && step < bestTowardPlayerStep))
+                    {
+                        bestDistance = distance;
+                        bestTowardPlayerStep = step;
+                        snappedCandidate = candidate;
+                        found = true;
+                    }
+                }
+            }
+        }
+
+        return found;
+    }
+
+    bool TryUseSuggestedCandidate(
+        VoxelLightingWorld.BuildPieceType pieceType,
+        Vector3Int cell,
+        Vector3Int faceNormal,
+        out VoxelLightingWorld.BuildPieceCandidate candidate)
+    {
+        return voxelWorld.TryCreateBuildPieceCandidate(pieceType, cell, faceNormal, out candidate) &&
+            candidate.CanPlace &&
+            HasLineOfSightToBuildCandidate(candidate);
+    }
+
     float CrosshairDistance(VoxelLightingWorld.BuildPieceCandidate candidate)
     {
         if (viewCamera == null)
@@ -570,7 +760,9 @@ public class ThirdPersonController : MonoBehaviour
             Vector3 point = ray.GetPoint(enter);
             Vector3 cellPoint = point - ((Vector3)_rectangleFaceNormal * (voxelWorld.VoxelSize * 0.5f));
             Vector3Int cell = voxelWorld.WorldToCell(cellPoint);
-            cell = ProjectCellToRectangleAxis(_rectangleStartCandidate.Cell, cell, _rectangleWidthAxis);
+            cell = _selectedPiece == VoxelLightingWorld.BuildPieceType.Ceiling
+                ? new Vector3Int(cell.x, _rectangleStartCandidate.Cell.y, cell.z)
+                : ProjectCellToRectangleAxis(_rectangleStartCandidate.Cell, cell, _rectangleWidthAxis);
             return voxelWorld.TryCreateBuildPieceCandidate(_selectedPiece, cell, _rectangleFaceNormal, out endCandidate);
         }
 
@@ -609,7 +801,24 @@ public class ThirdPersonController : MonoBehaviour
         int minY = Mathf.Max(1, Mathf.Min(start.y, clampedEndY));
         int maxY = Mathf.Max(start.y, clampedEndY);
 
-        if (_rectangleWidthAxis.z != 0)
+        if (_selectedPiece == VoxelLightingWorld.BuildPieceType.Ceiling)
+        {
+            int clampedEndX = ClampToRange(end.x, start.x, maxCells - 1);
+            int clampedEndZ = ClampToRange(end.z, start.z, maxCells - 1);
+            int minX = Mathf.Min(start.x, clampedEndX);
+            int maxX = Mathf.Max(start.x, clampedEndX);
+            int minZ = Mathf.Min(start.z, clampedEndZ);
+            int maxZ = Mathf.Max(start.z, clampedEndZ);
+
+            for (int z = minZ; z <= maxZ; z++)
+            {
+                for (int x = minX; x <= maxX; x++)
+                {
+                    AddRectangleCandidate(new Vector3Int(x, start.y, z), faceNormal);
+                }
+            }
+        }
+        else if (_rectangleWidthAxis.z != 0)
         {
             int clampedEndZ = ClampToRange(end.z, start.z, maxCells - 1);
             int minZ = Mathf.Min(start.z, clampedEndZ);
@@ -818,7 +1027,7 @@ public class ThirdPersonController : MonoBehaviour
         };
         GUI.Label(new Rect(12, 8, 1100, 24),
             _buildMode
-                ? $"BUILD MODE ({_selectedPiece})   F: exit   Left Click: place   Ctrl+Left Drag: line/rectangle   {OrientationHelpText()}   Right Click + Mouse Direction: select   Esc: menu"
+                ? BuildModeHelpText()
                 : "WASD: move   Mouse: look   Space: jump   F: build mode   Esc: menu",
             style);
         DrawCrosshair();
@@ -943,12 +1152,23 @@ public class ThirdPersonController : MonoBehaviour
         }
     }
 
-    static bool IsRectangleBuildPiece(VoxelLightingWorld.BuildPieceType pieceType)
+    static bool HasBuildOrientation(VoxelLightingWorld.BuildPieceType pieceType)
     {
         return pieceType == VoxelLightingWorld.BuildPieceType.Wall ||
             pieceType == VoxelLightingWorld.BuildPieceType.Window ||
-            pieceType == VoxelLightingWorld.BuildPieceType.Door ||
+            pieceType == VoxelLightingWorld.BuildPieceType.Door;
+    }
+
+    static bool SupportsRectangleDrag(VoxelLightingWorld.BuildPieceType pieceType)
+    {
+        return pieceType == VoxelLightingWorld.BuildPieceType.Wall ||
+            pieceType == VoxelLightingWorld.BuildPieceType.Window ||
             pieceType == VoxelLightingWorld.BuildPieceType.Ceiling;
+    }
+
+    static bool CanUseVisibleSideSuggestion(VoxelLightingWorld.BuildPieceType pieceType)
+    {
+        return pieceType != VoxelLightingWorld.BuildPieceType.Ladder;
     }
 
     bool HasLineOfSightToBuildCandidate(VoxelLightingWorld.BuildPieceCandidate candidate)
@@ -1027,15 +1247,61 @@ public class ThirdPersonController : MonoBehaviour
     {
         if (_selectedPiece == VoxelLightingWorld.BuildPieceType.Ceiling)
         {
-            return "Ceiling drag: camera-forward axis";
+            return "Ceiling drag: horizontal rectangle";
         }
 
-        if (IsRectangleBuildPiece(_selectedPiece))
+        if (HasBuildOrientation(_selectedPiece))
         {
             return $"Scroll: rotate {OrientationLabel()}";
         }
 
         return string.Empty;
+    }
+
+    string BuildModeHelpText()
+    {
+        string dragHelp = SupportsRectangleDrag(_selectedPiece)
+            ? "   Ctrl+Left Drag: line/rectangle"
+            : string.Empty;
+        string lockHelp = HasBuildOrientation(_selectedPiece)
+            ? "   Hold Left Shift: lock orientation"
+            : string.Empty;
+        string orientationHelp = OrientationHelpText();
+        if (!string.IsNullOrEmpty(orientationHelp))
+        {
+            orientationHelp = $"   {orientationHelp}";
+        }
+
+        return $"BUILD MODE ({_selectedPiece})   F: exit   Left Click: place{dragHelp}{orientationHelp}{lockHelp}   Right Click + Mouse Direction: select   Esc: menu";
+    }
+
+    static Vector3Int PerpendicularHorizontalAxis(Vector3Int axis)
+    {
+        if (axis.x != 0)
+        {
+            return new Vector3Int(0, 0, 1);
+        }
+
+        return Vector3Int.right;
+    }
+
+    static Vector3Int QuantizeNormal(Vector3 normal)
+    {
+        float ax = Mathf.Abs(normal.x);
+        float ay = Mathf.Abs(normal.y);
+        float az = Mathf.Abs(normal.z);
+
+        if (ay >= ax && ay >= az)
+        {
+            return normal.y >= 0f ? Vector3Int.up : Vector3Int.down;
+        }
+
+        if (ax >= az)
+        {
+            return normal.x >= 0f ? Vector3Int.right : Vector3Int.left;
+        }
+
+        return normal.z >= 0f ? new Vector3Int(0, 0, 1) : new Vector3Int(0, 0, -1);
     }
 
     static Material CreateTransparentMaterial(string materialName, Color color)
