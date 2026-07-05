@@ -584,7 +584,7 @@ public class MenuNavigator : MonoBehaviour
     void BuildDecks()
     {
         _window = MenuWindowFrame.CreateScreen(_screenRoot.transform, "DECKS", showBack: true,
-            "pick two cards for your loadout", new Vector2(1320f, 820f), showHeader: true, GoBack);
+            "pick two cards for your loadout", DecksLayout.WindowSize, showHeader: true, GoBack);
 
         _decksLoadoutBar = LoadoutSlotBar.Create(_window.Header, ClearLoadoutSlot);
         _previewPanel = CardPreviewPanel.Create(_screenRoot.transform);
@@ -618,18 +618,21 @@ public class MenuNavigator : MonoBehaviour
         var contentRect = contentGo.AddComponent<RectTransform>();
         contentRect.anchorMin = new Vector2(0f, 1f);
         contentRect.anchorMax = new Vector2(1f, 1f);
-        contentRect.pivot = new Vector2(0.5f, 1f);
+        contentRect.pivot = new Vector2(0f, 1f);
         contentRect.anchoredPosition = Vector2.zero;
+        contentRect.sizeDelta = new Vector2(0f, 0f);
 
         var layout = contentGo.AddComponent<VerticalLayoutGroup>();
-        layout.spacing = 16f;
-        layout.padding = new RectOffset(8, 8, 8, 8);
+        layout.spacing = DecksLayout.RowSpacing;
+        layout.padding = new RectOffset((int)DecksLayout.HorizontalPadding, (int)DecksLayout.HorizontalPadding, 4, 4);
         layout.childControlHeight = true;
         layout.childControlWidth = true;
         layout.childForceExpandHeight = false;
-        layout.childForceExpandWidth = true;
+        layout.childForceExpandWidth = false;
 
         contentGo.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        CreateDecksSectionHeader(contentGo.transform, "CLASS SPECIALTIES");
 
         var specialtyKeys = new[]
         {
@@ -654,6 +657,20 @@ public class MenuNavigator : MonoBehaviour
         RefreshDeckCardLoadoutStates();
     }
 
+    static void CreateDecksSectionHeader(Transform parent, string title)
+    {
+        var headerGo = new GameObject("Section Header");
+        headerGo.transform.SetParent(parent, false);
+        var layout = headerGo.AddComponent<LayoutElement>();
+        layout.preferredHeight = 36f;
+        layout.minHeight = 36f;
+        layout.preferredWidth = DecksLayout.ContentRowWidth;
+        layout.minWidth = DecksLayout.ContentRowWidth;
+
+        MenuUiFactory.CreateAnchoredText(headerGo.transform, "Title", title,
+            MenuUiFactory.BodyFontSize, FontStyle.Bold, TextAnchor.MiddleLeft, MenuUiFactory.Ink);
+    }
+
     void CreateSpecialtyRow(Transform parent, string specialtyKey)
     {
         CardDefinition tier1 = null;
@@ -674,31 +691,27 @@ public class MenuNavigator : MonoBehaviour
 
         var rowGo = new GameObject($"Row_{specialtyKey}");
         rowGo.transform.SetParent(parent, false);
-        rowGo.AddComponent<RectTransform>().sizeDelta = new Vector2(0f, 210f);
+
+        var rowLayoutElement = rowGo.AddComponent<LayoutElement>();
+        rowLayoutElement.preferredWidth = DecksLayout.ContentRowWidth;
+        rowLayoutElement.minWidth = DecksLayout.ContentRowWidth;
+        rowLayoutElement.preferredHeight = DecksLayout.RowHeight;
+        rowLayoutElement.minHeight = DecksLayout.RowHeight;
+        rowLayoutElement.flexibleWidth = 0f;
 
         var rowLayout = rowGo.AddComponent<HorizontalLayoutGroup>();
-        rowLayout.spacing = 12f;
-        rowLayout.childAlignment = TextAnchor.MiddleCenter;
-        rowLayout.childControlWidth = false;
-        rowLayout.childControlHeight = false;
+        rowLayout.spacing = DecksLayout.ColumnSpacing;
+        rowLayout.padding = new RectOffset(0, 0, 0, 0);
+        rowLayout.childAlignment = TextAnchor.MiddleLeft;
+        rowLayout.childControlWidth = true;
+        rowLayout.childControlHeight = true;
         rowLayout.childForceExpandWidth = false;
         rowLayout.childForceExpandHeight = false;
 
-        CreateRowLabel(rowGo.transform, specialtyLabel);
+        ClassSpecialtyPanel.Create(rowGo.transform, specialtyKey, specialtyLabel);
         CreateRowCardCell(rowGo.transform, tier1);
-        CreateRowArrow(rowGo.transform);
         CreateRowCardCell(rowGo.transform, tier2);
-        CreateRowArrow(rowGo.transform);
         CreateRowCardCell(rowGo.transform, tier3);
-    }
-
-    static void CreateRowLabel(Transform parent, string specialtyLabel)
-    {
-        var labelGo = new GameObject("Specialty Label");
-        labelGo.transform.SetParent(parent, false);
-        labelGo.AddComponent<RectTransform>().sizeDelta = new Vector2(120f, 180f);
-        MenuUiFactory.CreateAnchoredText(labelGo.transform, "Text", specialtyLabel.ToUpperInvariant(),
-            MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.MiddleCenter);
     }
 
     void CreateRowCardCell(Transform parent, CardDefinition card)
@@ -708,18 +721,21 @@ public class MenuNavigator : MonoBehaviour
             return;
         }
 
+        var cellGo = new GameObject($"Card Cell {card.id}");
+        cellGo.transform.SetParent(parent, false);
+        var cellLayout = cellGo.AddComponent<LayoutElement>();
+        cellLayout.preferredWidth = DecksLayout.CardSize.x;
+        cellLayout.preferredHeight = DecksLayout.CardSize.y;
+        cellLayout.minWidth = DecksLayout.CardSize.x;
+        cellLayout.minHeight = DecksLayout.CardSize.y;
+        cellLayout.flexibleWidth = 0f;
+
+        cellGo.AddComponent<RectMask2D>();
+
         bool owned = ProfileSession.OwnsCard(card.id);
-        var tile = CardTileView.Create(parent, card, owned, () => OpenCardAction(card));
+        var tile = CardTileView.Create(cellGo.transform, card, owned, () => OpenCardAction(card), DecksLayout.CardSize);
         _deckCardTiles.Add(tile);
         tile.SetInLoadout(IsCardInLoadout(card.id));
-    }
-
-    static void CreateRowArrow(Transform parent)
-    {
-        var arrowGo = new GameObject("Tier Arrow");
-        arrowGo.transform.SetParent(parent, false);
-        arrowGo.AddComponent<RectTransform>().sizeDelta = new Vector2(36f, 180f);
-        MenuUiFactory.CreateAnchoredText(arrowGo.transform, "Arrow", "→", 34, FontStyle.Bold, TextAnchor.MiddleCenter);
     }
 
     void OpenCardAction(CardDefinition card)

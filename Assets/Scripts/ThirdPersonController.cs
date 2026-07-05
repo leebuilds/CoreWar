@@ -116,6 +116,8 @@ public class ThirdPersonController : MonoBehaviour
     float _sessionHeartbeat;
     bool _wasInPrepPhase;
     bool _wasPrepReady;
+    Vector3 _initialSpawnPosition;
+    readonly Collider[] _respawnOverlapBuffer = new Collider[32];
     readonly List<GameObject> _previewRoots = new List<GameObject>();
     readonly List<VoxelLightingWorld.BuildPieceCandidate> _rectangleCandidates =
         new List<VoxelLightingWorld.BuildPieceCandidate>();
@@ -216,6 +218,8 @@ public class ThirdPersonController : MonoBehaviour
 
     void Start()
     {
+        _initialSpawnPosition = transform.position;
+
         if (viewCamera != null)
         {
             viewCamera.fieldOfView = fieldOfView;
@@ -238,6 +242,7 @@ public class ThirdPersonController : MonoBehaviour
         {
             GameSession.SetActiveCard(cardId);
             ApplyKitFromSession();
+            RespawnAtValidMapPosition();
         });
         _pauseMenu = GamePauseMenu.Create(transform, _respawnPicker);
 
@@ -250,6 +255,158 @@ public class ThirdPersonController : MonoBehaviour
         _activeKit = GameSession.ActiveKit ?? CardKitDefinition.DefaultInfantryPlaceholder();
         _selectedHotbarIndex = Mathf.Clamp(_selectedHotbarIndex, 0, Mathf.Max(0, HotbarSlotCount - 1));
         RefreshHeldToolVisibility();
+    }
+
+    void RespawnAtValidMapPosition()
+    {
+        if (_rb == null || _capsule == null || voxelWorld == null ||
+            !TryFindValidRespawnPosition(out var respawnPosition))
+        {
+            return;
+        }
+
+        _selectorOpen = false;
+        _rectangleDragActive = false;
+        _scrollTargetLocked = false;
+        _hasBuildCandidate = false;
+        HidePreviewRoots();
+
+        _gunKickTimer = 0f;
+        _muzzleFlashTimer = 0f;
+        _hammerSwingTimer = 0f;
+        _gunRecoilPeak = Vector2.zero;
+        _gunRecoilResidual = Vector2.zero;
+        _gunRecoilKickTimer = 0f;
+        _gunRecoilAimApplied = true;
+
+        _rb.linearVelocity = Vector3.zero;
+        _rb.angularVelocity = Vector3.zero;
+        _rb.position = respawnPosition;
+        transform.position = respawnPosition;
+        _grounded = false;
+        Physics.SyncTransforms();
+    }
+
+    bool TryFindValidRespawnPosition(out Vector3 respawnPosition)
+    {
+        respawnPosition = _initialSpawnPosition;
+        Physics.SyncTransforms();
+
+        int width = voxelWorld.GridWidth;
+        int length = voxelWorld.GridLength;
+        if (width <= 0 || length <= 0)
+        {
+            return false;
+        }
+
+        Vector3Int preferredCell = voxelWorld.WorldToCell(_initialSpawnPosition);
+        preferredCell.x = Mathf.Clamp(preferredCell.x, 0, width - 1);
+        preferredCell.z = Mathf.Clamp(preferredCell.z, 0, length - 1);
+
+        int maxRadius = Mathf.Max(width, length);
+        for (int radius = 0; radius <= maxRadius; radius++)
+        {
+            int minX = Mathf.Max(0, preferredCell.x - radius);
+            int maxX = Mathf.Min(width - 1, preferredCell.x + radius);
+            int minZ = Mathf.Max(0, preferredCell.z - radius);
+            int maxZ = Mathf.Min(length - 1, preferredCell.z + radius);
+
+            for (int x = minX; x <= maxX; x++)
+            {
+                for (int z = minZ; z <= maxZ; z++)
+                {
+                    if (radius > 0 &&
+                        Mathf.Abs(x - preferredCell.x) < radius &&
+                        Mathf.Abs(z - preferredCell.z) < radius)
+                    {
+                        continue;
+                    }
+
+                    Vector3 cellCenter = voxelWorld.CellToWorld(new Vector3Int(x, 0, z));
+                    float groundTop = cellCenter.y + (voxelWorld.VoxelSize * 0.5f);
+                    var candidate = new Vector3(
+                        cellCenter.x,
+                        groundTop + Mathf.Max(0.05f, voxelWorld.VoxelSize * 0.05f),
+                        cellCenter.z);
+
+                    if (IsRespawnCapsuleClear(candidate))
+                    {
+                        respawnPosition = candidate;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // If construction has obstructed every ground tile, re-enter above the
+        // preferred map cell and fall onto the highest available surface.
+        Vector3 preferredCenter = voxelWorld.CellToWorld(new Vector3Int(preferredCell.x, 0, preferredCell.z));
+        float fallbackHeight = preferredCenter.y +
+            ((voxelWorld.MaxBuildHeight + 4f) * voxelWorld.VoxelSize);
+        var fallback = new Vector3(preferredCenter.x, fallbackHeight, preferredCenter.z);
+        if (!IsRespawnCapsuleClear(fallback))
+        {
+            return false;
+        }
+
+        respawnPosition = fallback;
+        return true;
+    }
+
+    bool IsRespawnCapsuleClear(Vector3 candidatePosition)
+    {
+        Vector3 scale = transform.lossyScale;
+        scale = new Vector3(Mathf.Abs(scale.x), Mathf.Abs(scale.y), Mathf.Abs(scale.z));
+
+        Vector3 axis;
+        float axisScale;
+        float radiusScale;
+        switch (_capsule.direction)
+        {
+            case 0:
+                axis = transform.right;
+                axisScale = scale.x;
+                radiusScale = Mathf.Max(scale.y, scale.z);
+                break;
+            case 2:
+                axis = transform.forward;
+                axisScale = scale.z;
+                radiusScale = Mathf.Max(scale.x, scale.y);
+                break;
+            default:
+                axis = transform.up;
+                axisScale = scale.y;
+                radiusScale = Mathf.Max(scale.x, scale.z);
+                break;
+        }
+
+        float radius = _capsule.radius * radiusScale;
+        float height = Mathf.Max(_capsule.height * axisScale, radius * 2f);
+        float segmentHalfLength = Mathf.Max(0f, (height * 0.5f) - radius);
+        Vector3 scaledCenter = Vector3.Scale(_capsule.center, scale);
+        Vector3 center = candidatePosition + (transform.rotation * scaledCenter);
+        Vector3 pointA = center + (axis * segmentHalfLength);
+        Vector3 pointB = center - (axis * segmentHalfLength);
+
+        int overlapCount = Physics.OverlapCapsuleNonAlloc(
+            pointA,
+            pointB,
+            radius,
+            _respawnOverlapBuffer,
+            Physics.AllLayers,
+            QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < overlapCount; i++)
+        {
+            Collider overlap = _respawnOverlapBuffer[i];
+            if (overlap != null && overlap != _capsule && !overlap.transform.IsChildOf(transform))
+            {
+                return false;
+            }
+        }
+
+        // A full buffer means additional uninspected colliders may exist.
+        return overlapCount < _respawnOverlapBuffer.Length;
     }
 
     void Update()

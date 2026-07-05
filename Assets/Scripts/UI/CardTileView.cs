@@ -26,25 +26,51 @@ public class CardTileView : MonoBehaviour
 
     public static CardTileView Create(Transform parent, CardDefinition card, bool owned, UnityAction onClick)
     {
+        return Create(parent, card, owned, onClick, new Vector2(280f, 180f), fillParent: false);
+    }
+
+    public static CardTileView Create(Transform parent, CardDefinition card, bool owned, UnityAction onClick,
+        Vector2 size, bool fillParent = true)
+    {
         var go = new GameObject($"Card_{card.id}");
         go.transform.SetParent(parent, false);
 
         var view = go.AddComponent<CardTileView>();
-        view.Build(card, owned, onClick);
+        view.Build(card, owned, onClick, size, fillParent);
         MenuUiFactory.ApplyCardHover(view);
         return view;
     }
 
-    void Build(CardDefinition card, bool owned, UnityAction onClick)
+    void Build(CardDefinition card, bool owned, UnityAction onClick, Vector2 size, bool fillParent)
     {
         _card = card;
         _locked = !owned;
         _baseFill = CardRarityColors.Fill(card.rarity);
 
         var rect = gameObject.AddComponent<RectTransform>();
-        rect.sizeDelta = new Vector2(280f, 180f);
+        if (fillParent)
+        {
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+        }
+        else
+        {
+            rect.sizeDelta = size;
+        }
 
-        _loadoutOutline = CreateLayer("Loadout Outline", MenuUiFactory.LoadoutOutline, outerExpand: 5f);
+        bool decksTile = size.x >= 300f;
+        bool compact = !decksTile && size.x < 260f;
+        bool slim = !decksTile && size.x < 210f;
+        int titleFontSize = decksTile ? 30 : slim ? 16 : compact ? 18 : 26;
+        int metaFontSize = decksTile ? 22 : slim ? 12 : compact ? 14 : MenuUiFactory.SmallFontSize;
+        int lockFontSize = decksTile ? 30 : slim ? 18 : compact ? 20 : 28;
+        float titleTop = decksTile ? 0.52f : slim ? 0.50f : compact ? 0.54f : 0.56f;
+        float metaBottom = decksTile ? 0.08f : slim ? 0.08f : compact ? 0.10f : 0.08f;
+        float loadoutOutlineExpand = decksTile ? 3f : 5f;
+
+        _loadoutOutline = CreateLayer("Loadout Outline", MenuUiFactory.LoadoutOutline, outerExpand: loadoutOutlineExpand);
         _loadoutOutline.SetActive(false);
 
         _dimOverlay = CreateLayer("Dim Overlay", new Color(0.12f, 0.12f, 0.12f, 0.45f), innerInset: BorderThickness);
@@ -66,9 +92,14 @@ public class CardTileView : MonoBehaviour
         }
 
         var titleText = MenuUiFactory.CreateAnchoredText(transform, "Title", card.displayName.ToUpperInvariant(),
-            26, FontStyle.Bold, TextAnchor.UpperCenter, MenuUiFactory.Ink);
+            titleFontSize, FontStyle.Bold, TextAnchor.UpperCenter, MenuUiFactory.Ink);
+        titleText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        titleText.verticalOverflow = VerticalWrapMode.Truncate;
+        titleText.resizeTextForBestFit = compact || decksTile;
+        titleText.resizeTextMinSize = decksTile ? 18 : slim ? 11 : 12;
+        titleText.resizeTextMaxSize = titleFontSize;
         var titleRect = titleText.GetComponent<RectTransform>();
-        titleRect.anchorMin = new Vector2(0.08f, 0.56f);
+        titleRect.anchorMin = new Vector2(0.08f, titleTop);
         titleRect.anchorMax = new Vector2(0.92f, 0.92f);
         titleRect.offsetMin = Vector2.zero;
         titleRect.offsetMax = Vector2.zero;
@@ -84,10 +115,16 @@ public class CardTileView : MonoBehaviour
 
         var tierText = MenuUiFactory.CreateAnchoredText(transform, "Meta",
             $"{CardRarityColors.Label(card.rarity)}\n{card.specialtyLabel.ToUpperInvariant()} · TIER {card.tier}",
-            MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.LowerCenter, MenuUiFactory.Ink);
+            metaFontSize, FontStyle.Bold, TextAnchor.LowerCenter, MenuUiFactory.Ink);
+        tierText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        tierText.verticalOverflow = VerticalWrapMode.Truncate;
+        tierText.lineSpacing = 0.95f;
+        tierText.resizeTextForBestFit = compact || decksTile;
+        tierText.resizeTextMinSize = decksTile ? 14 : slim ? 10 : 11;
+        tierText.resizeTextMaxSize = metaFontSize;
         var tierRect = tierText.GetComponent<RectTransform>();
-        tierRect.anchorMin = new Vector2(0.08f, 0.08f);
-        tierRect.anchorMax = new Vector2(0.92f, 0.40f);
+        tierRect.anchorMin = new Vector2(0.06f, metaBottom);
+        tierRect.anchorMax = new Vector2(0.94f, decksTile ? 0.46f : slim ? 0.44f : compact ? 0.42f : 0.40f);
         tierRect.offsetMin = Vector2.zero;
         tierRect.offsetMax = Vector2.zero;
 
@@ -105,7 +142,8 @@ public class CardTileView : MonoBehaviour
             lockBg.color = new Color(0.15f, 0.15f, 0.15f, 0.55f);
             lockBg.raycastTarget = false;
 
-            MenuUiFactory.CreateAnchoredText(_lockOverlay.transform, "Lock", "LOCK", 28, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+            MenuUiFactory.CreateAnchoredText(_lockOverlay.transform, "Lock", "LOCK", lockFontSize, FontStyle.Bold,
+                TextAnchor.MiddleCenter, Color.white);
         }
 
         _spawnSelectionFrame = MenuUiFactory.CreateCornerBracketFrame(transform, MenuUiFactory.Ink);

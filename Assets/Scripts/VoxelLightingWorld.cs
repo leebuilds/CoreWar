@@ -95,6 +95,9 @@ public class VoxelLightingWorld : MonoBehaviour
     public const float SealOverlap = 1.002f;
 
     public float VoxelSize => _voxelSize;
+    public int GridWidth => _gridWidth;
+    public int GridLength => _gridLength;
+    public int MaxBuildHeight => _maxBuildHeight;
 
     public void Initialize(
         int gridWidth,

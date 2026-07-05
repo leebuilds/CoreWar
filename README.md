@@ -35,9 +35,11 @@ Before a match, each player chooses two class cards and selects one of them at
 the start or after respawning. Planned specialties include Infantry, Sniper,
 Engineer, Support, Assault, Assassin, Heavy, Demolition, Saboteur, and Gunner.
 
-Cards use independent rarity, specialty, and tier systems. Higher tiers provide
-more specialized playstyles rather than direct power upgrades, and advanced
-cards may require progress across one or more specialties.
+Cards use independent rarity, specialty, and tier systems. The catalog defines
+all 30 cards with display names, rarities, weapons, and descriptions (e.g.
+Infantry → Ranger → Skirmisher; Gunner → Water Cannon Officer → Vulcan Operator).
+Higher tiers provide more specialized playstyles rather than direct power upgrades,
+and advanced cards may require progress across one or more specialties.
 
 Persistent player progression includes cards, cosmetics, levels, titles,
 emblems, statistics, achievements, and ranked rating. Match-specific progress
@@ -73,7 +75,7 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 | Sign In / Sign Up | Local username + passcode profiles (stored in `persistentDataPath`, not in git) |
 | Hub | Play, Decks, Settings, Logout, Quit — shown automatically when a session is still valid (1 hour of inactivity) |
 | Game Modes | Scrollable list of modes; selecting one starts local matchmaking (test one/two player) |
-| Decks | Browse all 30 class cards (scroll starts at top); set a two-slot loadout; preview stats |
+| Decks | Browse all 30 class cards (vertical scroll only); each row is ~1/3 class specialty blurb + ~2/3 three tier cards; set a two-slot loadout; preview stats |
 | Match Prep | Arena loads behind card pick; press **READY** to look around and cycle hotbar; top banner counts down; movement unlocks when prep ends |
 | Settings | Light/dark theme, UI volume, UI sounds toggle, mouse sensitivity, account info |
 
@@ -98,7 +100,9 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 - **Esc** — pause menu (game does not freeze; opens Respawn / Settings / Exit Match); **Exit Match** asks for confirmation; respawn is locked during prep
 - **Exit Match** — fully ends the match and returns to the main menu
 - Top-right **match clock** counts up from match start (`M:SS`); hidden while pause or respawn overlays are open
-- After respawn, pick loadout slot A or B from the class picker overlay
+- After respawn, pick loadout slot A or B from the class picker overlay; the
+  player returns near the original spawn in the closest location with full
+  capsule clearance from terrain and builds
 
 While the pause menu, respawn picker, or other in-match overlays are open,
 gameplay input is ignored, the crosshair is hidden, and the cursor stays free
@@ -127,7 +131,7 @@ any part of the player's body (measured from the capsule surface).
 **Blueprint:** full build-mode toolset (see below).
 
 All 30 class cards currently share the same placeholder kit (gun, hammer,
-blueprint). Per-class kits are planned.
+blueprint). Per-class weapons and abilities from the card catalog are planned.
 
 ### Build mode (blueprint slot)
 
@@ -175,9 +179,12 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/UI/MenuUiSounds.cs` — procedural hover, click, gunshot sounds
 - `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay (locked respawn during prep, exit confirm, theme refresh)
 - `Assets/Scripts/UI/RespawnClassPicker.cs` — respawn class selection
-- `Assets/Scripts/UI/CardTileView.cs` — collection card tiles, spawn selection visuals
+- `Assets/Scripts/UI/CardTileView.cs` — collection card tiles (compact + deck-row sizing), spawn selection visuals
+- `Assets/Scripts/UI/DecksLayout.cs` — decks window and row width constants
 - `Assets/Scripts/Profile/` — local profile repository, 1-hour session restore, passcode hashing
-- `Assets/Scripts/Cards/` — 30-card catalog, rarity colors, placeholder kits
+- `Assets/Scripts/Cards/ClassSpecialtyDescriptions.cs` — class role blurbs for the decks collection
+- `Assets/Scripts/UI/ClassSpecialtyPanel.cs` — specialty column in each decks row (name, symbol slot, role text)
+- `Assets/Scripts/Cards/` — 30-card catalog (names, rarities, preview stats), rarity colors, placeholder kits
 
 **Gameplay**
 
@@ -196,6 +203,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/Third_Person_Shooter_Game_Design_v2.md)
+- [Decks collection layout and card catalog session recap](docs/chats/2026-07-05-decks-layout-and-card-catalog-session.md)
 - [In-arena prep, pause polish, and overlay theming session recap](docs/chats/2026-07-05-in-arena-prep-pause-flow-session.md)
 - [Matchmaking, pre-match flow, and menu polish session recap](docs/chats/2026-07-05-matchmaking-prep-flow-session.md)
 - [Settings, theme, session, and menu polish session recap](docs/chats/2026-07-05-settings-theme-menu-polish-session.md)

@@ -27,7 +27,6 @@ public class MatchClassSelectPanel : MonoBehaviour
     UnityAction _onEditDecks;
     bool _isReady;
     bool _completed;
-    bool _prepRunning;
     Coroutine _prepRoutine;
     float _remainingSeconds;
 
@@ -234,7 +233,6 @@ public class MatchClassSelectPanel : MonoBehaviour
         _onEditDecks = onEditDecks;
         _isReady = false;
         _completed = false;
-        _prepRunning = false;
         _spawnSlotIndex = 0;
         RefreshSpawnSelection();
 
@@ -276,7 +274,6 @@ public class MatchClassSelectPanel : MonoBehaviour
             _prepRoutine = null;
         }
 
-        _prepRunning = false;
         _completed = false;
 
         if (_readyBanner != null)
@@ -294,7 +291,6 @@ public class MatchClassSelectPanel : MonoBehaviour
 
     IEnumerator PrepCountdown()
     {
-        _prepRunning = true;
         _remainingSeconds = PrepDuration;
 
         while (_remainingSeconds > 0f && !_completed)
@@ -314,7 +310,6 @@ public class MatchClassSelectPanel : MonoBehaviour
             _prepTimerText.text = "starting match";
         }
 
-        _prepRunning = false;
         CompleteSelection();
     }
 
