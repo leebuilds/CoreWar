@@ -311,10 +311,13 @@ public class MenuNavigator : MonoBehaviour
     void BuildHub()
     {
         var username = ProfileSession.ActiveProfile?.username ?? "player";
-        bool canPlay = ProfileSession.HasCompleteLoadout;
-        string footer = canPlay
+        bool hasSlot1 = ProfileSession.HasLoadoutSlot1;
+        bool hasFullLoadout = ProfileSession.HasCompleteLoadout;
+        string footer = hasFullLoadout
             ? $"welcome, {username} · loadout ready"
-            : $"welcome, {username} · choose two cards in decks";
+            : hasSlot1
+                ? $"welcome, {username} · shooting range available"
+                : $"welcome, {username} · set loadout slot 1 in decks";
 
         _window = MenuWindowFrame.CreateScreen(_screenRoot.transform, "COREWAR", showBack: false,
             footer, new Vector2(480f, 640f), showHeader: false, null);
@@ -323,7 +326,7 @@ public class MenuNavigator : MonoBehaviour
             MenuUiFactory.BodyFontSize, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, 170f), new Vector2(420f, 40f));
 
         MenuUiFactory.CreateButton(_window.Body, "Play Button", "PLAY",
-            new Vector2(0f, 70f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.GameModes), enabled: canPlay);
+            new Vector2(0f, 70f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.GameModes));
         MenuUiFactory.CreateButton(_window.Body, "Decks Button", "DECKS",
             new Vector2(0f, -10f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.Decks));
         MenuUiFactory.CreateButton(_window.Body, "Settings Button", "SETTINGS",
@@ -401,10 +404,15 @@ public class MenuNavigator : MonoBehaviour
         rowLayout.minHeight = 64f;
 
         GameModeButtonFx fx = null;
+        bool playable = mode.IsPlayable();
         var button = MenuUiFactory.CreateBodyButton(rowGo.transform, $"Mode Button {mode.displayName}", mode.displayName,
             Vector2.zero, new Vector2(480f, MenuUiFactory.CompactControlHeight),
-            () => OnGameModeSelected(mode, fx), enabled: ProfileSession.HasCompleteLoadout);
+            () => OnGameModeSelected(mode, fx), enabled: playable);
         fx = GameModeButtonFx.Attach(button);
+        if (!playable)
+        {
+            MenuUiFactory.AddButtonLockIcon(button.transform);
+        }
 
         var buttonRect = button.GetComponent<RectTransform>();
         buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -430,7 +438,7 @@ public class MenuNavigator : MonoBehaviour
 
     void OnGameModeSelected(GameModeDefinition mode, GameModeButtonFx fx)
     {
-        if (mode == null || !ProfileSession.HasCompleteLoadout)
+        if (mode == null || !mode.IsPlayable())
         {
             return;
         }
@@ -498,22 +506,39 @@ public class MenuNavigator : MonoBehaviour
         _matchmakingPanel.Hide();
         StopActiveModeFx();
 
-        if (!ProfileSession.HasCompleteLoadout)
+        var mode = GameModeDefinition.Get(_activeModeId);
+        if (mode == null || !mode.IsPlayable())
         {
             CleanupMatchFlow();
             return;
         }
 
         var profile = ProfileSession.ActiveProfile;
-        var mode = GameModeDefinition.Get(_activeModeId);
         ProfileSession.TouchActivity();
+
+        if (mode.skipPrepPhase)
+        {
+            GameSession.BeginMatch(
+                GameSession.Team.Red,
+                profile.loadoutCardIds[0],
+                null,
+                profile.loadoutCardIds[0],
+                _activeModeId,
+                mode.requiredPlayers);
+
+            MatchmakingSession.Reset();
+            _activeModeId = null;
+            SceneFlow.EnterGame();
+            return;
+        }
+
         GameSession.BeginMatchForPrep(
             GameSession.Team.Red,
             profile.loadoutCardIds[0],
             profile.loadoutCardIds[1],
             profile.loadoutCardIds[0],
             _activeModeId,
-            mode?.requiredPlayers ?? 1);
+            mode.requiredPlayers);
 
         MatchmakingSession.Reset();
         _activeModeId = null;

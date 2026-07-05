@@ -13,6 +13,7 @@ public class ProjectileBullet : MonoBehaviour
     float _remainingLifetime;
     float _landedLifetime;
     bool _landed;
+    bool _persistInRange;
 
     public void Initialize(Vector3 velocity, float gravity, float lifetime, float landedLifetime)
     {
@@ -20,18 +21,36 @@ public class ProjectileBullet : MonoBehaviour
         _gravity = gravity;
         _remainingLifetime = lifetime;
         _landedLifetime = landedLifetime;
+        _persistInRange = GameSession.IsShootingRange;
         EnsureVisual();
+
+        if (_persistInRange)
+        {
+            ShootingRangeSession.RegisterProjectileEntity(gameObject);
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (_persistInRange)
+        {
+            ShootingRangeSession.UnregisterProjectileEntity(gameObject);
+        }
     }
 
     void Update()
     {
         if (_landed)
         {
-            _landedLifetime -= Time.deltaTime;
-            if (_landedLifetime <= 0f)
+            if (!_persistInRange)
             {
-                Destroy(gameObject);
+                _landedLifetime -= Time.deltaTime;
+                if (_landedLifetime <= 0f)
+                {
+                    Destroy(gameObject);
+                }
             }
+
             return;
         }
 
@@ -65,12 +84,27 @@ public class ProjectileBullet : MonoBehaviour
         for (int i = 0; i < hits.Length; i++)
         {
             RaycastHit hit = hits[i];
+            var hitZone = hit.collider.GetComponent<ShootingRangeHitZone>();
+            if (hitZone != null && hitZone.dummy != null)
+            {
+                hitZone.dummy.ApplyHit(hitZone.zoneType);
+                transform.position = hit.point;
+                _velocity = Vector3.zero;
+                _landed = true;
+                return;
+            }
+
             var marker = hit.collider.GetComponentInParent<PlayerBuiltVoxel>();
             if (marker != null && marker.IsPanelPiece)
             {
                 CreateBulletHole(hit);
                 DegradeThroughBuildPiece();
                 continue;
+            }
+
+            if (_persistInRange)
+            {
+                CreateBulletHole(hit);
             }
 
             transform.position = hit.point;
@@ -122,7 +156,14 @@ public class ProjectileBullet : MonoBehaviour
             hole.transform.SetParent(hit.collider.transform, true);
         }
 
-        Destroy(hole, DefaultHoleLifetime);
+        if (GameSession.IsShootingRange)
+        {
+            ShootingRangeSession.RegisterProjectileEntity(hole);
+        }
+        else
+        {
+            Destroy(hole, DefaultHoleLifetime);
+        }
     }
 
     static Material BulletMaterial()

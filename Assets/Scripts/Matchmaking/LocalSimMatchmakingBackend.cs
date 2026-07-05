@@ -62,6 +62,12 @@ public class LocalSimMatchmakingBackend : IMatchmakingBackend
 
     IEnumerator Run(GameModeDefinition mode)
     {
+        if (mode.skipMatchmakingDelay)
+        {
+            yield return InstantCompleteSequence(mode);
+            yield break;
+        }
+
         if (mode.requiredPlayers <= 1)
         {
             yield return new WaitForSecondsRealtime(OnePlayerJoinDelay);
@@ -123,6 +129,33 @@ public class LocalSimMatchmakingBackend : IMatchmakingBackend
         Publish(MatchmakingPhase.Complete, mode.requiredPlayers, mode.requiredPlayers, "found match");
         _routine = null;
         Completed?.Invoke();
+    }
+
+    IEnumerator InstantCompleteSequence(GameModeDefinition mode)
+    {
+        int ping = UnityEngine.Random.Range(12, 48);
+        Publish(MatchmakingPhase.Searching, mode.requiredPlayers, 1, $"player connected · {ping}ms", ping);
+        if (_mode == null)
+        {
+            yield break;
+        }
+
+        Publish(MatchmakingPhase.Found, mode.requiredPlayers, mode.requiredPlayers, "found players");
+        if (_mode == null)
+        {
+            yield break;
+        }
+
+        Publish(MatchmakingPhase.Loading, mode.requiredPlayers, mode.requiredPlayers, "loading match");
+        if (_mode == null)
+        {
+            yield break;
+        }
+
+        Publish(MatchmakingPhase.Complete, mode.requiredPlayers, mode.requiredPlayers, "found match");
+        _routine = null;
+        Completed?.Invoke();
+        yield break;
     }
 
     void Publish(MatchmakingPhase phase, int required, int connected, string feed, int pingMs = 0)

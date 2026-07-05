@@ -9,6 +9,9 @@ public class GamePauseMenu : MonoBehaviour
     static GamePauseMenu _instance;
 
     RespawnClassPicker _respawnPicker;
+    ShootingRangeCharacterPicker _characterPicker;
+    ShootingRangeDummyStatsPanel _dummyStatsPanel;
+    ThirdPersonController _player;
     GameObject _overlayRoot;
     GameObject _settingsOverlay;
     GameObject _exitConfirmOverlay;
@@ -18,11 +21,14 @@ public class GamePauseMenu : MonoBehaviour
     public bool IsOpen => _isOpen;
     public static bool IsAnyOpen => _instance != null && _instance._isOpen;
 
-    /// <summary>
-    /// Handles ESC while the pause menu is open. Closes settings first, then the pause overlay.
-    /// </summary>
     public bool TryHandleEscape()
     {
+        if (_dummyStatsPanel != null && _dummyStatsPanel.IsOpen)
+        {
+            _dummyStatsPanel.Hide();
+            return true;
+        }
+
         if (!_isOpen)
         {
             return false;
@@ -44,13 +50,19 @@ public class GamePauseMenu : MonoBehaviour
         return true;
     }
 
-    public static GamePauseMenu Create(Transform parent, RespawnClassPicker respawnPicker)
+    public static GamePauseMenu Create(
+        Transform parent,
+        RespawnClassPicker respawnPicker,
+        ShootingRangeCharacterPicker characterPicker = null,
+        ThirdPersonController player = null)
     {
         var go = new GameObject("Game Pause Menu");
         go.transform.SetParent(parent, false);
         var menu = go.AddComponent<GamePauseMenu>();
         _instance = menu;
         menu._respawnPicker = respawnPicker;
+        menu._characterPicker = characterPicker;
+        menu._player = player;
         menu.Build();
         return menu;
     }
@@ -75,6 +87,11 @@ public class GamePauseMenu : MonoBehaviour
         _overlayRoot.transform.SetParent(canvasGo.transform, false);
         MenuUiFactory.StretchFull(_overlayRoot.AddComponent<RectTransform>());
         _overlayRoot.SetActive(false);
+
+        if (GameSession.IsShootingRange)
+        {
+            _dummyStatsPanel = ShootingRangeDummyStatsPanel.Create(transform, null);
+        }
     }
 
     public void Toggle()
@@ -110,6 +127,12 @@ public class GamePauseMenu : MonoBehaviour
     {
         CreateDim(_overlayRoot.transform, 0.35f);
 
+        if (GameSession.IsShootingRange)
+        {
+            BuildShootingRangePauseContents();
+            return;
+        }
+
         var frame = MenuWindowFrame.CreateScreen(_overlayRoot.transform, "PAUSE", showBack: true,
             PauseFooterText(), new Vector2(480f, 420f), showHeader: false, Hide);
 
@@ -118,13 +141,30 @@ public class GamePauseMenu : MonoBehaviour
             new Vector2(0f, 70f), MenuUiFactory.StandardButtonSize, OpenRespawnPicker, enabled: !respawnLocked);
         if (respawnLocked)
         {
-            AddButtonLockIcon(respawnButton.transform);
+            MenuUiFactory.AddButtonLockIcon(respawnButton.transform);
         }
 
         MenuUiFactory.CreateButton(frame.Body, "Settings", "SETTINGS",
             new Vector2(0f, -10f), MenuUiFactory.StandardButtonSize, ShowSettings);
         MenuUiFactory.CreateButton(frame.Body, "Exit Match", "EXIT MATCH",
             new Vector2(0f, -90f), MenuUiFactory.StandardButtonSize, RequestExitMatch);
+    }
+
+    void BuildShootingRangePauseContents()
+    {
+        var frame = MenuWindowFrame.CreateScreen(_overlayRoot.transform, "PAUSE", showBack: true,
+            PauseFooterText(), new Vector2(480f, 560f), showHeader: false, Hide);
+
+        MenuUiFactory.CreateButton(frame.Body, "Choose Character", "CHOOSE CHARACTER",
+            new Vector2(0f, 130f), MenuUiFactory.StandardButtonSize, OpenCharacterPicker);
+        MenuUiFactory.CreateButton(frame.Body, "Dummy Stats", "DUMMY STATS",
+            new Vector2(0f, 50f), MenuUiFactory.StandardButtonSize, OpenDummyStats);
+        MenuUiFactory.CreateButton(frame.Body, "Reset Map", "RESET MAP",
+            new Vector2(0f, -30f), MenuUiFactory.StandardButtonSize, ResetMap);
+        MenuUiFactory.CreateButton(frame.Body, "Settings", "SETTINGS",
+            new Vector2(0f, -110f), MenuUiFactory.StandardButtonSize, ShowSettings);
+        MenuUiFactory.CreateButton(frame.Body, "Exit Match", "EXIT MATCH",
+            new Vector2(0f, -190f), MenuUiFactory.StandardButtonSize, RequestExitMatch);
     }
 
     static string PauseFooterText()
@@ -186,6 +226,22 @@ public class GamePauseMenu : MonoBehaviour
 
         Hide();
         _respawnPicker?.Show();
+    }
+
+    void OpenCharacterPicker()
+    {
+        Hide();
+        _characterPicker?.Show();
+    }
+
+    void OpenDummyStats()
+    {
+        _dummyStatsPanel?.Show();
+    }
+
+    void ResetMap()
+    {
+        ShootingRangeSession.ResetMap();
     }
 
     void ShowSettings()
@@ -289,52 +345,6 @@ public class GamePauseMenu : MonoBehaviour
             Destroy(_exitConfirmOverlay);
             _exitConfirmOverlay = null;
         }
-    }
-
-    static void AddButtonLockIcon(Transform buttonRoot)
-    {
-        var inner = buttonRoot.Find("Inner");
-        if (inner == null)
-        {
-            return;
-        }
-
-        var iconRoot = new GameObject("Lock Icon");
-        iconRoot.transform.SetParent(inner, false);
-        var iconRect = iconRoot.AddComponent<RectTransform>();
-        iconRect.anchorMin = new Vector2(1f, 0.5f);
-        iconRect.anchorMax = new Vector2(1f, 0.5f);
-        iconRect.pivot = new Vector2(1f, 0.5f);
-        iconRect.anchoredPosition = new Vector2(-10f, 0f);
-        iconRect.sizeDelta = new Vector2(18f, 22f);
-
-        var shackleGo = new GameObject("Shackle");
-        shackleGo.transform.SetParent(iconRoot.transform, false);
-        var shackleRect = shackleGo.AddComponent<RectTransform>();
-        shackleRect.anchorMin = new Vector2(0.5f, 1f);
-        shackleRect.anchorMax = new Vector2(0.5f, 1f);
-        shackleRect.pivot = new Vector2(0.5f, 1f);
-        shackleRect.sizeDelta = new Vector2(12f, 9f);
-        shackleRect.anchoredPosition = new Vector2(0f, -1f);
-        shackleGo.AddComponent<Image>().color = MenuUiFactory.MutedInk;
-
-        var bodyGo = new GameObject("Body");
-        bodyGo.transform.SetParent(iconRoot.transform, false);
-        var bodyRect = bodyGo.AddComponent<RectTransform>();
-        bodyRect.anchorMin = new Vector2(0.5f, 0f);
-        bodyRect.anchorMax = new Vector2(0.5f, 0f);
-        bodyRect.pivot = new Vector2(0.5f, 0f);
-        bodyRect.sizeDelta = new Vector2(12f, 10f);
-        bodyRect.anchoredPosition = new Vector2(0f, 1f);
-        bodyGo.AddComponent<Image>().color = MenuUiFactory.MutedInk;
-
-        var keyholeGo = new GameObject("Keyhole");
-        keyholeGo.transform.SetParent(bodyGo.transform, false);
-        var keyholeRect = keyholeGo.AddComponent<RectTransform>();
-        keyholeRect.anchorMin = new Vector2(0.5f, 0.5f);
-        keyholeRect.anchorMax = new Vector2(0.5f, 0.5f);
-        keyholeRect.sizeDelta = new Vector2(3f, 4f);
-        keyholeGo.AddComponent<Image>().color = MenuUiFactory.DisabledFill;
     }
 
     static void CreateDim(Transform parent, float alpha)

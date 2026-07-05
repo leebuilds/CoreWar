@@ -24,6 +24,8 @@ public static class GameSession
     public static string SelectedGameModeId { get; private set; }
     public static int RequiredPlayers { get; private set; } = 1;
 
+    public static bool IsShootingRange => SelectedGameModeId == "shooting_range";
+
     public static string LoadoutCardIdA { get; private set; }
     public static string LoadoutCardIdB { get; private set; }
     public static string ActiveCardId { get; private set; }
@@ -78,16 +80,26 @@ public static class GameSession
 
         LoadoutCardIdA = loadoutA;
         LoadoutCardIdB = loadoutB;
-        HasLoadoutSelected = !string.IsNullOrEmpty(loadoutA) && !string.IsNullOrEmpty(loadoutB);
+        HasLoadoutSelected = !string.IsNullOrEmpty(loadoutA) &&
+            (!string.IsNullOrEmpty(loadoutB) || IsShootingRange);
 
-        if (HasLoadoutSelected)
+        if (!string.IsNullOrEmpty(initialActiveCardId))
         {
-            SetActiveCard(initialActiveCardId ?? loadoutA);
+            SetActiveCard(initialActiveCardId);
+        }
+        else if (!string.IsNullOrEmpty(loadoutA))
+        {
+            SetActiveCard(loadoutA);
         }
         else
         {
             ActiveCardId = null;
             ActiveKit = CardKitDefinition.DefaultInfantryPlaceholder();
+        }
+
+        if (!inPrepPhase)
+        {
+            MarkMatchStarted();
         }
     }
 
@@ -177,6 +189,7 @@ public static class GameSession
         ActiveCardId = null;
         ActiveKit = null;
         _matchStartUtcSeconds = 0d;
+        ShootingRangeSession.Clear();
     }
 
     static double GetUtcNowSeconds()

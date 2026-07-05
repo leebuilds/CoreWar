@@ -74,7 +74,7 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 |--------|---------|
 | Sign In / Sign Up | Local username + passcode profiles (stored in `persistentDataPath`, not in git) |
 | Hub | Play, Decks, Settings, Logout, Quit — shown automatically when a session is still valid (1 hour of inactivity) |
-| Game Modes | Scrollable list of modes; selecting one starts local matchmaking (test one/two player) |
+| Game Modes | Scrollable list of modes (locked modes show a padlock); selecting one starts local matchmaking |
 | Decks | Browse all 30 class cards (vertical scroll only); each row is ~1/3 class specialty blurb + ~2/3 three tier cards; set a two-slot loadout; preview stats |
 | Match Prep | Arena loads behind card pick; press **READY** to look around and cycle hotbar; top banner counts down; movement unlocks when prep ends |
 | Settings | Light/dark theme, UI volume, UI sounds toggle, mouse sensitivity, account info |
@@ -87,8 +87,25 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
   are silent (back arrow still clicks)
 - **READY** on the match prep screen locks your spawn class and dismisses the card window; a small top banner counts down while you look around and cycle hotbar (no crosshair or build previews until prep ends)
 - During matchmaking, a bottom panel shows live status plus **Settings**; **Cancel matchmaking** or back/ESC warns before stopping search
+- **Game modes:** **SHOOTING RANGE** requires loadout slot 1 only; **TEST ONE PLAYER** requires both slots; **TEST TWO PLAYER** is locked until online play (shows padlock)
+- Hub **PLAY** is always available to browse modes even when some modes are locked
 
-### In the field scene
+### Shooting Range (solo)
+
+- Long flat lane (1 voxel = 1 meter) with side walls, backstop, and a **firing-line fence at 0 m**
+- **10 m walk zone** behind the fence (Z = −10 to 0); you spawn at the center (~Z = −5); target distances are measured from the fence forward
+- **8 tan humanoid dummies** at **10, 50, 100, 200, 300, 400, 500, 600 m**, spread across the lane — **10 m on the right**, **600 m on the left**, others interpolated in between (not a straight row)
+- Red **distance sign on each dummy’s chest**, facing the firing line
+- **No match prep** — instant spawn with crosshair, movement, gun, and full hotbar; starts with **loadout slot 1** card
+- Matchmaking UI still runs but completes immediately (zero delay)
+- Body hits deal 30 damage, head hits 60; **ding** sound on hit (brighter ding on headshot); dummies respawn ~3 s after being dropped
+- Bullets and bullet holes persist until **Reset Map** or until **100** combined projectile entities exist (oldest removed)
+- Terrain uses merged panels (floor, walls, backstop, fence) for performance instead of per-voxel cubes
+- Pause menu (**Esc**): **Choose Character** (owned cards only, full collection overlay with game visible behind), **Dummy Stats** (logarithmic HP slider 10–1000), **Reset Map**, Settings, Exit Match
+- Choose Character teleports you back to the firing-line spawn and resets velocity/recoil
+- No stats are saved from range sessions
+
+### In the field scene (standard modes)
 
 - After matchmaking, the arena loads behind the match prep overlay (pick spawn class, then press **READY**)
 - Before **READY**, only the card window is interactive
@@ -166,7 +183,7 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/SceneFlow.cs` — scene transitions, cursor/input resets, EventSystem cleanup
 - `Assets/Scripts/MainMenuController.cs` — menu scene bootstrap (camera, audio listener, navigator)
 - `Assets/Scripts/UI/MenuNavigator.cs` — sign-in, hub, game modes, matchmaking flow, decks, settings routing; theme backdrop
-- `Assets/Scripts/Matchmaking/` — `GameModeDefinition`, `MatchmakingSession`, `IMatchmakingBackend`, local sim backend
+- `Assets/Scripts/Matchmaking/` — `GameModeDefinition`, `MatchmakingSession`, `IMatchmakingBackend`, local sim backend (per-mode playability and instant matchmaking for shooting range)
 - `Assets/Scripts/UI/GameModeButtonFx.cs` — bullet holes + smoke on selected game mode button
 - `Assets/Scripts/UI/MatchmakingPanel.cs` — bottom matchmaking status panel (feed, timer, count, cancel)
 - `Assets/Scripts/UI/MatchClassSelectPanel.cs` — in-arena spawn picker, READY, 10s prep countdown
@@ -177,8 +194,11 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/UI/MenuSettings.cs` — persistent client settings (`settings.json`)
 - `Assets/Scripts/UI/MenuSettingsPanel.cs` — shared settings form (hub + pause menu)
 - `Assets/Scripts/UI/MenuUiSounds.cs` — procedural hover, click, gunshot sounds
-- `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay (locked respawn during prep, exit confirm, theme refresh)
+- `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay (range mode: Choose Character, Dummy Stats, Reset Map)
 - `Assets/Scripts/UI/RespawnClassPicker.cs` — respawn class selection
+- `Assets/Scripts/UI/ShootingRangeCharacterPicker.cs` — owned-card collection overlay for range character swaps
+- `Assets/Scripts/UI/ShootingRangeDummyStatsPanel.cs` — logarithmic dummy HP slider
+- `Assets/Scripts/UI/DecksCollectionView.cs` — shared owned-card scroll builder
 - `Assets/Scripts/UI/CardTileView.cs` — collection card tiles (compact + deck-row sizing), spawn selection visuals
 - `Assets/Scripts/UI/DecksLayout.cs` — decks window and row width constants
 - `Assets/Scripts/Profile/` — local profile repository, 1-hour session restore, passcode hashing
@@ -189,7 +209,9 @@ The menu UI and the voxel field are generated from code at runtime:
 **Gameplay**
 
 - `Assets/Scripts/GameSession.cs` — team, loadout, game mode, match clock, and active card into the game scene
-- `Assets/Scripts/VoxelFieldBuilder.cs` — flat 32×32 grid of white voxels with lighting
+- `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid of white voxels (32×32 standard; 48×680 shooting range) with lighting
+- `Assets/Scripts/ShootingRange/` — merged terrain + firing-line fence, spread dummies, hit zones, session state (bullets, reset)
+- `Assets/Scripts/VoxelMaterialUtility.cs` — solid-color materials for range props and hit flashes
 - `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, tools, pause
 - `Assets/Scripts/ProjectileBullet.cs` — visual bullet flight and bullet holes
 - `Assets/Scripts/CapsuleRobotVisual.cs` + `Assets/Scripts/JerseyInkUtility.cs` — capsule robot with jersey
@@ -203,6 +225,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/Third_Person_Shooter_Game_Design_v2.md)
+- [Shooting range solo mode and layout polish session recap](docs/chats/2026-07-05-shooting-range-mode-session.md)
 - [Decks collection layout and card catalog session recap](docs/chats/2026-07-05-decks-layout-and-card-catalog-session.md)
 - [In-arena prep, pause polish, and overlay theming session recap](docs/chats/2026-07-05-in-arena-prep-pause-flow-session.md)
 - [Matchmaking, pre-match flow, and menu polish session recap](docs/chats/2026-07-05-matchmaking-prep-flow-session.md)

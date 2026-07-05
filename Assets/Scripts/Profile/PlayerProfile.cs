@@ -15,6 +15,11 @@ public class PlayerProfile
     public string[] loadoutCardIds;
     public string lastActiveUtc;
 
+    public bool HasLoadoutSlot1 =>
+        loadoutCardIds != null &&
+        loadoutCardIds.Length >= 1 &&
+        !string.IsNullOrEmpty(loadoutCardIds[0]);
+
     public bool HasCompleteLoadout =>
         loadoutCardIds != null &&
         loadoutCardIds.Length >= 2 &&

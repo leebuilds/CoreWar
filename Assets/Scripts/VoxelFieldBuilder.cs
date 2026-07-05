@@ -17,11 +17,18 @@ public class VoxelFieldBuilder : MonoBehaviour
     {
         SceneFlow.InitializeGameScene();
 
+        bool isRange = GameSession.IsShootingRange;
+        if (isRange)
+        {
+            gridWidth = 48;
+            gridLength = 680;
+        }
+
         var voxelMaterial = CreateVoxelMaterial();
         var slipperyColliderMaterial = CreateSlipperyColliderMaterial();
-        float offsetX = (gridWidth - 1) * 0.5f * voxelSize;
-        float offsetZ = (gridLength - 1) * 0.5f * voxelSize;
-        var gridOrigin = new Vector3(-offsetX, -0.5f * voxelSize, -offsetZ);
+        Vector3 gridOrigin = isRange
+            ? new Vector3(-gridWidth * 0.5f * voxelSize, -0.5f * voxelSize, ShootingRangeSession.GridOriginWorldZ * voxelSize)
+            : ComputeCenteredGridOrigin();
 
         var fieldRoot = new GameObject("Voxel Field").transform;
         var builtRoot = new GameObject("Built Voxels").transform;
@@ -36,10 +43,30 @@ public class VoxelFieldBuilder : MonoBehaviour
             slipperyColliderMaterial,
             builtRoot);
 
-        BuildField(voxelMaterial, slipperyColliderMaterial, voxelWorld, fieldRoot, gridOrigin);
+        BuildField(voxelMaterial, slipperyColliderMaterial, voxelWorld, fieldRoot, gridOrigin, isRange);
 
-        CreateLight();
-        CreatePlayer(voxelWorld);
+        if (isRange)
+        {
+            ShootingRangeTerrain.Build(
+                transform,
+                voxelWorld,
+                gridOrigin,
+                voxelSize,
+                gridWidth,
+                gridLength,
+                voxelMaterial,
+                slipperyColliderMaterial);
+
+            ShootingRangeBuilder.BuildTargets(
+                transform,
+                gridOrigin,
+                voxelSize,
+                gridWidth,
+                slipperyColliderMaterial);
+        }
+
+        CreateLight(isRange);
+        var player = CreatePlayer(voxelWorld, isRange);
         MatchClockHud.Create();
 
         if (GameSession.IsInPrepPhase)
@@ -50,14 +77,25 @@ public class VoxelFieldBuilder : MonoBehaviour
         {
             GameSession.EnsureMatchClockStarted();
         }
+
+        if (isRange && player != null)
+        {
+            var controller = player.GetComponent<ThirdPersonController>();
+            ShootingRangeSession.Initialize(voxelWorld, controller);
+        }
     }
 
-    void CreateLight()
+    Vector3 ComputeCenteredGridOrigin()
+    {
+        float offsetX = (gridWidth - 1) * 0.5f * voxelSize;
+        float offsetZ = (gridLength - 1) * 0.5f * voxelSize;
+        return new Vector3(-offsetX, -0.5f * voxelSize, -offsetZ);
+    }
+
+    void CreateLight(bool isRange)
     {
         var go = new GameObject("Directional Light");
         go.transform.position = new Vector3(0f, 30f, 0f);
-        // Yaw -45 so the sun's horizontal tilt strikes two vertical faces
-        // (+X and -Z) with equal strength.
         go.transform.rotation = Quaternion.Euler(78f, -45f, 0f);
 
         var light = go.AddComponent<Light>();
@@ -78,20 +116,23 @@ public class VoxelFieldBuilder : MonoBehaviour
 
         QualitySettings.shadows = ShadowQuality.All;
         QualitySettings.shadowProjection = ShadowProjection.CloseFit;
-        QualitySettings.shadowDistance = 120f;
+        QualitySettings.shadowDistance = isRange ? 150f : 120f;
         QualitySettings.shadowResolution = ShadowResolution.VeryHigh;
     }
 
-    void CreatePlayer(VoxelLightingWorld voxelWorld)
+    GameObject CreatePlayer(VoxelLightingWorld voxelWorld, bool isRange)
     {
         if (!GameSession.IsMatchActive)
         {
-            // Supports pressing Play directly on the Game scene in the editor.
             GameSession.BeginMatch(GameSession.Team.Red);
         }
 
+        var spawnPosition = isRange
+            ? ShootingRangeSession.PlayerSpawnPosition
+            : new Vector3(0f, 1.1f, -5f);
+
         var player = new GameObject("Player");
-        player.transform.position = new Vector3(0f, 1.1f, -5f);
+        player.transform.position = spawnPosition;
 
         var capsule = player.AddComponent<CapsuleCollider>();
         capsule.height = 1.8f;
@@ -120,7 +161,7 @@ public class VoxelFieldBuilder : MonoBehaviour
         var cam = camObject.AddComponent<Camera>();
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = new Color(0.92f, 0.94f, 0.96f);
-        cam.farClipPlane = 500f;
+        cam.farClipPlane = isRange ? 750f : 500f;
         cam.nearClipPlane = 0.03f;
 
         camObject.AddComponent<AudioListener>();
@@ -141,6 +182,8 @@ public class VoxelFieldBuilder : MonoBehaviour
         controller.cameraPitchPivot = pitchPivot.transform;
         controller.characterVisual = visualRoot.transform;
         controller.voxelWorld = voxelWorld;
+
+        return player;
     }
 
     void BuildField(
@@ -148,8 +191,14 @@ public class VoxelFieldBuilder : MonoBehaviour
         PhysicsMaterial colliderMaterial,
         VoxelLightingWorld voxelWorld,
         Transform fieldRoot,
-        Vector3 gridOrigin)
+        Vector3 gridOrigin,
+        bool skipIndividualVoxels)
     {
+        if (skipIndividualVoxels)
+        {
+            return;
+        }
+
         for (int x = 0; x < gridWidth; x++)
         {
             for (int z = 0; z < gridLength; z++)
@@ -157,7 +206,6 @@ public class VoxelFieldBuilder : MonoBehaviour
                 var voxel = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 voxel.name = $"Voxel ({x},{z})";
                 voxel.transform.SetParent(fieldRoot, false);
-                // Top surface of the field sits at y = 0.
                 voxel.transform.position = new Vector3(
                     gridOrigin.x + x * voxelSize,
                     gridOrigin.y,
@@ -205,10 +253,6 @@ public class VoxelFieldBuilder : MonoBehaviour
         };
     }
 
-    /// <summary>
-    /// White tile with a thin gray border so each cube face reads
-    /// as one cell of the white grid ground from the design doc.
-    /// </summary>
     static Texture2D CreateGridTexture()
     {
         const int size = 32;

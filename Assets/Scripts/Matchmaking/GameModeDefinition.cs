@@ -5,12 +5,32 @@ using System.Collections.Generic;
 /// </summary>
 public class GameModeDefinition
 {
+    public enum LoadoutRequirement
+    {
+        None,
+        Slot1,
+        Complete
+    }
+
     public string id;
     public string displayName;
     public int requiredPlayers;
+    public LoadoutRequirement loadoutRequirement = LoadoutRequirement.Complete;
+    public bool skipMatchmakingDelay;
+    public bool skipPrepPhase;
+    public bool isLocallyPlayable = true;
 
     static readonly List<GameModeDefinition> All = new List<GameModeDefinition>
     {
+        new GameModeDefinition
+        {
+            id = "shooting_range",
+            displayName = "SHOOTING RANGE",
+            requiredPlayers = 1,
+            loadoutRequirement = LoadoutRequirement.Slot1,
+            skipMatchmakingDelay = true,
+            skipPrepPhase = true
+        },
         new GameModeDefinition
         {
             id = "test_one_player",
@@ -21,7 +41,8 @@ public class GameModeDefinition
         {
             id = "test_two_player",
             displayName = "TEST TWO PLAYER",
-            requiredPlayers = 2
+            requiredPlayers = 2,
+            isLocallyPlayable = false
         }
     };
 
@@ -43,5 +64,23 @@ public class GameModeDefinition
         }
 
         return null;
+    }
+
+    public bool IsPlayable()
+    {
+        if (!isLocallyPlayable)
+        {
+            return false;
+        }
+
+        switch (loadoutRequirement)
+        {
+            case LoadoutRequirement.None:
+                return ProfileSession.IsSignedIn;
+            case LoadoutRequirement.Slot1:
+                return ProfileSession.HasLoadoutSlot1;
+            default:
+                return ProfileSession.HasCompleteLoadout;
+        }
     }
 }

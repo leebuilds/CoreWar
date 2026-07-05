@@ -94,6 +94,7 @@ public class ThirdPersonController : MonoBehaviour
     CardKitDefinition _activeKit;
     int _selectedHotbarIndex;
     RespawnClassPicker _respawnPicker;
+    ShootingRangeCharacterPicker _characterPicker;
     GamePauseMenu _pauseMenu;
     VoxelLightingWorld.BuildPieceType _selectedPiece = VoxelLightingWorld.BuildPieceType.Wall;
     VoxelLightingWorld.BuildPieceCandidate _buildCandidate;
@@ -238,13 +239,31 @@ public class ThirdPersonController : MonoBehaviour
         ProfileSession.TouchActivity();
         _wasInPrepPhase = GameSession.IsInPrepPhase;
         _wasPrepReady = GameSession.IsPrepReady;
+
+        if (GameSession.IsShootingRange)
+        {
+            bulletLifetime = 12f;
+            bulletLandedLifetime = 999f;
+        }
+
         _respawnPicker = RespawnClassPicker.Create(transform, cardId =>
         {
             GameSession.SetActiveCard(cardId);
             ApplyKitFromSession();
             RespawnAtValidMapPosition();
         });
-        _pauseMenu = GamePauseMenu.Create(transform, _respawnPicker);
+
+        if (GameSession.IsShootingRange)
+        {
+            _characterPicker = ShootingRangeCharacterPicker.Create(transform, cardId =>
+            {
+                GameSession.SetActiveCard(cardId);
+                ApplyKitFromSession();
+                ResetToSpawn();
+            });
+        }
+
+        _pauseMenu = GamePauseMenu.Create(transform, _respawnPicker, _characterPicker, this);
 
         CreateHeldToolVisuals();
         RefreshHeldToolVisibility();
@@ -265,6 +284,22 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
+        ApplySpawnReset(respawnPosition);
+    }
+
+    public void ResetToSpawn()
+    {
+        if (GameSession.IsShootingRange)
+        {
+            ApplySpawnReset(ShootingRangeSession.PlayerSpawnPosition);
+            return;
+        }
+
+        RespawnAtValidMapPosition();
+    }
+
+    void ApplySpawnReset(Vector3 respawnPosition)
+    {
         _selectorOpen = false;
         _rectangleDragActive = false;
         _scrollTargetLocked = false;
@@ -430,6 +465,12 @@ public class ThirdPersonController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Escape))
         {
+            if (_characterPicker != null && _characterPicker.IsOpen)
+            {
+                _characterPicker.Hide();
+                return;
+            }
+
             if (_respawnPicker != null && _respawnPicker.IsOpen)
             {
                 _respawnPicker.Hide();
@@ -449,6 +490,11 @@ public class ThirdPersonController : MonoBehaviour
         }
 
         if (_pauseMenu != null && _pauseMenu.IsOpen)
+        {
+            return;
+        }
+
+        if (_characterPicker != null && _characterPicker.IsOpen)
         {
             return;
         }
@@ -504,7 +550,8 @@ public class ThirdPersonController : MonoBehaviour
     bool IsUiOverlayBlocking()
     {
         return (_pauseMenu != null && _pauseMenu.IsOpen) ||
-               (_respawnPicker != null && _respawnPicker.IsOpen);
+               (_respawnPicker != null && _respawnPicker.IsOpen) ||
+               (_characterPicker != null && _characterPicker.IsOpen);
     }
 
     bool IsMovementBlocked()

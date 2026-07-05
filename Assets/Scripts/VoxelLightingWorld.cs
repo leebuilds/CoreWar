@@ -10,6 +10,7 @@ using UnityEngine.Rendering;
 public class VoxelLightingWorld : MonoBehaviour
 {
     readonly Dictionary<Vector3Int, GameObject> _voxels = new Dictionary<Vector3Int, GameObject>();
+    readonly HashSet<Vector3Int> _occupiedCells = new HashSet<Vector3Int>();
     readonly HashSet<Vector3Int> _playerPlaced = new HashSet<Vector3Int>();
     readonly Dictionary<BuildPieceSlot, GameObject> _buildPieces = new Dictionary<BuildPieceSlot, GameObject>();
 
@@ -128,6 +129,44 @@ public class VoxelLightingWorld : MonoBehaviour
     public void RegisterBaseVoxel(Vector3Int cell, GameObject voxel)
     {
         _voxels[cell] = voxel;
+        _occupiedCells.Add(cell);
+    }
+
+    public void RegisterStaticVoxel(Vector3Int cell, GameObject voxel)
+    {
+        RegisterBaseVoxel(cell, voxel);
+    }
+
+    public void RegisterOccupiedCell(Vector3Int cell)
+    {
+        _occupiedCells.Add(cell);
+    }
+
+    public void ClearAllPlayerBuilt()
+    {
+        var builtCells = new List<Vector3Int>(_playerPlaced);
+        for (int i = 0; i < builtCells.Count; i++)
+        {
+            Vector3Int cell = builtCells[i];
+            if (_voxels.TryGetValue(cell, out var go))
+            {
+                _voxels.Remove(cell);
+                _occupiedCells.Remove(cell);
+                Destroy(go);
+            }
+        }
+
+        _playerPlaced.Clear();
+
+        var buildRoots = new List<GameObject>(_buildPieces.Values);
+        _buildPieces.Clear();
+        for (int i = 0; i < buildRoots.Count; i++)
+        {
+            if (buildRoots[i] != null)
+            {
+                Destroy(buildRoots[i]);
+            }
+        }
     }
 
     public Vector3 CellToWorld(Vector3Int cell)
@@ -170,6 +209,7 @@ public class VoxelLightingWorld : MonoBehaviour
         marker.Initialize(cell);
 
         _voxels[cell] = voxel;
+        _occupiedCells.Add(cell);
         _playerPlaced.Add(cell);
         return true;
     }
@@ -190,6 +230,7 @@ public class VoxelLightingWorld : MonoBehaviour
         if (_voxels.TryGetValue(cell, out var go))
         {
             _voxels.Remove(cell);
+            _occupiedCells.Remove(cell);
             _playerPlaced.Remove(cell);
             Destroy(go);
             return true;
@@ -370,7 +411,7 @@ public class VoxelLightingWorld : MonoBehaviour
             return false;
         }
 
-        if (_voxels.ContainsKey(cell))
+        if (_occupiedCells.Contains(cell))
         {
             return false;
         }
@@ -635,7 +676,7 @@ public class VoxelLightingWorld : MonoBehaviour
 
     bool HasBuildConnection(BuildPieceCandidate candidate)
     {
-        if (CanRestOnGround(candidate) && _voxels.ContainsKey(candidate.Cell + Vector3Int.down))
+        if (CanRestOnGround(candidate) && _occupiedCells.Contains(candidate.Cell + Vector3Int.down))
         {
             return true;
         }

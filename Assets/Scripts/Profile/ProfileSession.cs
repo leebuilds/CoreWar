@@ -28,6 +28,8 @@ public static class ProfileSession
 
     public static bool HasCompleteLoadout => _activeProfile != null && _activeProfile.HasCompleteLoadout;
 
+    public static bool HasLoadoutSlot1 => _activeProfile != null && _activeProfile.HasLoadoutSlot1;
+
     public static void EnsureInitialized()
     {
         if (_initialized)

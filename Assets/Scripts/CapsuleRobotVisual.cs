@@ -36,6 +36,27 @@ public class CapsuleRobotVisual : MonoBehaviour
         CreatePart("Foot R", PrimitiveType.Capsule, new Vector3(0.16f, 0.08f, 0.04f), new Vector3(0.16f, 0.08f, 0.22f), _metalMaterial);
     }
 
+    public void BuildNeutralDummy()
+    {
+        var tan = new Color(0.76f, 0.65f, 0.52f);
+        _metalMaterial = CreateBodyMaterial(tan);
+        _jerseyFrontMaterial = _metalMaterial;
+        _jerseyBackMaterial = _metalMaterial;
+
+        CreatePart("Head", PrimitiveType.Capsule, new Vector3(0f, 1.52f, 0f), new Vector3(0.34f, 0.22f, 0.34f), _metalMaterial);
+        CreatePart("Eye", PrimitiveType.Sphere, new Vector3(0f, 1.54f, 0.15f), new Vector3(0.12f, 0.12f, 0.05f), _metalMaterial);
+        CreatePart("Torso", PrimitiveType.Capsule, new Vector3(0f, 1.05f, 0f), new Vector3(0.52f, 0.34f, 0.38f), _metalMaterial);
+        CreatePart("Hips", PrimitiveType.Capsule, new Vector3(0f, 0.72f, 0f), new Vector3(0.42f, 0.14f, 0.34f), _metalMaterial);
+        CreatePart("Shoulder L", PrimitiveType.Sphere, new Vector3(-0.34f, 1.18f, 0f), new Vector3(0.12f, 0.12f, 0.12f), _metalMaterial);
+        CreatePart("Shoulder R", PrimitiveType.Sphere, new Vector3(0.34f, 1.18f, 0f), new Vector3(0.12f, 0.12f, 0.12f), _metalMaterial);
+        CreatePart("Arm L", PrimitiveType.Capsule, new Vector3(-0.42f, 0.92f, 0f), new Vector3(0.1f, 0.22f, 0.1f), _metalMaterial);
+        CreatePart("Arm R", PrimitiveType.Capsule, new Vector3(0.42f, 0.92f, 0f), new Vector3(0.1f, 0.22f, 0.1f), _metalMaterial);
+        CreatePart("Leg L", PrimitiveType.Capsule, new Vector3(-0.16f, 0.34f, 0f), new Vector3(0.14f, 0.28f, 0.14f), _metalMaterial);
+        CreatePart("Leg R", PrimitiveType.Capsule, new Vector3(0.16f, 0.34f, 0f), new Vector3(0.14f, 0.28f, 0.14f), _metalMaterial);
+        CreatePart("Foot L", PrimitiveType.Capsule, new Vector3(-0.16f, 0.08f, 0.04f), new Vector3(0.16f, 0.08f, 0.22f), _metalMaterial);
+        CreatePart("Foot R", PrimitiveType.Capsule, new Vector3(0.16f, 0.08f, 0.04f), new Vector3(0.16f, 0.08f, 0.22f), _metalMaterial);
+    }
+
     void CreatePart(string name, PrimitiveType type, Vector3 localPosition, Vector3 localScale, Material material)
     {
         var part = GameObject.CreatePrimitive(type);

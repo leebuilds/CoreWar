@@ -84,6 +84,20 @@ public static class MenuUiSounds
         _source.PlayOneShot(_gunshotClip);
     }
 
+    public static void PlayRangeDing(bool headshot)
+    {
+        EnsureInitialized();
+        if (!MenuSettings.UiSoundsEnabled)
+        {
+            return;
+        }
+
+        float frequency = headshot ? 1560f : 980f;
+        float volume = headshot ? 0.42f : 0.28f;
+        _source.pitch = 1f;
+        _source.PlayOneShot(CreateClickClip(frequency, 0.08f, volume));
+    }
+
     public static void WireButton(Button button, bool playClick = true)
     {
         if (button == null)

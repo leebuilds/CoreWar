@@ -806,6 +806,52 @@ public static class MenuUiFactory
         rect.offsetMax = Vector2.zero;
     }
 
+    public static void AddButtonLockIcon(Transform buttonRoot)
+    {
+        var inner = buttonRoot.Find("Inner");
+        if (inner == null)
+        {
+            return;
+        }
+
+        var iconRoot = new GameObject("Lock Icon");
+        iconRoot.transform.SetParent(inner, false);
+        var iconRect = iconRoot.AddComponent<RectTransform>();
+        iconRect.anchorMin = new Vector2(1f, 0.5f);
+        iconRect.anchorMax = new Vector2(1f, 0.5f);
+        iconRect.pivot = new Vector2(1f, 0.5f);
+        iconRect.anchoredPosition = new Vector2(-10f, 0f);
+        iconRect.sizeDelta = new Vector2(18f, 22f);
+
+        var shackleGo = new GameObject("Shackle");
+        shackleGo.transform.SetParent(iconRoot.transform, false);
+        var shackleRect = shackleGo.AddComponent<RectTransform>();
+        shackleRect.anchorMin = new Vector2(0.5f, 1f);
+        shackleRect.anchorMax = new Vector2(0.5f, 1f);
+        shackleRect.pivot = new Vector2(0.5f, 1f);
+        shackleRect.sizeDelta = new Vector2(12f, 9f);
+        shackleRect.anchoredPosition = new Vector2(0f, -1f);
+        shackleGo.AddComponent<Image>().color = MutedInk;
+
+        var bodyGo = new GameObject("Body");
+        bodyGo.transform.SetParent(iconRoot.transform, false);
+        var bodyRect = bodyGo.AddComponent<RectTransform>();
+        bodyRect.anchorMin = new Vector2(0.5f, 0f);
+        bodyRect.anchorMax = new Vector2(0.5f, 0f);
+        bodyRect.pivot = new Vector2(0.5f, 0f);
+        bodyRect.sizeDelta = new Vector2(12f, 10f);
+        bodyRect.anchoredPosition = new Vector2(0f, 1f);
+        bodyGo.AddComponent<Image>().color = MutedInk;
+
+        var keyholeGo = new GameObject("Keyhole");
+        keyholeGo.transform.SetParent(bodyGo.transform, false);
+        var keyholeRect = keyholeGo.AddComponent<RectTransform>();
+        keyholeRect.anchorMin = new Vector2(0.5f, 0.5f);
+        keyholeRect.anchorMax = new Vector2(0.5f, 0.5f);
+        keyholeRect.sizeDelta = new Vector2(3f, 4f);
+        keyholeGo.AddComponent<Image>().color = DisabledFill;
+    }
+
     /// <summary>
     /// HUD-style corner brackets: thin frame plus thicker L-shaped accents at each corner.
     /// </summary>
