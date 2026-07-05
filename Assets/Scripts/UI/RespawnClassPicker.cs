@@ -27,6 +27,7 @@ public class RespawnClassPicker : MonoBehaviour
     void Build(Action<string> onCardSelected)
     {
         _onCardSelected = onCardSelected;
+        MenuUiFactory.EnsureEventSystem();
 
         var canvasGo = new GameObject("Picker Canvas");
         canvasGo.transform.SetParent(transform, false);
@@ -66,7 +67,7 @@ public class RespawnClassPicker : MonoBehaviour
         MenuUiFactory.StretchFull(dim.GetComponent<RectTransform>());
 
         MenuUiFactory.CreateText(_overlayRoot.transform, "Title", "CHOOSE CLASS",
-            52, FontStyle.Bold, TextAnchor.MiddleCenter, new Vector2(0f, 280f), new Vector2(900f, 80f), MenuUiFactory.Background);
+            52, FontStyle.Bold, TextAnchor.MiddleCenter, new Vector2(0f, 280f), new Vector2(900f, 80f), MenuUiFactory.Ink);
 
         var cardA = CardCatalog.Get(GameSession.LoadoutCardIdA);
         var cardB = CardCatalog.Get(GameSession.LoadoutCardIdB);

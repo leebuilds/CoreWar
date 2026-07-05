@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 using System.IO;
 using UnityEngine;
 
@@ -47,8 +48,7 @@ public static class ProfileSession
             return;
         }
 
-        var elapsed = DateTime.UtcNow - _activeProfile.GetLastActiveUtc();
-        if (elapsed.TotalHours > SessionTimeoutHours)
+        if (IsSessionExpired(_activeProfile))
         {
             Logout();
         }
@@ -78,6 +78,7 @@ public static class ProfileSession
 
         _activeProfile.TouchLastActive();
         _repository.SaveProfile(_activeProfile);
+        SaveSessionFile(_activeProfile.profileId);
     }
 
     public static void SaveActiveProfile()
@@ -179,14 +180,30 @@ public static class ProfileSession
             return;
         }
 
-        var elapsed = DateTime.UtcNow - profile.GetLastActiveUtc();
-        if (elapsed.TotalHours > SessionTimeoutHours)
+        if (IsSessionExpired(profile))
         {
             DeleteSessionFile();
             return;
         }
 
         _activeProfile = profile;
+    }
+
+    static bool IsSessionExpired(PlayerProfile profile)
+    {
+        if (profile == null)
+        {
+            return true;
+        }
+
+        if (string.IsNullOrEmpty(profile.lastActiveUtc))
+        {
+            return false;
+        }
+
+        var lastActive = profile.GetLastActiveUtc();
+        var elapsed = DateTime.UtcNow - lastActive;
+        return elapsed.TotalHours > SessionTimeoutHours;
     }
 
     static void SaveSessionFile(string profileId)

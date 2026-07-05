@@ -8,9 +8,85 @@ using UnityEngine.UI;
 /// </summary>
 public static class MenuUiFactory
 {
-    public static readonly Color Background = new Color(0.97f, 0.97f, 0.97f);
-    public static readonly Color Ink = new Color(0.08f, 0.08f, 0.08f);
-    public static readonly Color MutedInk = new Color(0.35f, 0.35f, 0.35f);
+    static readonly Color LightBackground = new Color(0.97f, 0.97f, 0.97f);
+    static readonly Color LightInk = new Color(0.08f, 0.08f, 0.08f);
+    static readonly Color LightMutedInk = new Color(0.35f, 0.35f, 0.35f);
+    static readonly Color LightPanelFill = Color.white;
+    static readonly Color LightDisabledFill = new Color(0.92f, 0.92f, 0.92f);
+    static readonly Color LightScrollViewport = new Color(0.98f, 0.98f, 0.98f);
+
+    static readonly Color DarkBackground = Color.black;
+    static readonly Color DarkInk = new Color(0.94f, 0.94f, 0.95f);
+    static readonly Color DarkMutedInk = new Color(0.68f, 0.68f, 0.7f);
+    static readonly Color DarkPanelFill = new Color(0.12f, 0.12f, 0.13f);
+    static readonly Color DarkDisabledFill = new Color(0.18f, 0.18f, 0.19f);
+    static readonly Color DarkScrollViewport = new Color(0.1f, 0.1f, 0.11f);
+
+    public static Color Background
+    {
+        get
+        {
+            MenuSettings.EnsureLoaded();
+            return MenuSettings.IsDarkMode ? DarkBackground : LightBackground;
+        }
+    }
+
+    public static Color Ink
+    {
+        get
+        {
+            MenuSettings.EnsureLoaded();
+            return MenuSettings.IsDarkMode ? DarkInk : LightInk;
+        }
+    }
+
+    public static Color MutedInk
+    {
+        get
+        {
+            MenuSettings.EnsureLoaded();
+            return MenuSettings.IsDarkMode ? DarkMutedInk : LightMutedInk;
+        }
+    }
+
+    public static Color PanelFill
+    {
+        get
+        {
+            MenuSettings.EnsureLoaded();
+            return MenuSettings.IsDarkMode ? DarkPanelFill : LightPanelFill;
+        }
+    }
+
+    public static Color ButtonFill => PanelFill;
+    public static Color InputFill => PanelFill;
+    public static Color ScrollViewportFill
+    {
+        get
+        {
+            MenuSettings.EnsureLoaded();
+            return MenuSettings.IsDarkMode ? DarkScrollViewport : LightScrollViewport;
+        }
+    }
+
+    public static Color DisabledFill
+    {
+        get
+        {
+            MenuSettings.EnsureLoaded();
+            return MenuSettings.IsDarkMode ? DarkDisabledFill : LightDisabledFill;
+        }
+    }
+
+    public static Color OnInk
+    {
+        get
+        {
+            MenuSettings.EnsureLoaded();
+            return MenuSettings.IsDarkMode ? DarkBackground : Color.white;
+        }
+    }
+
     public static readonly Color Disabled = new Color(0.55f, 0.55f, 0.55f);
     public static readonly Color LoadoutOutline = new Color(0.15f, 0.78f, 0.28f);
     public static readonly Color Error = new Color(0.75f, 0.12f, 0.12f);
@@ -18,11 +94,17 @@ public static class MenuUiFactory
     public const int WindowBorderWidth = 2;
     public const float TitleBarHeight = 56f;
     public const float HeaderHeight = 108f;
-    public const float FooterHeight = 48f;
+    public const float FooterHeight = 52f;
     public const float ContentPadding = 16f;
-    public const int TitleFontSize = 24;
-    public const int BodyFontSize = 20;
-    public const int FooterFontSize = 16;
+    public const int TitleFontSize = 28;
+    public const int BodyFontSize = 24;
+    public const int FooterFontSize = 20;
+    public const int LinkFontSize = 24;
+    public const int ButtonFontSize = 26;
+    public const int InputFontSize = 24;
+    public const int HintFontSize = 22;
+    public const int SectionFontSize = 20;
+    public const int SmallFontSize = 20;
     public const float WindowFadeDuration = 0.12f;
     public const float CardHoverScale = 1.04f;
 
@@ -145,13 +227,20 @@ public static class MenuUiFactory
     public static Button CreateButton(Transform parent, string name, string label,
         Vector2 anchoredPos, Vector2 size, UnityAction onClick, bool enabled = true)
     {
-        var button = CreateBorderedButton(parent, name, label, size, anchoredPos, anchorRight: false,
-            onClick, enabled, anchored: true);
-        return button;
+        return CreateBorderedButton(parent, name, label, size, anchoredPos, anchorRight: false,
+            onClick, enabled, anchored: true, wireSounds: true);
+    }
+
+    public static Button CreateSettingsButton(Transform parent, string name, string label,
+        Vector2 anchoredPos, Vector2 size, UnityAction onClick, bool enabled = true)
+    {
+        return CreateBorderedButton(parent, name, label, size, anchoredPos, anchorRight: false,
+            onClick, enabled, anchored: true, wireSounds: false);
     }
 
     static Button CreateBorderedButton(Transform parent, string name, string label, Vector2 size,
-        Vector2 anchoredPos, bool anchorRight, UnityAction onClick, bool enabled, bool anchored)
+        Vector2 anchoredPos, bool anchorRight, UnityAction onClick, bool enabled, bool anchored,
+        bool wireSounds = true)
     {
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
@@ -191,13 +280,38 @@ public static class MenuUiFactory
         innerRect.offsetMin = new Vector2(2f, 2f);
         innerRect.offsetMax = new Vector2(-2f, -2f);
         var innerImage = innerGo.AddComponent<Image>();
-        innerImage.color = enabled ? Color.white : new Color(0.92f, 0.92f, 0.92f);
+        innerImage.color = enabled ? ButtonFill : DisabledFill;
 
-        CreateAnchoredText(innerGo.transform, "Label", label, 24, FontStyle.Bold, TextAnchor.MiddleCenter,
+        CreateAnchoredText(innerGo.transform, "Label", label, ButtonFontSize, FontStyle.Bold, TextAnchor.MiddleCenter,
             enabled ? Ink : Disabled);
 
-        MenuUiSounds.WireButton(button);
+        if (wireSounds)
+        {
+            MenuUiSounds.WireButton(button);
+        }
+        else
+        {
+            DisableSelectableFeedback(button);
+        }
+
         return button;
+    }
+
+    public static void DisableSelectableFeedback(Selectable selectable)
+    {
+        if (selectable == null)
+        {
+            return;
+        }
+
+        selectable.transition = Selectable.Transition.None;
+    }
+
+    static void ConfigureSlider(Slider slider, Image handleImage)
+    {
+        slider.direction = Slider.Direction.LeftToRight;
+        slider.transition = Selectable.Transition.None;
+        handleImage.raycastTarget = true;
     }
 
     public static Button CreateBodyButton(Transform parent, string name, string label,
@@ -223,9 +337,122 @@ public static class MenuUiFactory
         rect.anchoredPosition = anchoredPos;
         rect.sizeDelta = size;
 
-        CreateAnchoredText(go.transform, "Label", label, 20, FontStyle.Normal, TextAnchor.MiddleCenter, MutedInk);
+        CreateAnchoredText(go.transform, "Label", label, LinkFontSize, FontStyle.Bold, TextAnchor.MiddleCenter, Ink);
         MenuUiSounds.WireButton(button);
         return button;
+    }
+
+    public static Slider CreateSlider(Transform parent, string name, Vector2 anchoredPos, Vector2 size,
+        float minValue, float maxValue, float value, UnityAction<float> onValueChanged)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+
+        var rect = go.AddComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = anchoredPos;
+        rect.sizeDelta = size;
+
+        var backgroundGo = new GameObject("Background");
+        backgroundGo.transform.SetParent(go.transform, false);
+        MenuUiFactory.StretchFull(backgroundGo.AddComponent<RectTransform>());
+        var backgroundImage = backgroundGo.AddComponent<Image>();
+        backgroundImage.color = MutedInk;
+        backgroundImage.raycastTarget = true;
+
+        var fillAreaGo = new GameObject("Fill Area");
+        fillAreaGo.transform.SetParent(go.transform, false);
+        var fillAreaRect = fillAreaGo.AddComponent<RectTransform>();
+        MenuUiFactory.StretchFull(fillAreaRect);
+
+        var fillGo = new GameObject("Fill");
+        fillGo.transform.SetParent(fillAreaGo.transform, false);
+        var fillRect = fillGo.AddComponent<RectTransform>();
+        fillRect.anchorMin = Vector2.zero;
+        fillRect.anchorMax = Vector2.one;
+        fillRect.offsetMin = Vector2.zero;
+        fillRect.offsetMax = Vector2.zero;
+        var fillImage = fillGo.AddComponent<Image>();
+        fillImage.color = Ink;
+
+        var handleGo = new GameObject("Handle");
+        handleGo.transform.SetParent(go.transform, false);
+        var handleRect = handleGo.AddComponent<RectTransform>();
+        handleRect.sizeDelta = new Vector2(24f, 28f);
+        var handleImage = handleGo.AddComponent<Image>();
+        handleImage.color = PanelFill;
+
+        var slider = go.AddComponent<Slider>();
+        slider.targetGraphic = handleImage;
+        slider.fillRect = fillRect;
+        slider.handleRect = handleRect;
+        slider.minValue = minValue;
+        slider.maxValue = maxValue;
+        slider.value = value;
+        ConfigureSlider(slider, handleImage);
+        slider.onValueChanged.AddListener(onValueChanged);
+        return slider;
+    }
+
+    public static Slider CreateStretchedSlider(Transform parent, string name,
+        float minValue, float maxValue, float value, UnityAction<float> onValueChanged)
+    {
+        const float trackHeight = 28f;
+
+        var go = new GameObject(name);
+        go.transform.SetParent(parent, false);
+
+        var rect = go.AddComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, 0f);
+        rect.anchorMax = new Vector2(1f, 0f);
+        rect.pivot = new Vector2(0.5f, 0f);
+        rect.anchoredPosition = Vector2.zero;
+        rect.sizeDelta = new Vector2(0f, trackHeight);
+
+        var backgroundGo = new GameObject("Background");
+        backgroundGo.transform.SetParent(go.transform, false);
+        StretchFull(backgroundGo.AddComponent<RectTransform>());
+        var backgroundImage = backgroundGo.AddComponent<Image>();
+        backgroundImage.color = MutedInk;
+        backgroundImage.raycastTarget = true;
+
+        var fillAreaGo = new GameObject("Fill Area");
+        fillAreaGo.transform.SetParent(go.transform, false);
+        StretchFull(fillAreaGo.AddComponent<RectTransform>());
+
+        var fillGo = new GameObject("Fill");
+        fillGo.transform.SetParent(fillAreaGo.transform, false);
+        var fillRect = fillGo.AddComponent<RectTransform>();
+        fillRect.anchorMin = Vector2.zero;
+        fillRect.anchorMax = Vector2.one;
+        fillRect.offsetMin = Vector2.zero;
+        fillRect.offsetMax = Vector2.zero;
+        var fillImage = fillGo.AddComponent<Image>();
+        fillImage.color = Ink;
+        fillImage.raycastTarget = false;
+
+        var handleGo = new GameObject("Handle");
+        handleGo.transform.SetParent(go.transform, false);
+        var handleRect = handleGo.AddComponent<RectTransform>();
+        handleRect.anchorMin = new Vector2(0f, 0f);
+        handleRect.anchorMax = new Vector2(0f, 1f);
+        handleRect.pivot = new Vector2(0.5f, 0.5f);
+        handleRect.sizeDelta = new Vector2(28f, 0f);
+        var handleImage = handleGo.AddComponent<Image>();
+        handleImage.color = PanelFill;
+
+        var slider = go.AddComponent<Slider>();
+        slider.targetGraphic = handleImage;
+        slider.fillRect = fillRect;
+        slider.handleRect = handleRect;
+        slider.minValue = minValue;
+        slider.maxValue = maxValue;
+        slider.value = value;
+        ConfigureSlider(slider, handleImage);
+        slider.onValueChanged.AddListener(onValueChanged);
+        return slider;
     }
 
     public static InputField CreateInputField(Transform parent, string name, string placeholder,
@@ -248,13 +475,13 @@ public static class MenuUiFactory
         innerRect.anchorMax = Vector2.one;
         innerRect.offsetMin = new Vector2(2f, 2f);
         innerRect.offsetMax = new Vector2(-2f, -2f);
-        innerGo.AddComponent<Image>().color = Color.white;
+        innerGo.AddComponent<Image>().color = InputFill;
 
         var textGo = new GameObject("Text");
         textGo.transform.SetParent(innerGo.transform, false);
         var text = textGo.AddComponent<Text>();
         text.font = Font;
-        text.fontSize = 22;
+        text.fontSize = InputFontSize;
         text.color = Ink;
         text.supportRichText = false;
         text.alignment = TextAnchor.MiddleLeft;
@@ -270,7 +497,7 @@ public static class MenuUiFactory
         placeholderGo.transform.SetParent(innerGo.transform, false);
         var placeholderText = placeholderGo.AddComponent<Text>();
         placeholderText.font = Font;
-        placeholderText.fontSize = 22;
+        placeholderText.fontSize = InputFontSize;
         placeholderText.color = MutedInk;
         placeholderText.text = placeholder;
         placeholderText.alignment = TextAnchor.MiddleLeft;
@@ -317,6 +544,18 @@ public static class MenuUiFactory
         rect.offsetMax = Vector2.zero;
     }
 
+    public static void EnsureEventSystem()
+    {
+        if (UnityEngine.Object.FindFirstObjectByType<EventSystem>() != null)
+        {
+            return;
+        }
+
+        var go = new GameObject("EventSystem");
+        go.AddComponent<EventSystem>();
+        go.AddComponent<StandaloneInputModule>();
+    }
+
     public static void QuitApplication()
     {
 #if UNITY_EDITOR
@@ -324,6 +563,21 @@ public static class MenuUiFactory
 #else
         Application.Quit();
 #endif
+    }
+}
+
+/// <summary>
+/// Forwards mouse-wheel scroll to the nearest parent ScrollRect.
+/// </summary>
+public class ScrollWheelForwarder : MonoBehaviour, IScrollHandler
+{
+    public void OnScroll(PointerEventData eventData)
+    {
+        var scrollRect = GetComponentInParent<ScrollRect>();
+        if (scrollRect != null)
+        {
+            scrollRect.OnScroll(eventData);
+        }
     }
 }
 

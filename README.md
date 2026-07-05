@@ -60,22 +60,29 @@ version should work — if Unity Hub asks, pick your installed 6000.x editor).
 2. Open the project and let Unity import the assets.
 3. Open `Assets/Scenes/MainMenu.unity` and press Play.
 4. **Sign in** or **create a profile**, then use the hub to manage your
-   collection and start a match.
+   collection and start a match. If you signed in within the last hour, the game
+   opens straight to the hub — use **Logout** to switch accounts.
+
+Your **light/dark theme**, volume, UI sounds, and mouse sensitivity are saved
+locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 
 ### Main menu flow
 
 | Screen | Purpose |
 |--------|---------|
 | Sign In / Sign Up | Local username + passcode profiles (stored in `persistentDataPath`, not in git) |
-| Hub | Play, Decks, Settings, Logout, Quit |
-| Decks | Browse all 30 class cards; set a two-slot loadout; preview stats |
+| Hub | Play, Decks, Settings, Logout, Quit — shown automatically when a session is still valid (1 hour of inactivity) |
+| Decks | Browse all 30 class cards (scroll starts at top); set a two-slot loadout; preview stats |
 | Play | Confirm loadout, tap a card to choose spawn class, start match (Red team for now) |
+| Settings | Light/dark theme, UI volume, UI sounds toggle, mouse sensitivity, account info |
 
 **Menu controls:**
 
 - **ESC** — back (closes modals first, then previous screen)
-- Buttons play procedural hover/click sounds; **PLAY** on the match screen also
-  plays a gunshot when the arena loads
+- **Mouse wheel** — scroll the decks collection (works even when hovering a card)
+- Most buttons play procedural hover/click sounds; settings toggles and sliders
+  are silent (back arrow still clicks)
+- **PLAY** on the match screen also plays a gunshot when the arena loads
 
 ### In the field scene
 
@@ -84,10 +91,12 @@ version should work — if Unity Hub asks, pick your installed 6000.x editor).
 - Space to jump
 - Mouse wheel cycles the hotbar; `1`, `2`, and `3` select slots directly
 - **Esc** — pause menu (game does not freeze; opens Respawn / Settings / Exit Match)
+- **Exit Match** — fully ends the match and returns to the main menu
 - After respawn, pick loadout slot A or B from the class picker overlay
 
 While the pause menu or respawn picker is open, gameplay input is ignored, the
-crosshair is hidden, and the cursor is free for UI clicks.
+crosshair is hidden, and the cursor is free for UI clicks. In-match **Settings**
+uses the same form as the hub (without the account section).
 
 ### Hotbar
 
@@ -141,14 +150,16 @@ The menu UI and the voxel field are generated from code at runtime:
 **Menu & profiles**
 
 - `Assets/Scripts/MainMenuController.cs` — menu scene bootstrap (camera, audio listener, navigator)
-- `Assets/Scripts/UI/MenuNavigator.cs` — sign-in, hub, play, decks, settings routing
+- `Assets/Scripts/UI/MenuNavigator.cs` — sign-in, hub, play, decks, settings routing; theme backdrop
 - `Assets/Scripts/UI/MenuWindowFrame.cs` — shared window chrome (title bar, header, footer)
-- `Assets/Scripts/UI/MenuUiFactory.cs` — buttons, inputs, styling tokens
+- `Assets/Scripts/UI/MenuUiFactory.cs` — buttons, inputs, sliders, light/dark styling tokens
+- `Assets/Scripts/UI/MenuSettings.cs` — persistent client settings (`settings.json`)
+- `Assets/Scripts/UI/MenuSettingsPanel.cs` — shared settings form (hub + pause menu)
 - `Assets/Scripts/UI/MenuUiSounds.cs` — procedural hover, click, gunshot sounds
 - `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay
 - `Assets/Scripts/UI/RespawnClassPicker.cs` — respawn class selection
-- `Assets/Scripts/UI/CardTileView.cs` — collection card tiles
-- `Assets/Scripts/Profile/` — local profile repository, session, passcode hashing
+- `Assets/Scripts/UI/CardTileView.cs` — collection card tiles, spawn selection visuals
+- `Assets/Scripts/Profile/` — local profile repository, 1-hour session restore, passcode hashing
 - `Assets/Scripts/Cards/` — 30-card catalog, rarity colors, placeholder kits
 
 **Gameplay**
@@ -161,12 +172,14 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/VoxelLightingWorld.cs` — voxel occupancy, build rules, hammer removal
 - `Assets/Scripts/PenInkShadowEffect.cs` + `Assets/Scripts/PenInkShadowPost.shader` — pen-and-ink shadows
 
-Local profile JSON is written to `Application.persistentDataPath/CoreWar/` and
-is excluded from git via `.gitignore`.
+Local profile, session, and settings JSON are written to
+`Application.persistentDataPath/CoreWar/` and are excluded from git via
+`.gitignore` (`profiles/`, `settings.json`, `session.json`).
 
 ## Documentation
 
 - [Full game design document](docs/Third_Person_Shooter_Game_Design_v2.md)
+- [Settings, theme, session, and menu polish session recap](docs/chats/2026-07-05-settings-theme-menu-polish-session.md)
 - [Profile, decks, loadout, and menu UI session recap](docs/chats/2026-07-04-profile-decks-loadout-menu-session.md)
 - [Hotbar tools and combat session recap](docs/chats/2026-07-04-hotbar-tools-and-combat-session.md)
 - [FPS build mode session recap](docs/chats/2026-07-03-fps-build-mode-session.md)

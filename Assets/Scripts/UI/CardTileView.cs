@@ -13,6 +13,9 @@ public class CardTileView : MonoBehaviour
     Image _fillImage;
     Color _baseFill;
     GameObject _loadoutOutline;
+    GameObject _spawnOutline;
+    GameObject _spawnBadge;
+    GameObject _dimOverlay;
     GameObject _lockOverlay;
     Button _button;
     CardDefinition _card;
@@ -44,6 +47,12 @@ public class CardTileView : MonoBehaviour
         _loadoutOutline = CreateLayer("Loadout Outline", MenuUiFactory.LoadoutOutline, outerExpand: 5f);
         _loadoutOutline.SetActive(false);
 
+        _spawnOutline = CreateLayer("Spawn Outline", MenuUiFactory.Ink, outerExpand: 8f);
+        _spawnOutline.SetActive(false);
+
+        _dimOverlay = CreateLayer("Dim Overlay", new Color(0.12f, 0.12f, 0.12f, 0.45f), innerInset: BorderThickness);
+        _dimOverlay.SetActive(false);
+
         CreateLayer("Border", MenuUiFactory.Ink, outerExpand: 0f);
 
         var fillGo = CreateLayer("Fill", _baseFill, innerInset: BorderThickness);
@@ -69,12 +78,26 @@ public class CardTileView : MonoBehaviour
 
         var tierText = MenuUiFactory.CreateAnchoredText(transform, "Meta",
             $"{CardRarityColors.Label(card.rarity)}\n{card.specialtyLabel.ToUpperInvariant()} · TIER {card.tier}",
-            18, FontStyle.Bold, TextAnchor.LowerCenter, MenuUiFactory.Ink);
+            MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.LowerCenter, MenuUiFactory.Ink);
         var tierRect = tierText.GetComponent<RectTransform>();
         tierRect.anchorMin = new Vector2(0.08f, 0.08f);
         tierRect.anchorMax = new Vector2(0.92f, 0.48f);
         tierRect.offsetMin = Vector2.zero;
         tierRect.offsetMax = Vector2.zero;
+
+        _spawnBadge = new GameObject("Spawn Badge");
+        _spawnBadge.transform.SetParent(transform, false);
+        var badgeRect = _spawnBadge.AddComponent<RectTransform>();
+        badgeRect.anchorMin = new Vector2(0.08f, 0.78f);
+        badgeRect.anchorMax = new Vector2(0.92f, 0.96f);
+        badgeRect.offsetMin = Vector2.zero;
+        badgeRect.offsetMax = Vector2.zero;
+        var badgeBg = _spawnBadge.AddComponent<Image>();
+        badgeBg.color = MenuUiFactory.Ink;
+        badgeBg.raycastTarget = false;
+        MenuUiFactory.CreateAnchoredText(_spawnBadge.transform, "Label", "SPAWNING",
+            MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.MiddleCenter, MenuUiFactory.OnInk);
+        _spawnBadge.SetActive(false);
 
         if (_locked)
         {
@@ -92,6 +115,8 @@ public class CardTileView : MonoBehaviour
 
             MenuUiFactory.CreateAnchoredText(_lockOverlay.transform, "Lock", "LOCK", 28, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
         }
+
+        gameObject.AddComponent<ScrollWheelForwarder>();
     }
 
     GameObject CreateLayer(string name, Color color, float outerExpand = 0f, float innerInset = 0f)
@@ -143,5 +168,26 @@ public class CardTileView : MonoBehaviour
         _fillImage.color = highlighted
             ? Color.Lerp(_baseFill, MenuUiFactory.Ink, 0.1f)
             : _baseFill;
+    }
+
+    public void SetSpawnSelected(bool selected)
+    {
+        if (_spawnOutline != null)
+        {
+            _spawnOutline.SetActive(selected);
+        }
+
+        if (_spawnBadge != null)
+        {
+            _spawnBadge.SetActive(selected);
+        }
+    }
+
+    public void SetSpawnDimmed(bool dimmed)
+    {
+        if (_dimOverlay != null)
+        {
+            _dimOverlay.SetActive(dimmed);
+        }
     }
 }

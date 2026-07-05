@@ -67,6 +67,16 @@ public static class GameSession
         ActiveKit = card?.kit ?? CardKitDefinition.DefaultInfantryPlaceholder();
     }
 
+    public static void EndMatch()
+    {
+        HasTeamSelected = false;
+        HasLoadoutSelected = false;
+        LoadoutCardIdA = null;
+        LoadoutCardIdB = null;
+        ActiveCardId = null;
+        ActiveKit = null;
+    }
+
     public static CardDefinition GetActiveCardDefinition()
     {
         return CardCatalog.Get(ActiveCardId);

@@ -28,9 +28,19 @@ public static class MenuUiSounds
         _source.volume = 0.55f;
     }
 
+    public static void ApplySettings()
+    {
+        EnsureInitialized();
+        _source.volume = MenuSettings.UiSoundsEnabled ? MenuSettings.MasterVolume : 0f;
+    }
+
     public static void PlayHover()
     {
         EnsureInitialized();
+        if (!MenuSettings.UiSoundsEnabled)
+        {
+            return;
+        }
         if (Time.unscaledTime - _lastHoverTime < 0.05f)
         {
             return;
@@ -49,6 +59,10 @@ public static class MenuUiSounds
     public static void PlayClick()
     {
         EnsureInitialized();
+        if (!MenuSettings.UiSoundsEnabled)
+        {
+            return;
+        }
         _source.pitch = 1f;
         if (_clickClip == null)
         {

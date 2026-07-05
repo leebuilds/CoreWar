@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -20,6 +21,7 @@ public class MenuNavigator : MonoBehaviour
     }
 
     RectTransform _root;
+    Image _backdropImage;
     GameObject _screenRoot;
     MenuWindowFrame _window;
     InputField _usernameField;
@@ -29,7 +31,7 @@ public class MenuNavigator : MonoBehaviour
     CardPreviewPanel _previewPanel;
     GameObject _cardActionOverlay;
     CardDefinition _pendingActionCard;
-    float _decksScrollPosition;
+    float _decksScrollPosition = 1f;
     ScrollRect _decksScrollRect;
 
     readonly List<CardTileView> _deckCardTiles = new List<CardTileView>();
@@ -38,21 +40,51 @@ public class MenuNavigator : MonoBehaviour
     int _playSpawnSlotIndex;
     CardTileView _playLeftTile;
     CardTileView _playRightTile;
+    int _sessionCheckGraceFrames;
+    bool _bootstrapped;
 
     public static MenuNavigator Create()
     {
         RectTransform root;
         MenuUiFactory.CreateCanvas("Menu Canvas", out root);
+
+        MenuSettings.EnsureLoaded();
+
+        var backdropGo = new GameObject("Menu Backdrop");
+        backdropGo.transform.SetParent(root, false);
+        backdropGo.transform.SetAsFirstSibling();
+        var backdropImage = backdropGo.AddComponent<Image>();
+        backdropImage.raycastTarget = false;
+        backdropImage.color = MenuUiFactory.Background;
+        MenuUiFactory.StretchFull(backdropGo.GetComponent<RectTransform>());
+
         var navigatorGo = new GameObject("Menu Navigator");
         navigatorGo.transform.SetParent(root, false);
         MenuUiFactory.StretchFull(navigatorGo.AddComponent<RectTransform>());
-        return navigatorGo.AddComponent<MenuNavigator>();
+        var navigator = navigatorGo.AddComponent<MenuNavigator>();
+        navigator._backdropImage = backdropImage;
+        navigator.Bootstrap();
+        return navigator;
     }
 
     void Awake()
     {
         _root = transform as RectTransform;
+    }
+
+    void Bootstrap()
+    {
+        if (_bootstrapped)
+        {
+            return;
+        }
+
+        _bootstrapped = true;
+        MenuSettings.EnsureLoaded();
+        ApplyMenuBackground();
         ProfileSession.EnsureInitialized();
+        ProfileSession.ValidateSessionOrLogout();
+        MenuSettings.Changed += HandleSettingsChanged;
 
         if (ProfileSession.IsSignedIn)
         {
@@ -64,8 +96,56 @@ public class MenuNavigator : MonoBehaviour
         }
     }
 
+    void OnDestroy()
+    {
+        MenuSettings.Changed -= HandleSettingsChanged;
+    }
+
+    void HandleSettingsChanged()
+    {
+        ApplyMenuBackground();
+        if (_screenRoot == null)
+        {
+            return;
+        }
+
+        ShowScreen(_currentScreen, pushHistory: false);
+    }
+
+    void ApplyMenuBackground()
+    {
+        var background = MenuUiFactory.Background;
+        if (_backdropImage != null)
+        {
+            _backdropImage.color = background;
+        }
+
+        if (Camera.main != null)
+        {
+            Camera.main.backgroundColor = background;
+        }
+    }
+
     void Update()
     {
+        if (_currentScreen != ScreenId.SignIn && _currentScreen != ScreenId.SignUp)
+        {
+            if (_sessionCheckGraceFrames > 0)
+            {
+                _sessionCheckGraceFrames--;
+            }
+            else
+            {
+                ProfileSession.ValidateSessionOrLogout();
+                if (!ProfileSession.IsSignedIn)
+                {
+                    _backStack.Clear();
+                    ShowScreen(ScreenId.SignIn, pushHistory: false);
+                    return;
+                }
+            }
+        }
+
         if (!Input.GetKeyDown(KeyCode.Escape))
         {
             return;
@@ -99,14 +179,18 @@ public class MenuNavigator : MonoBehaviour
         }
 
         _currentScreen = screen;
-        ProfileSession.TouchActivity();
+        if (screen != ScreenId.SignIn && screen != ScreenId.SignUp)
+        {
+            ProfileSession.TouchActivity();
+            _sessionCheckGraceFrames = 2;
+        }
+
         DestroyScreen();
         BuildScreen(screen);
     }
 
     void GoBack()
     {
-        ProfileSession.TouchActivity();
         _previewPanel?.Hide();
         HideCardActionPanel();
 
@@ -172,7 +256,7 @@ public class MenuNavigator : MonoBehaviour
         MenuUiFactory.CreateButton(_window.Body, "Sign In Button", "SIGN IN",
             new Vector2(0f, -60f), new Vector2(320f, 64f), AttemptSignIn);
         MenuUiFactory.CreateTextLink(_window.Body, "Create Account Link", "create account",
-            new Vector2(0f, -130f), new Vector2(320f, 36f), () => ShowScreen(ScreenId.SignUp));
+            new Vector2(0f, -130f), new Vector2(320f, 44f), () => ShowScreen(ScreenId.SignUp));
         MenuUiFactory.CreateButton(_window.Body, "Quit Button", "QUIT",
             new Vector2(0f, -190f), new Vector2(320f, 64f), MenuUiFactory.QuitApplication);
     }
@@ -205,7 +289,7 @@ public class MenuNavigator : MonoBehaviour
             footer, new Vector2(480f, 640f), showHeader: false, null);
 
         MenuUiFactory.CreateText(_window.Body, "Welcome", $"welcome, {username}",
-            24, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, 170f), new Vector2(420f, 40f));
+            MenuUiFactory.BodyFontSize, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, 170f), new Vector2(420f, 40f));
 
         MenuUiFactory.CreateButton(_window.Body, "Play Button", "PLAY",
             new Vector2(0f, 70f), new Vector2(320f, 64f), () => ShowScreen(ScreenId.Play), enabled: canPlay);
@@ -222,10 +306,9 @@ public class MenuNavigator : MonoBehaviour
     void BuildSettings()
     {
         _window = MenuWindowFrame.CreateScreen(_screenRoot.transform, "SETTINGS", showBack: true,
-            "audio · controls · account options coming soon", new Vector2(520f, 420f), showHeader: false, GoBack);
+            "appearance · audio · controls", new Vector2(580f, 680f), showHeader: false, GoBack);
 
-        MenuUiFactory.CreateText(_window.Body, "Placeholder", "settings are not available yet",
-            22, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, 20f), new Vector2(420f, 80f), MenuUiFactory.MutedInk);
+        MenuSettingsPanel.Build(_window.Body, showAccountSection: true);
     }
 
     void BuildPlay()
@@ -242,25 +325,37 @@ public class MenuNavigator : MonoBehaviour
         _playRightTile = CreatePlayCardTile(_window.Body, rightCard, 1, new Vector2(300f, 20f));
         RefreshPlaySpawnSelection();
 
-        MenuUiFactory.CreateText(_window.Body, "Spawn Hint", "tap a card to choose your spawn class",
-            18, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, -150f), new Vector2(520f, 36f),
+        MenuUiFactory.CreateText(_window.Body, "Spawn Hint", "tap a card — the highlighted one is your spawn class",
+            MenuUiFactory.HintFontSize, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, -150f), new Vector2(520f, 40f),
             MenuUiFactory.MutedInk);
 
         bool canPlay = ProfileSession.HasCompleteLoadout;
         MenuUiFactory.CreateButton(_window.Body, "Start Button", "PLAY",
             new Vector2(0f, 20f), new Vector2(320f, 80f), StartMatch, enabled: canPlay);
         MenuUiFactory.CreateTextLink(_window.Body, "Edit Link", "edit in decks",
-            new Vector2(0f, -80f), new Vector2(320f, 36f), () => ShowScreen(ScreenId.Decks));
+            new Vector2(0f, -80f), new Vector2(320f, 44f), () => ShowScreen(ScreenId.Decks));
     }
 
     void BuildDecks()
     {
+        _decksScrollPosition = 1f;
         _window = MenuWindowFrame.CreateScreen(_screenRoot.transform, "DECKS", showBack: true,
             "pick two cards for your loadout", new Vector2(1320f, 820f), showHeader: true, GoBack);
 
         _decksLoadoutBar = LoadoutSlotBar.Create(_window.Header, ClearLoadoutSlot);
         _previewPanel = CardPreviewPanel.Create(_screenRoot.transform);
         BuildDecksScrollArea();
+        StartCoroutine(ScrollDecksToTopNextFrame());
+    }
+
+    IEnumerator ScrollDecksToTopNextFrame()
+    {
+        yield return null;
+        Canvas.ForceUpdateCanvases();
+        if (_decksScrollRect != null)
+        {
+            _decksScrollRect.verticalNormalizedPosition = 1f;
+        }
     }
 
     void BuildDecksScrollArea()
@@ -271,7 +366,7 @@ public class MenuNavigator : MonoBehaviour
         MenuUiFactory.StretchFull(viewportRect);
 
         var viewportImage = viewportGo.AddComponent<Image>();
-        viewportImage.color = new Color(0.98f, 0.98f, 0.98f, 1f);
+        viewportImage.color = MenuUiFactory.ScrollViewportFill;
         viewportGo.AddComponent<Mask>().showMaskGraphic = true;
 
         var contentGo = new GameObject("Decks Content");
@@ -310,7 +405,7 @@ public class MenuNavigator : MonoBehaviour
         _decksScrollRect.vertical = true;
         _decksScrollRect.movementType = ScrollRect.MovementType.Clamped;
         _decksScrollRect.scrollSensitivity = 40f;
-        _decksScrollRect.verticalNormalizedPosition = _decksScrollPosition;
+        _decksScrollRect.verticalNormalizedPosition = 1f;
 
         RefreshDeckCardLoadoutStates();
     }
@@ -359,7 +454,7 @@ public class MenuNavigator : MonoBehaviour
         labelGo.transform.SetParent(parent, false);
         labelGo.AddComponent<RectTransform>().sizeDelta = new Vector2(120f, 180f);
         MenuUiFactory.CreateAnchoredText(labelGo.transform, "Text", specialtyLabel.ToUpperInvariant(),
-            18, FontStyle.Bold, TextAnchor.MiddleCenter);
+            MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.MiddleCenter);
     }
 
     void CreateRowCardCell(Transform parent, CardDefinition card)
@@ -529,10 +624,12 @@ public class MenuNavigator : MonoBehaviour
 
     void RefreshPlaySpawnSelection()
     {
-        _playLeftTile?.SetInLoadout(_playSpawnSlotIndex == 0);
-        _playRightTile?.SetInLoadout(_playSpawnSlotIndex == 1);
-        _playLeftTile?.SetHighlighted(_playSpawnSlotIndex == 0);
-        _playRightTile?.SetHighlighted(_playSpawnSlotIndex == 1);
+        bool leftSelected = _playSpawnSlotIndex == 0;
+        bool rightSelected = _playSpawnSlotIndex == 1;
+        _playLeftTile?.SetSpawnSelected(leftSelected);
+        _playRightTile?.SetSpawnSelected(rightSelected);
+        _playLeftTile?.SetSpawnDimmed(!leftSelected);
+        _playRightTile?.SetSpawnDimmed(!rightSelected);
 
         if (_window != null)
         {
@@ -557,6 +654,12 @@ public class MenuNavigator : MonoBehaviour
         }
 
         ProfileSession.SignIn(profile);
+        if (!ProfileSession.IsSignedIn)
+        {
+            SetError("Could not start session. Try again.");
+            return;
+        }
+
         _backStack.Clear();
         ShowScreen(ScreenId.Hub, pushHistory: false);
     }
@@ -578,6 +681,12 @@ public class MenuNavigator : MonoBehaviour
         }
 
         ProfileSession.SignIn(profile);
+        if (!ProfileSession.IsSignedIn)
+        {
+            SetError("Could not start session. Try again.");
+            return;
+        }
+
         _backStack.Clear();
         ShowScreen(ScreenId.Hub, pushHistory: false);
     }

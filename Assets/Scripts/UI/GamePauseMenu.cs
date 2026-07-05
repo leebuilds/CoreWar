@@ -11,6 +11,7 @@ public class GamePauseMenu : MonoBehaviour
     GameObject _overlayRoot;
     GameObject _settingsOverlay;
     bool _isOpen;
+    bool _settingsSubscribed;
 
     public bool IsOpen => _isOpen;
 
@@ -46,6 +47,8 @@ public class GamePauseMenu : MonoBehaviour
 
     void Build()
     {
+        MenuUiFactory.EnsureEventSystem();
+
         var canvasGo = new GameObject("Pause Canvas");
         canvasGo.transform.SetParent(transform, false);
         var canvas = canvasGo.AddComponent<Canvas>();
@@ -131,14 +134,46 @@ public class GamePauseMenu : MonoBehaviour
             return;
         }
 
+        EnsureSettingsSubscription();
         _settingsOverlay = MenuUiFactory.CreateModalOverlay(_overlayRoot.transform, 0.25f);
         var frame = MenuWindowFrame.CreateScreen(_settingsOverlay.transform, "SETTINGS", showBack: true,
-            "audio · controls · account options coming soon", new Vector2(520f, 360f), showHeader: false,
+            "appearance · audio · controls", new Vector2(580f, 680f), showHeader: false,
             HideSettingsOverlay);
 
-        MenuUiFactory.CreateText(frame.Body, "Placeholder", "settings are not available yet",
-            22, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, 0f), new Vector2(420f, 80f),
-            MenuUiFactory.MutedInk);
+        MenuSettingsPanel.Build(frame.Body, showAccountSection: false);
+    }
+
+    void EnsureSettingsSubscription()
+    {
+        if (_settingsSubscribed)
+        {
+            return;
+        }
+
+        MenuSettings.Changed += HandleSettingsChanged;
+        _settingsSubscribed = true;
+    }
+
+    void HandleSettingsChanged()
+    {
+        if (_settingsOverlay == null)
+        {
+            return;
+        }
+
+        HideSettingsOverlay();
+        if (_isOpen)
+        {
+            ShowSettings();
+        }
+    }
+
+    void OnDestroy()
+    {
+        if (_settingsSubscribed)
+        {
+            MenuSettings.Changed -= HandleSettingsChanged;
+        }
     }
 
     void HideSettingsOverlay()
@@ -152,8 +187,13 @@ public class GamePauseMenu : MonoBehaviour
 
     void ExitMatch()
     {
+        ProfileSession.TouchActivity();
+        Time.timeScale = 1f;
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
+        GameSession.EndMatch();
         Hide();
-        SceneManager.LoadScene("MainMenu");
+        SceneManager.LoadScene("MainMenu", LoadSceneMode.Single);
     }
 
     static void CreateDim(Transform parent, float alpha)

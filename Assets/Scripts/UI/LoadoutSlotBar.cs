@@ -28,7 +28,7 @@ public class LoadoutSlotBar : MonoBehaviour
     void Build(UnityAction<int> onSlotClicked)
     {
         MenuUiFactory.CreateAnchoredText(transform, "Label", "LOADOUT",
-            16, FontStyle.Bold, TextAnchor.UpperCenter, MenuUiFactory.MutedInk);
+            MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.UpperCenter, MenuUiFactory.MutedInk);
         var labelRect = transform.Find("Label").GetComponent<RectTransform>();
         labelRect.anchorMin = new Vector2(0.04f, 0.62f);
         labelRect.anchorMax = new Vector2(0.96f, 0.98f);
@@ -57,7 +57,7 @@ public class LoadoutSlotBar : MonoBehaviour
             innerRect.offsetMin = new Vector2(2f, 2f);
             innerRect.offsetMax = new Vector2(-2f, -2f);
             _slotImages[i] = innerGo.AddComponent<Image>();
-            _slotImages[i].color = Color.white;
+            _slotImages[i].color = MenuUiFactory.PanelFill;
 
             _slotButtons[i] = slotGo.AddComponent<Button>();
             _slotButtons[i].targetGraphic = border;
@@ -65,7 +65,7 @@ public class LoadoutSlotBar : MonoBehaviour
             _slotButtons[i].onClick.AddListener(() => onSlotClicked?.Invoke(slotIndex));
 
             _slotLabels[i] = MenuUiFactory.CreateAnchoredText(innerGo.transform, "Label", $"SLOT {i + 1}\nEMPTY",
-                15, FontStyle.Bold, TextAnchor.MiddleCenter);
+                MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.MiddleCenter);
         }
     }
 
@@ -81,12 +81,12 @@ public class LoadoutSlotBar : MonoBehaviour
             var card = CardCatalog.Get(cardId);
             if (card == null)
             {
-                _slotImages[i].color = Color.white;
+                _slotImages[i].color = MenuUiFactory.PanelFill;
                 _slotLabels[i].text = $"SLOT {i + 1}\nEMPTY";
                 continue;
             }
 
-            _slotImages[i].color = Color.white;
+            _slotImages[i].color = MenuUiFactory.PanelFill;
             _slotLabels[i].text = $"{card.displayName.ToUpperInvariant()}\nT{card.tier} {card.specialtyLabel.ToUpperInvariant()}";
         }
     }

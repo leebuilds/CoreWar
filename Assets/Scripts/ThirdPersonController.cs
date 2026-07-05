@@ -88,6 +88,7 @@ public class ThirdPersonController : MonoBehaviour
     CapsuleCollider _capsule;
     float _yaw;
     float _pitch;
+    float _baseLookSensitivity;
     bool _grounded;
     bool _selectorOpen;
     Vector2 _selectorDirection;
@@ -113,6 +114,7 @@ public class ThirdPersonController : MonoBehaviour
     Vector2 _gunRecoilResidual;
     float _gunRecoilKickTimer;
     bool _gunRecoilAimApplied;
+    float _sessionHeartbeat;
     readonly List<GameObject> _previewRoots = new List<GameObject>();
     readonly List<VoxelLightingWorld.BuildPieceCandidate> _rectangleCandidates =
         new List<VoxelLightingWorld.BuildPieceCandidate>();
@@ -141,6 +143,7 @@ public class ThirdPersonController : MonoBehaviour
     {
         _rb = GetComponent<Rigidbody>();
         _capsule = GetComponent<CapsuleCollider>();
+        _baseLookSensitivity = lookSensitivity;
 
         _rb.freezeRotation = true;
         _rb.interpolation = RigidbodyInterpolation.Interpolate;
@@ -161,10 +164,33 @@ public class ThirdPersonController : MonoBehaviour
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
+
+        MenuSettings.EnsureLoaded();
+        ApplyMenuSettings();
+        MenuSettings.Changed += ApplyMenuSettings;
+    }
+
+    void OnDestroy()
+    {
+        MenuSettings.Changed -= ApplyMenuSettings;
+        ProfileSession.TouchActivity();
+    }
+
+    void ApplyMenuSettings()
+    {
+        lookSensitivity = _baseLookSensitivity * MenuSettings.MouseSensitivity;
     }
 
     void LateUpdate()
     {
+        if (IsGameplayBlocked())
+        {
+            _selectorOpen = false;
+            HidePreviewRoots();
+            UpdateCameraTransform();
+            return;
+        }
+
         UpdateCameraTransform();
         UpdateHeldToolVisuals();
         UpdateCharacterAim();
@@ -187,6 +213,8 @@ public class ThirdPersonController : MonoBehaviour
         }
 
         ApplyKitFromSession();
+        ProfileSession.EnsureInitialized();
+        ProfileSession.TouchActivity();
         _respawnPicker = RespawnClassPicker.Create(transform, cardId =>
         {
             GameSession.SetActiveCard(cardId);
@@ -237,6 +265,8 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
+        UpdateSessionHeartbeat();
+
         HandleLook();
         HandleHotbarInput();
         HandleSelectedToolInput();
@@ -253,6 +283,7 @@ public class ThirdPersonController : MonoBehaviour
     {
         if (IsGameplayBlocked())
         {
+            StopHorizontalMovement();
             return;
         }
 
@@ -264,6 +295,24 @@ public class ThirdPersonController : MonoBehaviour
     {
         return (_pauseMenu != null && _pauseMenu.IsOpen) ||
                (_respawnPicker != null && _respawnPicker.IsOpen);
+    }
+
+    void StopHorizontalMovement()
+    {
+        var velocity = _rb.linearVelocity;
+        _rb.linearVelocity = new Vector3(0f, velocity.y, 0f);
+    }
+
+    void UpdateSessionHeartbeat()
+    {
+        _sessionHeartbeat += Time.unscaledDeltaTime;
+        if (_sessionHeartbeat < 300f)
+        {
+            return;
+        }
+
+        _sessionHeartbeat = 0f;
+        ProfileSession.TouchActivity();
     }
 
     void HandleLook()
@@ -1434,7 +1483,7 @@ public class ThirdPersonController : MonoBehaviour
 
     void OnGUI()
     {
-        if (_pauseMenu != null && _pauseMenu.IsOpen)
+        if (IsGameplayBlocked())
         {
             return;
         }

@@ -36,3 +36,5 @@ crashlytics-build.properties
 # Local profile dev fixtures (runtime data lives in persistentDataPath)
 ProfileData/
 *.profile.json
+settings.json
+session.json

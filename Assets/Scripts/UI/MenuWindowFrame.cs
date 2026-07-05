@@ -108,7 +108,7 @@ public class MenuWindowFrame : MonoBehaviour
         fillRect.offsetMin = new Vector2(inset, inset);
         fillRect.offsetMax = new Vector2(-inset, -inset);
         var fillImage = fillGo.AddComponent<Image>();
-        fillImage.color = Color.white;
+        fillImage.color = MenuUiFactory.PanelFill;
         fillImage.raycastTarget = false;
     }
 
@@ -159,7 +159,7 @@ public class MenuWindowFrame : MonoBehaviour
         MenuUiFactory.CreateDivider(footer.transform, true);
 
         var text = MenuUiFactory.CreateAnchoredText(footer.transform, "Footer Text", footerText ?? string.Empty,
-            MenuUiFactory.FooterFontSize, FontStyle.Normal, TextAnchor.MiddleLeft, MenuUiFactory.MutedInk);
+            MenuUiFactory.FooterFontSize, FontStyle.Normal, TextAnchor.MiddleCenter, MenuUiFactory.MutedInk);
         var textRect = text.GetComponent<RectTransform>();
         textRect.anchorMin = new Vector2(0.04f, 0f);
         textRect.anchorMax = new Vector2(0.96f, 1f);

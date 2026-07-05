@@ -8,6 +8,7 @@ public class MainMenuController : MonoBehaviour
 {
     void Awake()
     {
+        MenuSettings.EnsureLoaded();
         CreateCamera();
         CreateEventSystem();
         MenuNavigator.Create();
@@ -16,6 +17,7 @@ public class MainMenuController : MonoBehaviour
     void CreateCamera()
     {
         var camGo = new GameObject("Menu Camera");
+        camGo.tag = "MainCamera";
         var cam = camGo.AddComponent<Camera>();
         cam.clearFlags = CameraClearFlags.SolidColor;
         cam.backgroundColor = MenuUiFactory.Background;
@@ -25,13 +27,6 @@ public class MainMenuController : MonoBehaviour
 
     void CreateEventSystem()
     {
-        if (FindObjectOfType<EventSystem>() != null)
-        {
-            return;
-        }
-
-        var go = new GameObject("EventSystem");
-        go.AddComponent<EventSystem>();
-        go.AddComponent<StandaloneInputModule>();
+        MenuUiFactory.EnsureEventSystem();
     }
 }

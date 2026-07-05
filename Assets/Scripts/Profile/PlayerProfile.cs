@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 
 /// <summary>
 /// Persisted player account data. Swap storage via IProfileRepository for online play.
@@ -38,10 +39,28 @@ public class PlayerProfile
     {
         if (string.IsNullOrEmpty(lastActiveUtc))
         {
-            return DateTime.MinValue;
+            return DateTime.UtcNow;
         }
 
-        return DateTime.TryParse(lastActiveUtc, out var parsed) ? parsed : DateTime.MinValue;
+        if (DateTime.TryParse(
+                lastActiveUtc,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.RoundtripKind,
+                out var parsed))
+        {
+            return parsed.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(parsed, DateTimeKind.Utc)
+                : parsed.ToUniversalTime();
+        }
+
+        if (DateTime.TryParse(lastActiveUtc, out parsed))
+        {
+            return parsed.Kind == DateTimeKind.Unspecified
+                ? DateTime.SpecifyKind(parsed, DateTimeKind.Utc)
+                : parsed.ToUniversalTime();
+        }
+
+        return DateTime.UtcNow;
     }
 
     public void TouchLastActive()
