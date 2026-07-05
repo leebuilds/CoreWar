@@ -114,21 +114,8 @@ public class MenuWindowFrame : MonoBehaviour
 
     void BuildTitleBar(string title, bool showBack, UnityAction onBack)
     {
-        var titleBar = CreateBand("Title Bar", 0f, MenuUiFactory.TitleBarHeight);
-
-        var titleText = MenuUiFactory.CreateAnchoredText(titleBar, "Title", title.ToUpperInvariant(),
-            MenuUiFactory.TitleFontSize, FontStyle.Bold, TextAnchor.MiddleLeft, MenuUiFactory.Ink);
-        var titleRect = titleText.GetComponent<RectTransform>();
-        titleRect.anchorMin = new Vector2(0.04f, 0f);
-        titleRect.anchorMax = new Vector2(0.8f, 1f);
-        titleRect.offsetMin = Vector2.zero;
-        titleRect.offsetMax = Vector2.zero;
-
-        if (showBack)
-        {
-            BackButton = MenuUiFactory.CreateTitleBarButton(titleBar, "Back", "←", onBack);
-        }
-
+        var titleBar = MenuUiFactory.BuildMilitaryTitleBar(transform, 0f, title, showBack, onBack, out var backButton);
+        BackButton = backButton;
         MenuUiFactory.CreateDivider(titleBar, false);
     }
 
@@ -137,11 +124,7 @@ public class MenuWindowFrame : MonoBehaviour
         var band = new GameObject(name);
         band.transform.SetParent(transform, false);
         var rect = band.AddComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0f, 1f);
-        rect.anchorMax = new Vector2(1f, 1f);
-        rect.pivot = new Vector2(0.5f, 1f);
-        rect.sizeDelta = new Vector2(0f, height);
-        rect.anchoredPosition = new Vector2(0f, -(MenuUiFactory.WindowBorderWidth + topOffset));
+        MenuUiFactory.ApplyTopChromeBand(rect, topOffset, height);
         return rect;
     }
 
@@ -150,21 +133,17 @@ public class MenuWindowFrame : MonoBehaviour
         var footer = new GameObject("Footer");
         footer.transform.SetParent(transform, false);
         var rect = footer.AddComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0f, 0f);
-        rect.anchorMax = new Vector2(1f, 0f);
-        rect.pivot = new Vector2(0.5f, 0f);
-        rect.sizeDelta = new Vector2(0f, MenuUiFactory.FooterHeight);
-        rect.anchoredPosition = new Vector2(0f, MenuUiFactory.WindowBorderWidth);
+        MenuUiFactory.ApplyBottomChromeBand(rect, MenuUiFactory.FooterHeight);
 
         MenuUiFactory.CreateDivider(footer.transform, true);
 
         var text = MenuUiFactory.CreateAnchoredText(footer.transform, "Footer Text", footerText ?? string.Empty,
             MenuUiFactory.FooterFontSize, FontStyle.Normal, TextAnchor.MiddleCenter, MenuUiFactory.MutedInk);
         var textRect = text.GetComponent<RectTransform>();
-        textRect.anchorMin = new Vector2(0.04f, 0f);
-        textRect.anchorMax = new Vector2(0.96f, 1f);
-        textRect.offsetMin = Vector2.zero;
-        textRect.offsetMax = Vector2.zero;
+        textRect.anchorMin = Vector2.zero;
+        textRect.anchorMax = Vector2.one;
+        textRect.offsetMin = new Vector2(MenuUiFactory.ContentPadding, 0f);
+        textRect.offsetMax = new Vector2(-MenuUiFactory.ContentPadding, 0f);
         return text;
     }
 

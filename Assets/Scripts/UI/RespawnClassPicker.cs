@@ -1,6 +1,5 @@
 using System;
 using UnityEngine;
-using UnityEngine.Events;
 using UnityEngine.UI;
 
 /// <summary>
@@ -58,8 +57,8 @@ public class RespawnClassPicker : MonoBehaviour
         _isOpen = true;
         _overlayRoot.SetActive(true);
 
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        SceneFlow.ApplyMenuInputState();
+        MatchClockHud.Instance?.SetVisible(false);
 
         var dim = new GameObject("Dim");
         dim.transform.SetParent(_overlayRoot.transform, false);
@@ -100,6 +99,11 @@ public class RespawnClassPicker : MonoBehaviour
 
     public void Hide()
     {
+        Hide(resumeGameplay: true);
+    }
+
+    public void Hide(bool resumeGameplay)
+    {
         _isOpen = false;
         if (_overlayRoot != null)
         {
@@ -107,8 +111,16 @@ public class RespawnClassPicker : MonoBehaviour
         }
 
         ClearOverlayChildren();
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+
+        if (resumeGameplay && GameSession.IsMatchActive)
+        {
+            SceneFlow.ApplyGameInputState();
+            MatchClockHud.Instance?.SetVisible(true);
+        }
+        else if (!resumeGameplay)
+        {
+            MatchClockHud.Instance?.SetVisible(false);
+        }
     }
 
     void ClearOverlayChildren()

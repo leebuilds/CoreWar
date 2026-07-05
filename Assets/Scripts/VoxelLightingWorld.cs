@@ -113,10 +113,10 @@ public class VoxelLightingWorld : MonoBehaviour
         _gridOrigin = gridOrigin;
         _voxelMaterial = voxelMaterial;
         _wallMaterial = CreateBuildMaterial("Built Wall", new Color(0.86f, 0.86f, 0.88f, 1f));
-        _windowMaterial = CreateBuildMaterial("Built Window", new Color(0.5f, 0.72f, 0.95f, 0.55f));
+        _windowMaterial = CreateBuildMaterial("Built Window", new Color(0.38f, 0.56f, 0.72f, 0.55f));
         _ceilingMaterial = CreateBuildMaterial("Built Ceiling", new Color(0.9f, 0.9f, 0.92f, 1f));
-        _doorMaterial = CreateBuildMaterial("Built Door", new Color(0.58f, 0.43f, 0.25f, 1f));
-        _trapDoorMaterial = CreateBuildMaterial("Built Trap Door", new Color(0.46f, 0.32f, 0.18f, 1f));
+        _doorMaterial = CreateBuildMaterial("Built Door", new Color(0.48f, 0.36f, 0.20f, 1f));
+        _trapDoorMaterial = CreateBuildMaterial("Built Trap Door", new Color(0.38f, 0.26f, 0.14f, 1f));
         _ladderMaterial = CreateBuildMaterial("Built Ladder", new Color(0.28f, 0.2f, 0.12f, 1f));
         _colliderMaterial = colliderMaterial;
         _builtRoot = builtRoot;

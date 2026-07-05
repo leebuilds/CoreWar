@@ -27,13 +27,16 @@ public class LoadoutSlotBar : MonoBehaviour
 
     void Build(UnityAction<int> onSlotClicked)
     {
+        float pad = MenuUiFactory.ContentPadding;
+        float gap = MenuUiFactory.ContentPadding * 0.5f;
+
         MenuUiFactory.CreateAnchoredText(transform, "Label", "LOADOUT",
             MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.UpperCenter, MenuUiFactory.MutedInk);
         var labelRect = transform.Find("Label").GetComponent<RectTransform>();
-        labelRect.anchorMin = new Vector2(0.04f, 0.62f);
-        labelRect.anchorMax = new Vector2(0.96f, 0.98f);
-        labelRect.offsetMin = Vector2.zero;
-        labelRect.offsetMax = Vector2.zero;
+        labelRect.anchorMin = new Vector2(0f, 0.62f);
+        labelRect.anchorMax = new Vector2(1f, 0.98f);
+        labelRect.offsetMin = new Vector2(pad, 0f);
+        labelRect.offsetMax = new Vector2(-pad, 0f);
 
         for (int i = 0; i < 2; i++)
         {
@@ -41,10 +44,10 @@ public class LoadoutSlotBar : MonoBehaviour
             slotGo.transform.SetParent(transform, false);
 
             var rect = slotGo.AddComponent<RectTransform>();
-            rect.anchorMin = new Vector2(i == 0 ? 0.04f : 0.52f, 0.08f);
-            rect.anchorMax = new Vector2(i == 0 ? 0.48f : 0.96f, 0.58f);
-            rect.offsetMin = Vector2.zero;
-            rect.offsetMax = Vector2.zero;
+            rect.anchorMin = new Vector2(i == 0 ? 0f : 0.5f, 0.08f);
+            rect.anchorMax = new Vector2(i == 0 ? 0.5f : 1f, 0.58f);
+            rect.offsetMin = new Vector2(i == 0 ? pad : gap * 0.5f, 0f);
+            rect.offsetMax = new Vector2(i == 0 ? -gap * 0.5f : -pad, 0f);
 
             var border = slotGo.AddComponent<Image>();
             border.color = MenuUiFactory.Ink;
@@ -52,10 +55,7 @@ public class LoadoutSlotBar : MonoBehaviour
             var innerGo = new GameObject("Inner");
             innerGo.transform.SetParent(slotGo.transform, false);
             var innerRect = innerGo.AddComponent<RectTransform>();
-            innerRect.anchorMin = Vector2.zero;
-            innerRect.anchorMax = Vector2.one;
-            innerRect.offsetMin = new Vector2(2f, 2f);
-            innerRect.offsetMax = new Vector2(-2f, -2f);
+            MenuUiFactory.ApplyInnerBorder(innerRect);
             _slotImages[i] = innerGo.AddComponent<Image>();
             _slotImages[i].color = MenuUiFactory.PanelFill;
 

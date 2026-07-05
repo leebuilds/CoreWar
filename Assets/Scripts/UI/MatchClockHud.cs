@@ -1,0 +1,92 @@
+using UnityEngine;
+using UnityEngine.UI;
+
+/// <summary>
+/// In-match elapsed time HUD (gray box, white M:SS text).
+/// </summary>
+public class MatchClockHud : MonoBehaviour
+{
+    public static MatchClockHud Instance { get; private set; }
+
+    Text _clockText;
+    Canvas _canvas;
+    bool _visible = true;
+
+    public static MatchClockHud Create()
+    {
+        var host = new GameObject("Match Clock HUD");
+        var hud = host.AddComponent<MatchClockHud>();
+        hud.Build();
+        return hud;
+    }
+
+    void Build()
+    {
+        _canvas = hostAddCanvas(gameObject);
+        _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+        _canvas.sortingOrder = 120;
+
+        var boxGo = new GameObject("Clock Box");
+        boxGo.transform.SetParent(transform, false);
+        var boxRect = boxGo.AddComponent<RectTransform>();
+        boxRect.anchorMin = new Vector2(1f, 1f);
+        boxRect.anchorMax = new Vector2(1f, 1f);
+        boxRect.pivot = new Vector2(1f, 1f);
+        boxRect.sizeDelta = new Vector2(96f, 40f);
+        boxRect.anchoredPosition = new Vector2(-16f, -16f);
+
+        var bg = boxGo.AddComponent<Image>();
+        bg.color = new Color(0.42f, 0.42f, 0.42f, 0.92f);
+        bg.raycastTarget = false;
+
+        _clockText = MenuUiFactory.CreateAnchoredText(boxGo.transform, "Clock", "0:00",
+            MenuUiFactory.BodyFontSize, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
+        MenuUiFactory.StretchFull(_clockText.GetComponent<RectTransform>());
+    }
+
+    static Canvas hostAddCanvas(GameObject go)
+    {
+        var canvas = go.AddComponent<Canvas>();
+        go.AddComponent<GraphicRaycaster>();
+        var scaler = go.AddComponent<CanvasScaler>();
+        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+        scaler.referenceResolution = new Vector2(1920, 1080);
+        scaler.matchWidthOrHeight = 0.5f;
+        return canvas;
+    }
+
+    void Awake()
+    {
+        Instance = this;
+    }
+
+    void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
+    void Update()
+    {
+        if (!_visible || !GameSession.IsMatchActive)
+        {
+            return;
+        }
+
+        if (_clockText != null)
+        {
+            _clockText.text = GameSession.FormatMatchElapsedClock();
+        }
+    }
+
+    public void SetVisible(bool visible)
+    {
+        _visible = visible;
+        if (_canvas != null)
+        {
+            _canvas.enabled = visible;
+        }
+    }
+}

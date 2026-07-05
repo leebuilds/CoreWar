@@ -39,23 +39,23 @@ public class CardPreviewPanel : MonoBehaviour
         var bodyText = MenuUiFactory.CreateAnchoredText(frame.Body, "Body", body,
             MenuUiFactory.BodyFontSize, FontStyle.Normal, TextAnchor.UpperLeft, MenuUiFactory.Ink);
         var bodyRect = bodyText.GetComponent<RectTransform>();
-        bodyRect.anchorMin = new Vector2(0.04f, 0.14f);
-        bodyRect.anchorMax = new Vector2(0.96f, 0.96f);
-        bodyRect.offsetMin = Vector2.zero;
-        bodyRect.offsetMax = Vector2.zero;
+        bodyRect.anchorMin = new Vector2(0f, 0.14f);
+        bodyRect.anchorMax = new Vector2(1f, 0.96f);
+        bodyRect.offsetMin = new Vector2(MenuUiFactory.ContentPadding, 0f);
+        bodyRect.offsetMax = new Vector2(-MenuUiFactory.ContentPadding, 0f);
 
         var buttonRow = new GameObject("Button Row");
         buttonRow.transform.SetParent(frame.Body, false);
         var rowRect = buttonRow.AddComponent<RectTransform>();
-        rowRect.anchorMin = new Vector2(0.04f, 0.02f);
-        rowRect.anchorMax = new Vector2(0.96f, 0.12f);
-        rowRect.offsetMin = Vector2.zero;
-        rowRect.offsetMax = Vector2.zero;
+        rowRect.anchorMin = new Vector2(0f, 0.02f);
+        rowRect.anchorMax = new Vector2(1f, 0.12f);
+        rowRect.offsetMin = new Vector2(MenuUiFactory.ContentPadding, 0f);
+        rowRect.offsetMax = new Vector2(-MenuUiFactory.ContentPadding, 0f);
 
         MenuUiFactory.CreateButton(buttonRow.transform, "Select Slot 1", "SELECT SLOT 1",
-            new Vector2(-230f, 0f), new Vector2(220f, 52f), () => onSelectSlot?.Invoke(0));
+            new Vector2(-MenuUiFactory.ModalSplitButtonOffset, 0f), MenuUiFactory.ModalSplitButtonSize, () => onSelectSlot?.Invoke(0));
         MenuUiFactory.CreateButton(buttonRow.transform, "Select Slot 2", "SELECT SLOT 2",
-            new Vector2(230f, 0f), new Vector2(220f, 52f), () => onSelectSlot?.Invoke(1));
+            new Vector2(MenuUiFactory.ModalSplitButtonOffset, 0f), MenuUiFactory.ModalSplitButtonSize, () => onSelectSlot?.Invoke(1));
 
         _root.transform.SetAsLastSibling();
     }

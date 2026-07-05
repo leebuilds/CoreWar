@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
@@ -91,8 +90,8 @@ public class GamePauseMenu : MonoBehaviour
         _isOpen = true;
         _overlayRoot.SetActive(true);
 
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
+        SceneFlow.ApplyMenuInputState();
+        MatchClockHud.Instance?.SetVisible(false);
 
         CreateDim(_overlayRoot.transform, 0.35f);
 
@@ -100,14 +99,19 @@ public class GamePauseMenu : MonoBehaviour
             "game continues in the background", new Vector2(480f, 420f), showHeader: false, Hide);
 
         MenuUiFactory.CreateButton(frame.Body, "Respawn", "RESPAWN",
-            new Vector2(0f, 70f), new Vector2(320f, 64f), OpenRespawnPicker);
+            new Vector2(0f, 70f), MenuUiFactory.StandardButtonSize, OpenRespawnPicker);
         MenuUiFactory.CreateButton(frame.Body, "Settings", "SETTINGS",
-            new Vector2(0f, -10f), new Vector2(320f, 64f), ShowSettings);
+            new Vector2(0f, -10f), MenuUiFactory.StandardButtonSize, ShowSettings);
         MenuUiFactory.CreateButton(frame.Body, "Exit Match", "EXIT MATCH",
-            new Vector2(0f, -90f), new Vector2(320f, 64f), ExitMatch);
+            new Vector2(0f, -90f), MenuUiFactory.StandardButtonSize, ExitMatch);
     }
 
     public void Hide()
+    {
+        Hide(resumeGameplay: true);
+    }
+
+    public void Hide(bool resumeGameplay)
     {
         HideSettingsOverlay();
         ClearOverlayChildren();
@@ -117,8 +121,15 @@ public class GamePauseMenu : MonoBehaviour
             _overlayRoot.SetActive(false);
         }
 
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
+        if (resumeGameplay && GameSession.IsMatchActive)
+        {
+            SceneFlow.ApplyGameInputState();
+            MatchClockHud.Instance?.SetVisible(true);
+        }
+        else if (!resumeGameplay)
+        {
+            MatchClockHud.Instance?.SetVisible(false);
+        }
     }
 
     void OpenRespawnPicker()
@@ -187,13 +198,7 @@ public class GamePauseMenu : MonoBehaviour
 
     void ExitMatch()
     {
-        ProfileSession.TouchActivity();
-        Time.timeScale = 1f;
-        Cursor.lockState = CursorLockMode.None;
-        Cursor.visible = true;
-        GameSession.EndMatch();
-        Hide();
-        SceneManager.LoadScene("MainMenu", LoadSceneMode.Single);
+        SceneFlow.EnterMainMenu();
     }
 
     static void CreateDim(Transform parent, float alpha)

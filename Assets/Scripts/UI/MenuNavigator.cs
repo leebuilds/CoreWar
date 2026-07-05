@@ -2,7 +2,6 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 /// <summary>
@@ -15,7 +14,7 @@ public class MenuNavigator : MonoBehaviour
         SignIn,
         SignUp,
         Hub,
-        Play,
+        GameModes,
         Decks,
         Settings
     }
@@ -31,17 +30,19 @@ public class MenuNavigator : MonoBehaviour
     CardPreviewPanel _previewPanel;
     GameObject _cardActionOverlay;
     CardDefinition _pendingActionCard;
-    float _decksScrollPosition = 1f;
     ScrollRect _decksScrollRect;
 
     readonly List<CardTileView> _deckCardTiles = new List<CardTileView>();
     readonly Stack<ScreenId> _backStack = new Stack<ScreenId>();
     ScreenId _currentScreen;
-    int _playSpawnSlotIndex;
-    CardTileView _playLeftTile;
-    CardTileView _playRightTile;
     int _sessionCheckGraceFrames;
     bool _bootstrapped;
+
+    MatchmakingPanel _matchmakingPanel;
+    MatchClassSelectPanel _classSelectPanel;
+    GameObject _cancelMatchmakingOverlay;
+    GameModeButtonFx _activeModeButtonFx;
+    string _activeModeId;
 
     public static MenuNavigator Create()
     {
@@ -86,6 +87,13 @@ public class MenuNavigator : MonoBehaviour
         ProfileSession.ValidateSessionOrLogout();
         MenuSettings.Changed += HandleSettingsChanged;
 
+        MatchmakingSession.BindRunner(this);
+        _matchmakingPanel = MatchmakingPanel.Create(_root, RequestCancelMatchmaking);
+        _classSelectPanel = MatchClassSelectPanel.Create(_root);
+        _classSelectPanel.Completed += HandlePrepComplete;
+        MatchmakingSession.Completed += HandleMatchmakingCompleted;
+        MatchmakingSession.Cancelled += HandleMatchmakingCancelled;
+
         if (ProfileSession.IsSignedIn)
         {
             ShowScreen(ScreenId.Hub, pushHistory: false);
@@ -99,6 +107,13 @@ public class MenuNavigator : MonoBehaviour
     void OnDestroy()
     {
         MenuSettings.Changed -= HandleSettingsChanged;
+        MatchmakingSession.Completed -= HandleMatchmakingCompleted;
+        MatchmakingSession.Cancelled -= HandleMatchmakingCancelled;
+
+        if (_classSelectPanel != null)
+        {
+            _classSelectPanel.Completed -= HandlePrepComplete;
+        }
     }
 
     void HandleSettingsChanged()
@@ -128,6 +143,11 @@ public class MenuNavigator : MonoBehaviour
 
     void Update()
     {
+        if (!SceneFlow.IsMainMenuActive)
+        {
+            return;
+        }
+
         if (_currentScreen != ScreenId.SignIn && _currentScreen != ScreenId.SignUp)
         {
             if (_sessionCheckGraceFrames > 0)
@@ -156,6 +176,18 @@ public class MenuNavigator : MonoBehaviour
 
     public void HandleBackNavigation()
     {
+        if (_cancelMatchmakingOverlay != null)
+        {
+            HideCancelMatchmakingModal();
+            return;
+        }
+
+        if (IsInMatchFlow())
+        {
+            ShowCancelMatchmakingModal(ConfirmCancelMatchFlow);
+            return;
+        }
+
         if (_previewPanel != null && _previewPanel.IsOpen)
         {
             _previewPanel.Hide();
@@ -237,7 +269,7 @@ public class MenuNavigator : MonoBehaviour
             case ScreenId.SignIn: BuildSignIn(); break;
             case ScreenId.SignUp: BuildSignUp(); break;
             case ScreenId.Hub: BuildHub(); break;
-            case ScreenId.Play: BuildPlay(); break;
+            case ScreenId.GameModes: BuildGameModes(); break;
             case ScreenId.Decks: BuildDecks(); break;
             case ScreenId.Settings: BuildSettings(); break;
         }
@@ -249,16 +281,16 @@ public class MenuNavigator : MonoBehaviour
             string.Empty, new Vector2(560f, 520f), showHeader: false, null);
 
         _usernameField = MenuUiFactory.CreateInputField(_window.Body, "Username", "username",
-            new Vector2(0f, 90f), new Vector2(420f, 52f));
+            new Vector2(0f, 90f), MenuUiFactory.StandardInputSize);
         _passcodeField = MenuUiFactory.CreateInputField(_window.Body, "Passcode", "passcode",
-            new Vector2(0f, 20f), new Vector2(420f, 52f), password: true);
+            new Vector2(0f, 20f), MenuUiFactory.StandardInputSize, password: true);
 
         MenuUiFactory.CreateButton(_window.Body, "Sign In Button", "SIGN IN",
-            new Vector2(0f, -60f), new Vector2(320f, 64f), AttemptSignIn);
+            new Vector2(0f, -60f), MenuUiFactory.StandardButtonSize, AttemptSignIn);
         MenuUiFactory.CreateTextLink(_window.Body, "Create Account Link", "create account",
-            new Vector2(0f, -130f), new Vector2(320f, 44f), () => ShowScreen(ScreenId.SignUp));
+            new Vector2(0f, -130f), MenuUiFactory.TextLinkSize, () => ShowScreen(ScreenId.SignUp));
         MenuUiFactory.CreateButton(_window.Body, "Quit Button", "QUIT",
-            new Vector2(0f, -190f), new Vector2(320f, 64f), MenuUiFactory.QuitApplication);
+            new Vector2(0f, -190f), MenuUiFactory.StandardButtonSize, MenuUiFactory.QuitApplication);
     }
 
     void BuildSignUp()
@@ -267,14 +299,14 @@ public class MenuNavigator : MonoBehaviour
             string.Empty, new Vector2(560f, 580f), showHeader: false, GoBack);
 
         _usernameField = MenuUiFactory.CreateInputField(_window.Body, "Username", "unique username",
-            new Vector2(0f, 120f), new Vector2(420f, 52f));
+            new Vector2(0f, 120f), MenuUiFactory.StandardInputSize);
         _passcodeField = MenuUiFactory.CreateInputField(_window.Body, "Passcode", "passcode",
-            new Vector2(0f, 50f), new Vector2(420f, 52f), password: true);
+            new Vector2(0f, 50f), MenuUiFactory.StandardInputSize, password: true);
         _confirmPasscodeField = MenuUiFactory.CreateInputField(_window.Body, "Confirm Passcode", "confirm passcode",
-            new Vector2(0f, -20f), new Vector2(420f, 52f), password: true);
+            new Vector2(0f, -20f), MenuUiFactory.StandardInputSize, password: true);
 
         MenuUiFactory.CreateButton(_window.Body, "Create Button", "CREATE",
-            new Vector2(0f, -100f), new Vector2(320f, 64f), AttemptSignUp);
+            new Vector2(0f, -100f), MenuUiFactory.StandardButtonSize, AttemptSignUp);
     }
 
     void BuildHub()
@@ -292,15 +324,15 @@ public class MenuNavigator : MonoBehaviour
             MenuUiFactory.BodyFontSize, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, 170f), new Vector2(420f, 40f));
 
         MenuUiFactory.CreateButton(_window.Body, "Play Button", "PLAY",
-            new Vector2(0f, 70f), new Vector2(320f, 64f), () => ShowScreen(ScreenId.Play), enabled: canPlay);
+            new Vector2(0f, 70f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.GameModes), enabled: canPlay);
         MenuUiFactory.CreateButton(_window.Body, "Decks Button", "DECKS",
-            new Vector2(0f, -10f), new Vector2(320f, 64f), () => ShowScreen(ScreenId.Decks));
+            new Vector2(0f, -10f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.Decks));
         MenuUiFactory.CreateButton(_window.Body, "Settings Button", "SETTINGS",
-            new Vector2(0f, -90f), new Vector2(320f, 64f), () => ShowScreen(ScreenId.Settings));
+            new Vector2(0f, -90f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.Settings));
         MenuUiFactory.CreateButton(_window.Body, "Logout Button", "LOGOUT",
-            new Vector2(0f, -170f), new Vector2(320f, 64f), Logout);
+            new Vector2(0f, -170f), MenuUiFactory.StandardButtonSize, Logout);
         MenuUiFactory.CreateButton(_window.Body, "Quit Button", "QUIT",
-            new Vector2(0f, -250f), new Vector2(320f, 64f), MenuUiFactory.QuitApplication);
+            new Vector2(0f, -250f), MenuUiFactory.StandardButtonSize, MenuUiFactory.QuitApplication);
     }
 
     void BuildSettings()
@@ -311,34 +343,246 @@ public class MenuNavigator : MonoBehaviour
         MenuSettingsPanel.Build(_window.Body, showAccountSection: true);
     }
 
-    void BuildPlay()
+    void BuildGameModes()
     {
-        _window = MenuWindowFrame.CreateScreen(_screenRoot.transform, "PLAY", showBack: true,
-            "team red · confirm loadout · quick play only (for now)", new Vector2(980f, 560f), showHeader: false, GoBack);
+        _window = MenuWindowFrame.CreateScreen(_screenRoot.transform, "GAME MODES", showBack: true,
+            "select a mode to search for a match", new Vector2(560f, 640f), showHeader: false, GoBackFromGameModes);
+
+        var viewportGo = new GameObject("Modes Viewport");
+        viewportGo.transform.SetParent(_window.Body, false);
+        var viewportRect = viewportGo.AddComponent<RectTransform>();
+        MenuUiFactory.StretchFull(viewportRect);
+
+        var viewportImage = viewportGo.AddComponent<Image>();
+        viewportImage.color = MenuUiFactory.ScrollViewportFill;
+        viewportGo.AddComponent<Mask>().showMaskGraphic = true;
+
+        var contentGo = new GameObject("Modes Content");
+        contentGo.transform.SetParent(viewportGo.transform, false);
+        var contentRect = contentGo.AddComponent<RectTransform>();
+        contentRect.anchorMin = new Vector2(0f, 1f);
+        contentRect.anchorMax = new Vector2(1f, 1f);
+        contentRect.pivot = new Vector2(0.5f, 1f);
+        contentRect.anchoredPosition = Vector2.zero;
+
+        var layout = contentGo.AddComponent<VerticalLayoutGroup>();
+        layout.spacing = 12f;
+        layout.padding = new RectOffset(8, 8, 8, 8);
+        layout.childControlHeight = true;
+        layout.childControlWidth = true;
+        layout.childForceExpandHeight = false;
+        layout.childForceExpandWidth = true;
+
+        contentGo.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+        for (int i = 0; i < GameModeDefinition.Catalog.Count; i++)
+        {
+            CreateGameModeRow(contentGo.transform, GameModeDefinition.Catalog[i]);
+        }
+
+        var scrollRect = viewportGo.AddComponent<ScrollRect>();
+        scrollRect.content = contentRect;
+        scrollRect.viewport = viewportRect;
+        scrollRect.horizontal = false;
+        scrollRect.vertical = true;
+        scrollRect.movementType = ScrollRect.MovementType.Clamped;
+        scrollRect.scrollSensitivity = 40f;
+        scrollRect.verticalNormalizedPosition = 1f;
+    }
+
+    void CreateGameModeRow(Transform parent, GameModeDefinition mode)
+    {
+        var rowGo = new GameObject($"Mode_{mode.id}");
+        rowGo.transform.SetParent(parent, false);
+        var rowRect = rowGo.AddComponent<RectTransform>();
+        rowRect.sizeDelta = new Vector2(0f, 64f);
+
+        var rowLayout = rowGo.AddComponent<LayoutElement>();
+        rowLayout.preferredHeight = 64f;
+        rowLayout.minHeight = 64f;
+
+        GameModeButtonFx fx = null;
+        var button = MenuUiFactory.CreateBodyButton(rowGo.transform, $"Mode Button {mode.displayName}", mode.displayName,
+            Vector2.zero, new Vector2(480f, MenuUiFactory.CompactControlHeight),
+            () => OnGameModeSelected(mode, fx), enabled: ProfileSession.HasCompleteLoadout);
+        fx = GameModeButtonFx.Attach(button);
+
+        var buttonRect = button.GetComponent<RectTransform>();
+        buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
+        buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
+        buttonRect.anchoredPosition = Vector2.zero;
+    }
+
+    void GoBackFromGameModes()
+    {
+        if (IsInMatchFlow())
+        {
+            ShowCancelMatchmakingModal(ConfirmCancelMatchFlow);
+            return;
+        }
+
+        GoBack();
+    }
+
+    bool IsInMatchFlow()
+    {
+        return MatchmakingSession.IsActive || (_classSelectPanel != null && _classSelectPanel.IsOpen);
+    }
+
+    void OnGameModeSelected(GameModeDefinition mode, GameModeButtonFx fx)
+    {
+        if (mode == null || !ProfileSession.HasCompleteLoadout)
+        {
+            return;
+        }
+
+        if (_activeModeId == mode.id && IsInMatchFlow())
+        {
+            return;
+        }
+
+        if (IsInMatchFlow())
+        {
+            ShowCancelMatchmakingModal(() =>
+            {
+                ConfirmCancelMatchFlow();
+                BeginMatchmaking(mode, fx);
+            });
+            return;
+        }
+
+        BeginMatchmaking(mode, fx);
+    }
+
+    void BeginMatchmaking(GameModeDefinition mode, GameModeButtonFx fx)
+    {
+        ProfileSession.TouchActivity();
+        _activeModeId = mode.id;
+        _activeModeButtonFx = fx;
+        fx?.PlayBurst();
+        MatchmakingSession.Start(mode);
+        _matchmakingPanel.Show();
+    }
+
+    void RequestCancelMatchmaking()
+    {
+        if (MatchmakingSession.IsActive)
+        {
+            MatchmakingSession.Cancel();
+            return;
+        }
+
+        if (_classSelectPanel != null && _classSelectPanel.IsOpen)
+        {
+            ConfirmCancelMatchFlow();
+        }
+    }
+
+    void HandleMatchmakingCompleted()
+    {
+        _matchmakingPanel.Hide();
+        _classSelectPanel.Show(() =>
+        {
+            ShowCancelMatchmakingModal(() =>
+            {
+                ConfirmCancelMatchFlow();
+                ShowScreen(ScreenId.Decks);
+            });
+        });
+    }
+
+    void HandleMatchmakingCancelled()
+    {
+        CleanupMatchFlow();
+    }
+
+    void ConfirmCancelMatchFlow()
+    {
+        if (MatchmakingSession.IsActive)
+        {
+            MatchmakingSession.Cancel();
+            return;
+        }
+
+        CleanupMatchFlow();
+    }
+
+    void CleanupMatchFlow()
+    {
+        StopActiveModeFx();
+        _matchmakingPanel?.Hide();
+        _classSelectPanel?.Hide();
+        _activeModeId = null;
+        _activeModeButtonFx = null;
+        MatchmakingSession.Reset();
+    }
+
+    void StopActiveModeFx()
+    {
+        _activeModeButtonFx?.StopFx();
+        _activeModeButtonFx = null;
+    }
+
+    void HandlePrepComplete(int spawnSlotIndex)
+    {
+        if (!ProfileSession.HasCompleteLoadout)
+        {
+            CleanupMatchFlow();
+            return;
+        }
+
+        StopActiveModeFx();
+        _classSelectPanel.Hide();
+        _matchmakingPanel.Hide();
 
         var profile = ProfileSession.ActiveProfile;
-        var leftCard = CardCatalog.Get(profile.loadoutCardIds[0]);
-        var rightCard = CardCatalog.Get(profile.loadoutCardIds[1]);
+        var mode = GameModeDefinition.Get(_activeModeId);
+        ProfileSession.TouchActivity();
+        GameSession.BeginMatch(
+            GameSession.Team.Red,
+            profile.loadoutCardIds[0],
+            profile.loadoutCardIds[1],
+            profile.loadoutCardIds[spawnSlotIndex],
+            _activeModeId,
+            mode?.requiredPlayers ?? 1);
+        MenuUiSounds.PlayGunshot();
+        SceneFlow.EnterGameFromPrep();
+        MatchmakingSession.Reset();
+        _activeModeId = null;
+    }
 
-        _playSpawnSlotIndex = 0;
-        _playLeftTile = CreatePlayCardTile(_window.Body, leftCard, 0, new Vector2(-300f, 20f));
-        _playRightTile = CreatePlayCardTile(_window.Body, rightCard, 1, new Vector2(300f, 20f));
-        RefreshPlaySpawnSelection();
+    void ShowCancelMatchmakingModal(Action onConfirmCancel)
+    {
+        if (_cancelMatchmakingOverlay != null)
+        {
+            return;
+        }
 
-        MenuUiFactory.CreateText(_window.Body, "Spawn Hint", "tap a card — the highlighted one is your spawn class",
-            MenuUiFactory.HintFontSize, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, -150f), new Vector2(520f, 40f),
-            MenuUiFactory.MutedInk);
+        var frame = MenuWindowFrame.CreateModal(_root, "CANCEL MATCHMAKING?", showBack: false,
+            "leaving will stop search", new Vector2(480f, 320f), HideCancelMatchmakingModal);
+        _cancelMatchmakingOverlay = frame.transform.parent.gameObject;
 
-        bool canPlay = ProfileSession.HasCompleteLoadout;
-        MenuUiFactory.CreateButton(_window.Body, "Start Button", "PLAY",
-            new Vector2(0f, 20f), new Vector2(320f, 80f), StartMatch, enabled: canPlay);
-        MenuUiFactory.CreateTextLink(_window.Body, "Edit Link", "edit in decks",
-            new Vector2(0f, -80f), new Vector2(320f, 44f), () => ShowScreen(ScreenId.Decks));
+        MenuUiFactory.CreateButton(frame.Body, "Stay Button", "STAY",
+            new Vector2(0f, 40f), MenuUiFactory.StandardButtonSize, HideCancelMatchmakingModal);
+        MenuUiFactory.CreateButton(frame.Body, "Cancel Search Button", "CANCEL SEARCH",
+            new Vector2(0f, -40f), MenuUiFactory.StandardButtonSize, () =>
+            {
+                HideCancelMatchmakingModal();
+                onConfirmCancel?.Invoke();
+            });
+    }
+
+    void HideCancelMatchmakingModal()
+    {
+        if (_cancelMatchmakingOverlay != null)
+        {
+            Destroy(_cancelMatchmakingOverlay);
+            _cancelMatchmakingOverlay = null;
+        }
     }
 
     void BuildDecks()
     {
-        _decksScrollPosition = 1f;
         _window = MenuWindowFrame.CreateScreen(_screenRoot.transform, "DECKS", showBack: true,
             "pick two cards for your loadout", new Vector2(1320f, 820f), showHeader: true, GoBack);
 
@@ -500,11 +744,11 @@ public class MenuNavigator : MonoBehaviour
         MenuUiFactory.StretchFull(panelRect);
 
         MenuUiFactory.CreateButton(buttonPanel.transform, "Preview", "PREVIEW",
-            new Vector2(0f, 90f), new Vector2(320f, 60f), OpenPreviewFromAction);
+            new Vector2(0f, 90f), MenuUiFactory.StandardButtonSize, OpenPreviewFromAction);
         MenuUiFactory.CreateButton(buttonPanel.transform, "Select Slot 1", "SELECT SLOT 1",
-            new Vector2(0f, 10f), new Vector2(320f, 60f), () => SelectPendingCard(0));
+            new Vector2(0f, 10f), MenuUiFactory.StandardButtonSize, () => SelectPendingCard(0));
         MenuUiFactory.CreateButton(buttonPanel.transform, "Select Slot 2", "SELECT SLOT 2",
-            new Vector2(0f, -70f), new Vector2(320f, 60f), () => SelectPendingCard(1));
+            new Vector2(0f, -70f), MenuUiFactory.StandardButtonSize, () => SelectPendingCard(1));
     }
 
     void HideCardActionPanel()
@@ -556,10 +800,6 @@ public class MenuNavigator : MonoBehaviour
     {
         _decksLoadoutBar?.Refresh();
         RefreshDeckCardLoadoutStates();
-        if (_decksScrollRect != null)
-        {
-            _decksScrollPosition = _decksScrollRect.verticalNormalizedPosition;
-        }
     }
 
     void RefreshDeckCardLoadoutStates()
@@ -597,50 +837,6 @@ public class MenuNavigator : MonoBehaviour
         }
 
         return false;
-    }
-
-    CardTileView CreatePlayCardTile(Transform parent, CardDefinition card, int slotIndex, Vector2 position)
-    {
-        if (card == null)
-        {
-            MenuUiFactory.CreateText(parent, "Missing Card", "EMPTY",
-                24, FontStyle.Bold, TextAnchor.MiddleCenter, position, new Vector2(280f, 180f));
-            return null;
-        }
-
-        var tile = CardTileView.Create(parent, card, owned: true, () => SelectPlaySpawnSlot(slotIndex));
-        var rect = tile.GetComponent<RectTransform>();
-        rect.anchorMin = new Vector2(0.5f, 0.5f);
-        rect.anchorMax = new Vector2(0.5f, 0.5f);
-        rect.anchoredPosition = position;
-        return tile;
-    }
-
-    void SelectPlaySpawnSlot(int slotIndex)
-    {
-        _playSpawnSlotIndex = Mathf.Clamp(slotIndex, 0, 1);
-        RefreshPlaySpawnSelection();
-    }
-
-    void RefreshPlaySpawnSelection()
-    {
-        bool leftSelected = _playSpawnSlotIndex == 0;
-        bool rightSelected = _playSpawnSlotIndex == 1;
-        _playLeftTile?.SetSpawnSelected(leftSelected);
-        _playRightTile?.SetSpawnSelected(rightSelected);
-        _playLeftTile?.SetSpawnDimmed(!leftSelected);
-        _playRightTile?.SetSpawnDimmed(!rightSelected);
-
-        if (_window != null)
-        {
-            var profile = ProfileSession.ActiveProfile;
-            if (profile?.loadoutCardIds != null && profile.loadoutCardIds.Length > 1)
-            {
-                var card = CardCatalog.Get(profile.loadoutCardIds[_playSpawnSlotIndex]);
-                var label = card != null ? card.displayName.ToUpperInvariant() : "UNKNOWN";
-                _window.SetFooterText($"spawning as {label} · team red · quick play only (for now)");
-            }
-        }
     }
 
     void AttemptSignIn()
@@ -693,27 +889,10 @@ public class MenuNavigator : MonoBehaviour
 
     void Logout()
     {
+        CleanupMatchFlow();
         ProfileSession.Logout();
         _backStack.Clear();
         ShowScreen(ScreenId.SignIn, pushHistory: false);
-    }
-
-    void StartMatch()
-    {
-        if (!ProfileSession.HasCompleteLoadout)
-        {
-            return;
-        }
-
-        var profile = ProfileSession.ActiveProfile;
-        ProfileSession.TouchActivity();
-        GameSession.BeginMatch(
-            GameSession.Team.Red,
-            profile.loadoutCardIds[0],
-            profile.loadoutCardIds[1],
-            profile.loadoutCardIds[_playSpawnSlotIndex]);
-        MenuUiSounds.PlayGunshot();
-        SceneManager.LoadScene("Game");
     }
 
     void SetError(string message)

@@ -34,25 +34,26 @@ public static class MenuSettingsPanel
     {
         CreateBodyLabel(body, $"Section {label}", label, y,
             MenuUiFactory.SectionFontSize, FontStyle.Bold, TextAnchor.MiddleLeft, MenuUiFactory.Ink);
-        y -= 52f;
+        y -= MenuUiFactory.SectionLabelSpacing;
     }
 
     static void CreateThemeRow(Transform body, ref float y)
     {
-        var row = CreateRow(body, "Theme Row", y, 52f);
+        var row = CreateRow(body, "Theme Row", y, MenuUiFactory.CompactControlHeight);
         bool dark = MenuSettings.IsDarkMode;
+        float themeOffset = MenuUiFactory.ThemeButtonOffset;
         MenuUiFactory.CreateSettingsButton(row.transform, "Light Theme",
             dark ? "LIGHT" : "LIGHT ✓",
-            new Vector2(-110f, 0f), new Vector2(200f, 52f), () => MenuSettings.SetDarkMode(false));
+            new Vector2(-themeOffset, 0f), MenuUiFactory.CompactButtonSize, () => MenuSettings.SetDarkMode(false));
         MenuUiFactory.CreateSettingsButton(row.transform, "Dark Theme",
             dark ? "DARK ✓" : "DARK",
-            new Vector2(110f, 0f), new Vector2(200f, 52f), () => MenuSettings.SetDarkMode(true));
-        y -= 72f;
+            new Vector2(themeOffset, 0f), MenuUiFactory.CompactButtonSize, () => MenuSettings.SetDarkMode(true));
+        y -= MenuUiFactory.SettingsRowSpacing;
     }
 
     static void CreateVolumeRow(Transform body, ref float y)
     {
-        var row = CreateRow(body, "Volume Row", y, 58f);
+        var row = CreateRow(body, "Volume Row", y, MenuUiFactory.SettingsLabeledRowHeight);
         CreateRowLeftLabel(row.transform, "Volume Label", "UI volume");
 
         var valueLabel = CreateRowRightLabel(row.transform, "Volume Value", FormatPercent(MenuSettings.MasterVolume));
@@ -62,28 +63,27 @@ public static class MenuSettingsPanel
             MenuSettings.SetMasterVolume(value);
             valueLabel.text = FormatPercent(MenuSettings.MasterVolume);
         });
-        y -= 78f;
+        y -= MenuUiFactory.SettingsSliderRowSpacing;
     }
 
     static void CreateUiSoundsRow(Transform body, ref float y)
     {
-        var row = CreateRow(body, "Ui Sounds Row", y, 52f);
+        var row = CreateRow(body, "Ui Sounds Row", y, MenuUiFactory.CompactControlHeight);
         CreateRowLeftLabel(row.transform, "Ui Sounds Label", "UI sounds");
-        var toggle = MenuUiFactory.CreateSettingsButton(row.transform, "Ui Sounds Toggle",
+        var toggle = MenuUiFactory.CreateSettingsButtonRight(row.transform, "Ui Sounds Toggle",
             MenuSettings.UiSoundsEnabled ? "ON" : "OFF",
-            new Vector2(0f, 0f), new Vector2(120f, 48f),
-            () => MenuSettings.SetUiSoundsEnabled(!MenuSettings.UiSoundsEnabled));
-        var toggleRect = toggle.GetComponent<RectTransform>();
-        toggleRect.anchorMin = new Vector2(1f, 0.5f);
-        toggleRect.anchorMax = new Vector2(1f, 0.5f);
-        toggleRect.pivot = new Vector2(1f, 0.5f);
-        toggleRect.anchoredPosition = Vector2.zero;
-        y -= 68f;
+            MenuUiFactory.SettingsToggleSize, null);
+        toggle.onClick.AddListener(() =>
+        {
+            MenuSettings.SetUiSoundsEnabled(!MenuSettings.UiSoundsEnabled);
+            RefreshToggleLabel(toggle);
+        });
+        y -= MenuUiFactory.SettingsRowSpacing;
     }
 
     static void CreateSensitivityRow(Transform body, ref float y)
     {
-        var row = CreateRow(body, "Sensitivity Row", y, 58f);
+        var row = CreateRow(body, "Sensitivity Row", y, MenuUiFactory.SettingsLabeledRowHeight);
         CreateRowLeftLabel(row.transform, "Sensitivity Label", "Mouse sensitivity");
 
         var valueLabel = CreateRowRightLabel(row.transform, "Sensitivity Value",
@@ -94,7 +94,7 @@ public static class MenuSettingsPanel
             MenuSettings.SetMouseSensitivity(value);
             valueLabel.text = $"{MenuSettings.MouseSensitivity:0.0}x";
         });
-        y -= 78f;
+        y -= MenuUiFactory.SettingsSliderRowSpacing;
     }
 
     static GameObject CreateRow(Transform body, string name, float y, float height)
@@ -121,7 +121,7 @@ public static class MenuSettingsPanel
         rect.anchorMax = new Vector2(1f, 0.5f);
         rect.pivot = new Vector2(0.5f, 0.5f);
         rect.anchoredPosition = new Vector2(0f, y);
-        rect.sizeDelta = new Vector2(0f, 36f);
+        rect.sizeDelta = new Vector2(-MenuUiFactory.ContentPadding * 2f, MenuUiFactory.SectionLabelHeight);
 
         var text = go.AddComponent<Text>();
         text.font = MenuUiFactory.Font;
@@ -144,7 +144,8 @@ public static class MenuSettingsPanel
         rect.anchorMax = new Vector2(0.62f, 1f);
         rect.pivot = new Vector2(0f, 1f);
         rect.anchoredPosition = Vector2.zero;
-        rect.sizeDelta = new Vector2(0f, 28f);
+        rect.offsetMin = new Vector2(MenuUiFactory.ContentPadding, 0f);
+        rect.sizeDelta = new Vector2(0f, MenuUiFactory.SliderTrackHeight);
 
         var text = go.AddComponent<Text>();
         text.font = MenuUiFactory.Font;
@@ -167,7 +168,8 @@ public static class MenuSettingsPanel
         rect.anchorMax = new Vector2(1f, 1f);
         rect.pivot = new Vector2(1f, 1f);
         rect.anchoredPosition = Vector2.zero;
-        rect.sizeDelta = new Vector2(0f, 28f);
+        rect.offsetMax = new Vector2(-MenuUiFactory.ContentPadding, 0f);
+        rect.sizeDelta = new Vector2(0f, MenuUiFactory.SliderTrackHeight);
 
         var text = go.AddComponent<Text>();
         text.font = MenuUiFactory.Font;
@@ -189,5 +191,19 @@ public static class MenuSettingsPanel
     static string FormatPercent(float value)
     {
         return $"{Mathf.RoundToInt(value * 100f)}%";
+    }
+
+    static void RefreshToggleLabel(Button toggle)
+    {
+        if (toggle == null)
+        {
+            return;
+        }
+
+        var label = toggle.GetComponentInChildren<Text>();
+        if (label != null)
+        {
+            label.text = MenuSettings.UiSoundsEnabled ? "ON" : "OFF";
+        }
     }
 }

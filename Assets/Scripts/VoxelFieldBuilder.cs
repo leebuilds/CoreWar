@@ -15,6 +15,8 @@ public class VoxelFieldBuilder : MonoBehaviour
 
     void Awake()
     {
+        SceneFlow.InitializeGameScene();
+
         var voxelMaterial = CreateVoxelMaterial();
         var slipperyColliderMaterial = CreateSlipperyColliderMaterial();
         float offsetX = (gridWidth - 1) * 0.5f * voxelSize;
@@ -38,6 +40,8 @@ public class VoxelFieldBuilder : MonoBehaviour
 
         CreateLight();
         CreatePlayer(voxelWorld);
+        MatchClockHud.Create();
+        GameSession.EnsureMatchClockStarted();
     }
 
     void CreateLight()
@@ -72,20 +76,10 @@ public class VoxelFieldBuilder : MonoBehaviour
 
     void CreatePlayer(VoxelLightingWorld voxelWorld)
     {
-        if (!GameSession.HasTeamSelected)
+        if (!GameSession.IsMatchActive)
         {
-            if (GameSession.HasLoadoutSelected)
-            {
-                GameSession.BeginMatch(
-                    GameSession.Team.Red,
-                    GameSession.LoadoutCardIdA,
-                    GameSession.LoadoutCardIdB,
-                    GameSession.ActiveCardId);
-            }
-            else
-            {
-                GameSession.BeginMatch(GameSession.Team.Red);
-            }
+            // Supports pressing Play directly on the Game scene in the editor.
+            GameSession.BeginMatch(GameSession.Team.Red);
         }
 
         var player = new GameObject("Player");

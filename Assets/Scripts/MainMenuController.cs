@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.EventSystems;
 
 /// <summary>
 /// Bootstraps the main menu scene and routes to sign-in or hub based on session state.
@@ -8,9 +7,9 @@ public class MainMenuController : MonoBehaviour
 {
     void Awake()
     {
-        MenuSettings.EnsureLoaded();
+        SceneFlow.InitializeMainMenuScene();
         CreateCamera();
-        CreateEventSystem();
+        MenuUiFactory.EnsureEventSystem();
         MenuNavigator.Create();
     }
 
@@ -25,8 +24,4 @@ public class MainMenuController : MonoBehaviour
         camGo.AddComponent<AudioListener>();
     }
 
-    void CreateEventSystem()
-    {
-        MenuUiFactory.EnsureEventSystem();
-    }
 }

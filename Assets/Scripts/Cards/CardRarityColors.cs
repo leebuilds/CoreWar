@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Rarity palette for card tiles and banners.
+/// Rarity palette for card tiles and banners — muted, darker military-adjacent tones.
 /// </summary>
 public static class CardRarityColors
 {
@@ -10,17 +10,17 @@ public static class CardRarityColors
         switch (rarity)
         {
             case CardRarity.Uncommon:
-                return new Color(0.52f, 0.88f, 0.58f);
+                return new Color(0.28f, 0.56f, 0.34f);
             case CardRarity.Rare:
-                return new Color(0.48f, 0.68f, 0.98f);
+                return new Color(0.26f, 0.42f, 0.68f);
             case CardRarity.Epic:
-                return new Color(0.72f, 0.52f, 0.96f);
+                return new Color(0.40f, 0.30f, 0.60f);
             case CardRarity.Legendary:
-                return new Color(0.98f, 0.82f, 0.28f);
+                return new Color(0.62f, 0.50f, 0.16f);
             case CardRarity.SuperSoldier:
-                return new Color(0.96f, 0.42f, 0.42f);
+                return new Color(0.60f, 0.24f, 0.24f);
             default:
-                return new Color(0.78f, 0.78f, 0.78f);
+                return new Color(0.58f, 0.58f, 0.58f);
         }
     }
 
@@ -51,26 +51,26 @@ public static class CardRarityColors
 
     public static Color Fill(CardRarity rarity)
     {
-        return BannerBackground(rarity);
+        switch (rarity)
+        {
+            case CardRarity.Uncommon:
+                return new Color(0.34f, 0.50f, 0.38f);
+            case CardRarity.Rare:
+                return new Color(0.32f, 0.44f, 0.58f);
+            case CardRarity.Epic:
+                return new Color(0.44f, 0.36f, 0.54f);
+            case CardRarity.Legendary:
+                return new Color(0.56f, 0.48f, 0.22f);
+            case CardRarity.SuperSoldier:
+                return new Color(0.54f, 0.34f, 0.34f);
+            default:
+                return new Color(0.68f, 0.68f, 0.68f);
+        }
     }
 
     public static Color Background(CardRarity rarity)
     {
-        switch (rarity)
-        {
-            case CardRarity.Uncommon:
-                return new Color(0.82f, 0.9f, 0.84f);
-            case CardRarity.Rare:
-                return new Color(0.82f, 0.88f, 0.96f);
-            case CardRarity.Epic:
-                return new Color(0.88f, 0.82f, 0.96f);
-            case CardRarity.Legendary:
-                return new Color(0.96f, 0.9f, 0.72f);
-            case CardRarity.SuperSoldier:
-                return new Color(0.96f, 0.82f, 0.82f);
-            default:
-                return new Color(0.9f, 0.9f, 0.9f);
-        }
+        return Fill(rarity);
     }
 
     public static Color BannerInk(CardRarity rarity)
@@ -79,9 +79,9 @@ public static class CardRarityColors
         {
             case CardRarity.Legendary:
             case CardRarity.SuperSoldier:
-                return MenuUiFactory.Ink;
+                return MenuUiFactory.MilitaryTitleInk;
             default:
-                return Color.white;
+                return new Color(0.92f, 0.94f, 0.88f);
         }
     }
 

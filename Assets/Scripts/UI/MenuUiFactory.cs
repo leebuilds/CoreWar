@@ -88,14 +88,76 @@ public static class MenuUiFactory
     }
 
     public static readonly Color Disabled = new Color(0.55f, 0.55f, 0.55f);
-    public static readonly Color LoadoutOutline = new Color(0.15f, 0.78f, 0.28f);
-    public static readonly Color Error = new Color(0.75f, 0.12f, 0.12f);
+    public static readonly Color LoadoutOutline = new Color(0.10f, 0.52f, 0.22f);
+    public static readonly Color Error = new Color(0.62f, 0.10f, 0.10f);
+
+    // Military title-bar chrome (dark olive panel, metal crease, corner nails).
+    static readonly Color DarkMilitaryPanelBorder = new Color(0.06f, 0.11f, 0.07f);
+    static readonly Color LightMilitaryPanelBorder = new Color(0.09f, 0.16f, 0.10f);
+    static readonly Color DarkMilitaryPanelFill = new Color(0.13f, 0.22f, 0.15f);
+    static readonly Color LightMilitaryPanelFill = new Color(0.19f, 0.32f, 0.21f);
+    static readonly Color DarkMilitaryPanelHighlight = new Color(0.18f, 0.28f, 0.19f);
+    static readonly Color LightMilitaryPanelHighlight = new Color(0.24f, 0.36f, 0.25f);
+    static readonly Color DarkMilitaryCreaseHighlight = new Color(0.34f, 0.40f, 0.30f, 0.75f);
+    static readonly Color LightMilitaryCreaseHighlight = new Color(0.40f, 0.48f, 0.36f, 0.75f);
+    static readonly Color DarkMilitaryCreaseShadow = new Color(0.04f, 0.07f, 0.04f, 0.85f);
+    static readonly Color LightMilitaryCreaseShadow = new Color(0.07f, 0.11f, 0.07f, 0.85f);
+    static readonly Color DarkMilitaryTitleInk = new Color(0.84f, 0.86f, 0.76f);
+    static readonly Color LightMilitaryTitleInk = new Color(0.90f, 0.92f, 0.82f);
+    static readonly Color MilitaryNailFill = new Color(0.36f, 0.30f, 0.18f);
+    static readonly Color MilitaryNailRim = new Color(0.20f, 0.16f, 0.10f);
+
+    public static Color MilitaryPanelBorder => SelectMilitary(DarkMilitaryPanelBorder, LightMilitaryPanelBorder);
+    public static Color MilitaryPanelFill => SelectMilitary(DarkMilitaryPanelFill, LightMilitaryPanelFill);
+    public static Color MilitaryPanelHighlight => SelectMilitary(DarkMilitaryPanelHighlight, LightMilitaryPanelHighlight);
+    public static Color MilitaryCreaseHighlight => SelectMilitary(DarkMilitaryCreaseHighlight, LightMilitaryCreaseHighlight);
+    public static Color MilitaryCreaseShadow => SelectMilitary(DarkMilitaryCreaseShadow, LightMilitaryCreaseShadow);
+    public static Color MilitaryTitleInk => SelectMilitary(DarkMilitaryTitleInk, LightMilitaryTitleInk);
+
+    static Color SelectMilitary(Color dark, Color light)
+    {
+        MenuSettings.EnsureLoaded();
+        return MenuSettings.IsDarkMode ? dark : light;
+    }
 
     public const int WindowBorderWidth = 2;
     public const float TitleBarHeight = 56f;
     public const float HeaderHeight = 108f;
     public const float FooterHeight = 52f;
     public const float ContentPadding = 16f;
+    public const float BackButtonSize = 40f;
+    public const float MilitaryNailSize = 6f;
+    public const float SliderTrackHeight = 28f;
+    public const float SettingsLabeledRowHeight = 58f;
+    public const float SectionLabelHeight = 36f;
+
+    public const float StandardButtonWidth = 320f;
+    public const float StandardButtonHeight = 64f;
+    public const float CompactControlHeight = 52f;
+    public const float StandardInputWidth = 420f;
+    public const float TextLinkHeight = 44f;
+    public const float PrimaryButtonHeight = 80f;
+    public const float ModalSplitButtonWidth = 220f;
+    public const float ModalSplitButtonOffset = 230f;
+    public const float SettingsToggleWidth = 120f;
+
+    public static float BackButtonInset => ContentPadding;
+    public static float TitleBarVerticalInset => (TitleBarHeight - BackButtonSize) * 0.5f;
+    public static float MilitaryNailInset => ContentPadding * 0.5f;
+    public static float SettingsRowSpacing => CompactControlHeight + ContentPadding;
+    public static float SettingsSliderRowSpacing => SettingsLabeledRowHeight + ContentPadding;
+    public static float SectionLabelSpacing => SectionLabelHeight + ContentPadding * 0.5f;
+    public static int BackButtonFontSize => ButtonFontSize;
+    public static float InputTextPaddingH => ContentPadding * 0.75f;
+    public static float InputTextPaddingV => ContentPadding * 0.375f;
+    public static Vector2 StandardButtonSize => new Vector2(StandardButtonWidth, StandardButtonHeight);
+    public static Vector2 CompactButtonSize => new Vector2(200f, CompactControlHeight);
+    public static Vector2 StandardInputSize => new Vector2(StandardInputWidth, CompactControlHeight);
+    public static Vector2 TextLinkSize => new Vector2(StandardButtonWidth, TextLinkHeight);
+    public static Vector2 PrimaryButtonSize => new Vector2(StandardButtonWidth, PrimaryButtonHeight);
+    public static Vector2 ModalSplitButtonSize => new Vector2(ModalSplitButtonWidth, CompactControlHeight);
+    public static Vector2 SettingsToggleSize => new Vector2(SettingsToggleWidth, CompactControlHeight);
+    public static float ThemeButtonOffset => CompactButtonSize.x * 0.5f + ContentPadding * 0.625f;
     public const int TitleFontSize = 28;
     public const int BodyFontSize = 24;
     public const int FooterFontSize = 20;
@@ -162,20 +224,209 @@ public static class MenuUiFactory
         rect.anchorMin = new Vector2(0f, top ? 1f : 0f);
         rect.anchorMax = new Vector2(1f, top ? 1f : 0f);
         rect.pivot = new Vector2(0.5f, top ? 1f : 0f);
-        rect.sizeDelta = new Vector2(0f, 1f);
+        rect.sizeDelta = new Vector2(0f, WindowBorderWidth);
         rect.anchoredPosition = Vector2.zero;
-        dividerGo.AddComponent<Image>().color = Ink;
+        dividerGo.AddComponent<Image>().color = MilitaryPanelBorder;
+    }
+
+    /// <summary>
+    /// Dark-green military title strip with crease, corner nails, screen label, and optional back control.
+    /// </summary>
+    public static RectTransform BuildMilitaryTitleBar(Transform windowRoot, float topOffset, string title,
+        bool showBack, UnityAction onBack, out Button backButton)
+    {
+        backButton = null;
+
+        var bar = new GameObject("Military Title Bar");
+        bar.transform.SetParent(windowRoot, false);
+        var barRect = bar.AddComponent<RectTransform>();
+        ApplyTopChromeBand(barRect, topOffset, TitleBarHeight);
+
+        var borderImage = bar.AddComponent<Image>();
+        borderImage.color = MilitaryPanelBorder;
+        borderImage.raycastTarget = false;
+
+        var fillGo = new GameObject("Fill");
+        fillGo.transform.SetParent(bar.transform, false);
+        var fillRect = fillGo.AddComponent<RectTransform>();
+        ApplyInnerBorder(fillRect);
+        fillGo.AddComponent<Image>().color = MilitaryPanelFill;
+
+        CreateMilitaryNails(fillGo.transform);
+        CreateMilitaryCrease(fillGo.transform);
+
+        var titleText = CreateAnchoredText(fillGo.transform, "Title", title.ToUpperInvariant(),
+            TitleFontSize, FontStyle.Bold, TextAnchor.MiddleLeft, MilitaryTitleInk);
+        var titleRect = titleText.GetComponent<RectTransform>();
+        titleRect.anchorMin = Vector2.zero;
+        titleRect.anchorMax = Vector2.one;
+        titleRect.offsetMin = new Vector2(ContentPadding, 0f);
+        titleRect.offsetMax = new Vector2(-TitleTextRightInset(showBack), 0f);
+
+        if (showBack && onBack != null)
+        {
+            backButton = CreateMilitaryBackButton(fillGo.transform, onBack);
+        }
+
+        return barRect;
     }
 
     public static Button CreateTitleBarButton(Transform parent, string name, string label, UnityAction onClick)
     {
-        var button = CreateBorderedButton(parent, name, label, new Vector2(40f, 40f), Vector2.zero,
-            anchorRight: true, onClick, enabled: true, anchored: false);
-        var rect = button.GetComponent<RectTransform>();
+        return CreateMilitaryBackButton(parent, onClick);
+    }
+
+    static Button CreateMilitaryBackButton(Transform parent, UnityAction onClick)
+    {
+        var go = new GameObject("Back");
+        go.transform.SetParent(parent, false);
+
+        var rect = go.AddComponent<RectTransform>();
         rect.anchorMin = new Vector2(1f, 0.5f);
         rect.anchorMax = new Vector2(1f, 0.5f);
         rect.pivot = new Vector2(1f, 0.5f);
-        rect.anchoredPosition = new Vector2(-12f, 0f);
+        rect.anchoredPosition = new Vector2(-BackButtonInset, 0f);
+        rect.sizeDelta = new Vector2(BackButtonSize, BackButtonSize);
+
+        var borderImage = go.AddComponent<Image>();
+        borderImage.color = MilitaryPanelBorder;
+
+        var button = go.AddComponent<Button>();
+        button.targetGraphic = borderImage;
+        if (onClick != null)
+        {
+            button.onClick.AddListener(onClick);
+        }
+
+        var innerGo = new GameObject("Inner");
+        innerGo.transform.SetParent(go.transform, false);
+        var innerRect = innerGo.AddComponent<RectTransform>();
+        ApplyInnerBorder(innerRect);
+        innerGo.AddComponent<Image>().color = MilitaryPanelHighlight;
+
+        CreateAnchoredText(innerGo.transform, "Label", "←", BackButtonFontSize, FontStyle.Bold,
+            TextAnchor.MiddleCenter, MilitaryTitleInk);
+
+        MenuUiSounds.WireButton(button);
+        return button;
+    }
+
+    static void CreateMilitaryCrease(Transform parent)
+    {
+        CreateHorizontalLine(parent, "Crease Highlight", 0.40f, MilitaryCreaseHighlight);
+        CreateHorizontalLine(parent, "Crease Shadow", 0.37f, MilitaryCreaseShadow);
+    }
+
+    static void CreateHorizontalLine(Transform parent, string name, float anchorY, Color color)
+    {
+        var lineGo = new GameObject(name);
+        lineGo.transform.SetParent(parent, false);
+        var rect = lineGo.AddComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0f, anchorY);
+        rect.anchorMax = new Vector2(1f, anchorY);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.sizeDelta = new Vector2(-ContentPadding * 2f, WindowBorderWidth);
+        rect.anchoredPosition = Vector2.zero;
+
+        var image = lineGo.AddComponent<Image>();
+        image.color = color;
+        image.raycastTarget = false;
+    }
+
+    static void CreateMilitaryNails(Transform parent)
+    {
+        CreateMilitaryNail(parent, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(MilitaryNailInset, -MilitaryNailInset), MilitaryNailSize);
+        CreateMilitaryNail(parent, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(-MilitaryNailInset, -MilitaryNailInset), MilitaryNailSize);
+        CreateMilitaryNail(parent, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(MilitaryNailInset, MilitaryNailInset), MilitaryNailSize);
+        CreateMilitaryNail(parent, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(-MilitaryNailInset, MilitaryNailInset), MilitaryNailSize);
+    }
+
+    static void CreateMilitaryNail(Transform parent, Vector2 anchorMin, Vector2 anchorMax, Vector2 anchoredPosition, float size)
+    {
+        var nailGo = new GameObject("Nail");
+        nailGo.transform.SetParent(parent, false);
+        var rect = nailGo.AddComponent<RectTransform>();
+        rect.anchorMin = anchorMin;
+        rect.anchorMax = anchorMax;
+        rect.pivot = anchorMin;
+        rect.sizeDelta = new Vector2(size, size);
+        rect.anchoredPosition = anchoredPosition;
+
+        var rim = nailGo.AddComponent<Image>();
+        rim.color = MilitaryNailRim;
+        rim.raycastTarget = false;
+
+        var headGo = new GameObject("Head");
+        headGo.transform.SetParent(nailGo.transform, false);
+        var headRect = headGo.AddComponent<RectTransform>();
+        SetRectInset(headRect, 1f);
+        headGo.AddComponent<Image>().color = MilitaryNailFill;
+    }
+
+    static void SetRectInset(RectTransform rect, float inset)
+    {
+        rect.anchorMin = Vector2.zero;
+        rect.anchorMax = Vector2.one;
+        rect.offsetMin = new Vector2(inset, inset);
+        rect.offsetMax = new Vector2(-inset, -inset);
+    }
+
+    public static void ApplyInnerBorder(RectTransform rect)
+    {
+        SetRectInset(rect, WindowBorderWidth);
+    }
+
+    /// <summary>
+    /// Top band aligned with the window fill (inset by <see cref="WindowBorderWidth"/> on left/right).
+    /// </summary>
+    public static void ApplyTopChromeBand(RectTransform rect, float topOffset, float height)
+    {
+        rect.anchorMin = new Vector2(0f, 1f);
+        rect.anchorMax = new Vector2(1f, 1f);
+        rect.pivot = new Vector2(0.5f, 1f);
+        rect.anchoredPosition = new Vector2(0f, -(WindowBorderWidth + topOffset));
+        rect.sizeDelta = new Vector2(-WindowBorderWidth * 2f, height);
+    }
+
+    /// <summary>
+    /// Bottom band aligned with the window fill (inset by <see cref="WindowBorderWidth"/> on left/right).
+    /// </summary>
+    public static void ApplyBottomChromeBand(RectTransform rect, float height)
+    {
+        rect.anchorMin = new Vector2(0f, 0f);
+        rect.anchorMax = new Vector2(1f, 0f);
+        rect.pivot = new Vector2(0.5f, 0f);
+        rect.anchoredPosition = new Vector2(0f, WindowBorderWidth);
+        rect.sizeDelta = new Vector2(-WindowBorderWidth * 2f, height);
+    }
+
+    public static void ApplyHorizontalPadding(RectTransform rect, float left, float right)
+    {
+        rect.offsetMin = new Vector2(left, rect.offsetMin.y);
+        rect.offsetMax = new Vector2(-right, rect.offsetMax.y);
+    }
+
+    static float TitleTextRightInset(bool showBack)
+    {
+        return showBack ? BackButtonInset + BackButtonSize + ContentPadding * 0.5f : ContentPadding;
+    }
+
+    /// <summary>
+    /// Anchors a control to the right edge using the same inset as the title-bar back button.
+    /// </summary>
+    public static void ApplyRightAlignedControl(RectTransform rect)
+    {
+        rect.anchorMin = new Vector2(1f, 0.5f);
+        rect.anchorMax = new Vector2(1f, 0.5f);
+        rect.pivot = new Vector2(1f, 0.5f);
+        rect.anchoredPosition = new Vector2(-BackButtonInset, 0f);
+    }
+
+    public static Button CreateSettingsButtonRight(Transform parent, string name, string label,
+        Vector2 size, UnityAction onClick)
+    {
+        var button = CreateSettingsButton(parent, name, label, Vector2.zero, size, onClick);
+        ApplyRightAlignedControl(button.GetComponent<RectTransform>());
         return button;
     }
 
@@ -275,10 +526,7 @@ public static class MenuUiFactory
         var innerGo = new GameObject("Inner");
         innerGo.transform.SetParent(go.transform, false);
         var innerRect = innerGo.AddComponent<RectTransform>();
-        innerRect.anchorMin = Vector2.zero;
-        innerRect.anchorMax = Vector2.one;
-        innerRect.offsetMin = new Vector2(2f, 2f);
-        innerRect.offsetMax = new Vector2(-2f, -2f);
+        ApplyInnerBorder(innerRect);
         var innerImage = innerGo.AddComponent<Image>();
         innerImage.color = enabled ? ButtonFill : DisabledFill;
 
@@ -291,10 +539,28 @@ public static class MenuUiFactory
         }
         else
         {
-            DisableSelectableFeedback(button);
+            ApplyButtonHover(button);
         }
 
         return button;
+    }
+
+    /// <summary>
+    /// Settings controls: hover scale like menu buttons, but no press tint or UI sounds.
+    /// </summary>
+    public static void ApplyButtonHover(Button button)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        DisableSelectableFeedback(button);
+
+        if (button.GetComponent<MenuButtonHover>() == null)
+        {
+            button.gameObject.AddComponent<MenuButtonHover>();
+        }
     }
 
     public static void DisableSelectableFeedback(Selectable selectable)
@@ -380,7 +646,7 @@ public static class MenuUiFactory
         var handleGo = new GameObject("Handle");
         handleGo.transform.SetParent(go.transform, false);
         var handleRect = handleGo.AddComponent<RectTransform>();
-        handleRect.sizeDelta = new Vector2(24f, 28f);
+        handleRect.sizeDelta = new Vector2(SliderTrackHeight - 4f, SliderTrackHeight);
         var handleImage = handleGo.AddComponent<Image>();
         handleImage.color = PanelFill;
 
@@ -399,8 +665,6 @@ public static class MenuUiFactory
     public static Slider CreateStretchedSlider(Transform parent, string name,
         float minValue, float maxValue, float value, UnityAction<float> onValueChanged)
     {
-        const float trackHeight = 28f;
-
         var go = new GameObject(name);
         go.transform.SetParent(parent, false);
 
@@ -409,7 +673,8 @@ public static class MenuUiFactory
         rect.anchorMax = new Vector2(1f, 0f);
         rect.pivot = new Vector2(0.5f, 0f);
         rect.anchoredPosition = Vector2.zero;
-        rect.sizeDelta = new Vector2(0f, trackHeight);
+        rect.offsetMin = new Vector2(ContentPadding, 0f);
+        rect.offsetMax = new Vector2(-ContentPadding, SliderTrackHeight);
 
         var backgroundGo = new GameObject("Background");
         backgroundGo.transform.SetParent(go.transform, false);
@@ -439,7 +704,7 @@ public static class MenuUiFactory
         handleRect.anchorMin = new Vector2(0f, 0f);
         handleRect.anchorMax = new Vector2(0f, 1f);
         handleRect.pivot = new Vector2(0.5f, 0.5f);
-        handleRect.sizeDelta = new Vector2(28f, 0f);
+        handleRect.sizeDelta = new Vector2(SliderTrackHeight, 0f);
         var handleImage = handleGo.AddComponent<Image>();
         handleImage.color = PanelFill;
 
@@ -471,10 +736,7 @@ public static class MenuUiFactory
         var innerGo = new GameObject("Inner");
         innerGo.transform.SetParent(go.transform, false);
         var innerRect = innerGo.AddComponent<RectTransform>();
-        innerRect.anchorMin = Vector2.zero;
-        innerRect.anchorMax = Vector2.one;
-        innerRect.offsetMin = new Vector2(2f, 2f);
-        innerRect.offsetMax = new Vector2(-2f, -2f);
+        ApplyInnerBorder(innerRect);
         innerGo.AddComponent<Image>().color = InputFill;
 
         var textGo = new GameObject("Text");
@@ -490,8 +752,8 @@ public static class MenuUiFactory
         var textRect = textGo.GetComponent<RectTransform>();
         textRect.anchorMin = Vector2.zero;
         textRect.anchorMax = Vector2.one;
-        textRect.offsetMin = new Vector2(12f, 6f);
-        textRect.offsetMax = new Vector2(-12f, -6f);
+        textRect.offsetMin = new Vector2(InputTextPaddingH, InputTextPaddingV);
+        textRect.offsetMax = new Vector2(-InputTextPaddingH, -InputTextPaddingV);
 
         var placeholderGo = new GameObject("Placeholder");
         placeholderGo.transform.SetParent(innerGo.transform, false);
@@ -506,8 +768,8 @@ public static class MenuUiFactory
         var placeholderRect = placeholderGo.GetComponent<RectTransform>();
         placeholderRect.anchorMin = Vector2.zero;
         placeholderRect.anchorMax = Vector2.one;
-        placeholderRect.offsetMin = new Vector2(12f, 6f);
-        placeholderRect.offsetMax = new Vector2(-12f, -6f);
+        placeholderRect.offsetMin = new Vector2(InputTextPaddingH, InputTextPaddingV);
+        placeholderRect.offsetMax = new Vector2(-InputTextPaddingH, -InputTextPaddingV);
 
         var input = go.AddComponent<InputField>();
         input.textComponent = text;
@@ -544,9 +806,96 @@ public static class MenuUiFactory
         rect.offsetMax = Vector2.zero;
     }
 
+    /// <summary>
+    /// HUD-style corner brackets: thin frame plus thicker L-shaped accents at each corner.
+    /// </summary>
+    public static GameObject CreateCornerBracketFrame(Transform parent, Color color,
+        float armLength = 24f, float cornerThickness = 4f, float frameThickness = 2f, float outset = 7f)
+    {
+        var root = new GameObject("Corner Bracket Frame");
+        root.transform.SetParent(parent, false);
+        var rootRect = root.AddComponent<RectTransform>();
+        rootRect.anchorMin = Vector2.zero;
+        rootRect.anchorMax = Vector2.one;
+        rootRect.offsetMin = new Vector2(-outset, -outset);
+        rootRect.offsetMax = new Vector2(outset, outset);
+
+        CreateThinFrameEdge(root.transform, color, frameThickness, horizontal: true, top: true);
+        CreateThinFrameEdge(root.transform, color, frameThickness, horizontal: true, top: false);
+        CreateThinFrameEdge(root.transform, color, frameThickness, horizontal: false, left: true);
+        CreateThinFrameEdge(root.transform, color, frameThickness, horizontal: false, left: false);
+
+        CreateCornerBracket(root.transform, color, armLength, cornerThickness, top: true, left: true);
+        CreateCornerBracket(root.transform, color, armLength, cornerThickness, top: true, left: false);
+        CreateCornerBracket(root.transform, color, armLength, cornerThickness, top: false, left: true);
+        CreateCornerBracket(root.transform, color, armLength, cornerThickness, top: false, left: false);
+
+        return root;
+    }
+
+    static void CreateThinFrameEdge(Transform parent, Color color, float thickness, bool horizontal, bool top = false, bool left = false)
+    {
+        var edgeGo = new GameObject("Frame Edge");
+        edgeGo.transform.SetParent(parent, false);
+        var rect = edgeGo.AddComponent<RectTransform>();
+
+        if (horizontal)
+        {
+            float y = top ? 1f : 0f;
+            rect.anchorMin = new Vector2(0f, y);
+            rect.anchorMax = new Vector2(1f, y);
+            rect.pivot = new Vector2(0.5f, y);
+            rect.sizeDelta = new Vector2(0f, thickness);
+        }
+        else
+        {
+            float x = left ? 0f : 1f;
+            rect.anchorMin = new Vector2(x, 0f);
+            rect.anchorMax = new Vector2(x, 1f);
+            rect.pivot = new Vector2(x, 0.5f);
+            rect.sizeDelta = new Vector2(thickness, 0f);
+        }
+
+        rect.anchoredPosition = Vector2.zero;
+        var image = edgeGo.AddComponent<Image>();
+        image.color = color;
+        image.raycastTarget = false;
+    }
+
+    static void CreateCornerBracket(Transform parent, Color color, float armLength, float thickness, bool top, bool left)
+    {
+        float anchorX = left ? 0f : 1f;
+        float anchorY = top ? 1f : 0f;
+        var pivot = new Vector2(anchorX, anchorY);
+
+        var horizontal = new GameObject("Corner H");
+        horizontal.transform.SetParent(parent, false);
+        var hRect = horizontal.AddComponent<RectTransform>();
+        hRect.anchorMin = pivot;
+        hRect.anchorMax = pivot;
+        hRect.pivot = pivot;
+        hRect.sizeDelta = new Vector2(armLength, thickness);
+        hRect.anchoredPosition = Vector2.zero;
+        var hImage = horizontal.AddComponent<Image>();
+        hImage.color = color;
+        hImage.raycastTarget = false;
+
+        var vertical = new GameObject("Corner V");
+        vertical.transform.SetParent(parent, false);
+        var vRect = vertical.AddComponent<RectTransform>();
+        vRect.anchorMin = pivot;
+        vRect.anchorMax = pivot;
+        vRect.pivot = pivot;
+        vRect.sizeDelta = new Vector2(thickness, armLength);
+        vRect.anchoredPosition = Vector2.zero;
+        var vImage = vertical.AddComponent<Image>();
+        vImage.color = color;
+        vImage.raycastTarget = false;
+    }
+
     public static void EnsureEventSystem()
     {
-        if (UnityEngine.Object.FindFirstObjectByType<EventSystem>() != null)
+        if (Object.FindAnyObjectByType<EventSystem>() != null)
         {
             return;
         }
@@ -563,6 +912,36 @@ public static class MenuUiFactory
 #else
         Application.Quit();
 #endif
+    }
+}
+
+/// <summary>
+/// Hover scale for settings buttons (no press tint or click sound).
+/// </summary>
+public class MenuButtonHover : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
+{
+    Button _button;
+    Vector3 _baseScale = Vector3.one;
+
+    void Awake()
+    {
+        _button = GetComponent<Button>();
+        _baseScale = transform.localScale;
+    }
+
+    public void OnPointerEnter(PointerEventData eventData)
+    {
+        if (_button != null && !_button.interactable)
+        {
+            return;
+        }
+
+        transform.localScale = _baseScale * MenuUiFactory.CardHoverScale;
+    }
+
+    public void OnPointerExit(PointerEventData eventData)
+    {
+        transform.localScale = _baseScale;
     }
 }
 

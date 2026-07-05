@@ -8,13 +8,13 @@ using UnityEngine.UI;
 /// </summary>
 public class CardTileView : MonoBehaviour
 {
-    const float BorderThickness = 3f;
+    const float BorderThickness = MenuUiFactory.WindowBorderWidth;
 
     Image _fillImage;
     Color _baseFill;
     GameObject _loadoutOutline;
-    GameObject _spawnOutline;
-    GameObject _spawnBadge;
+    GameObject _spawnSelectionFrame;
+    GameObject _spawnSelectedLabel;
     GameObject _dimOverlay;
     GameObject _lockOverlay;
     Button _button;
@@ -47,9 +47,6 @@ public class CardTileView : MonoBehaviour
         _loadoutOutline = CreateLayer("Loadout Outline", MenuUiFactory.LoadoutOutline, outerExpand: 5f);
         _loadoutOutline.SetActive(false);
 
-        _spawnOutline = CreateLayer("Spawn Outline", MenuUiFactory.Ink, outerExpand: 8f);
-        _spawnOutline.SetActive(false);
-
         _dimOverlay = CreateLayer("Dim Overlay", new Color(0.12f, 0.12f, 0.12f, 0.45f), innerInset: BorderThickness);
         _dimOverlay.SetActive(false);
 
@@ -71,33 +68,28 @@ public class CardTileView : MonoBehaviour
         var titleText = MenuUiFactory.CreateAnchoredText(transform, "Title", card.displayName.ToUpperInvariant(),
             26, FontStyle.Bold, TextAnchor.UpperCenter, MenuUiFactory.Ink);
         var titleRect = titleText.GetComponent<RectTransform>();
-        titleRect.anchorMin = new Vector2(0.08f, 0.52f);
+        titleRect.anchorMin = new Vector2(0.08f, 0.56f);
         titleRect.anchorMax = new Vector2(0.92f, 0.92f);
         titleRect.offsetMin = Vector2.zero;
         titleRect.offsetMax = Vector2.zero;
+
+        _spawnSelectedLabel = MenuUiFactory.CreateAnchoredText(transform, "Selected Label", "selected",
+            MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.MiddleCenter, MenuUiFactory.Ink).gameObject;
+        var selectedRect = _spawnSelectedLabel.GetComponent<RectTransform>();
+        selectedRect.anchorMin = new Vector2(0.10f, 0.40f);
+        selectedRect.anchorMax = new Vector2(0.90f, 0.56f);
+        selectedRect.offsetMin = Vector2.zero;
+        selectedRect.offsetMax = Vector2.zero;
+        _spawnSelectedLabel.SetActive(false);
 
         var tierText = MenuUiFactory.CreateAnchoredText(transform, "Meta",
             $"{CardRarityColors.Label(card.rarity)}\n{card.specialtyLabel.ToUpperInvariant()} · TIER {card.tier}",
             MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.LowerCenter, MenuUiFactory.Ink);
         var tierRect = tierText.GetComponent<RectTransform>();
         tierRect.anchorMin = new Vector2(0.08f, 0.08f);
-        tierRect.anchorMax = new Vector2(0.92f, 0.48f);
+        tierRect.anchorMax = new Vector2(0.92f, 0.40f);
         tierRect.offsetMin = Vector2.zero;
         tierRect.offsetMax = Vector2.zero;
-
-        _spawnBadge = new GameObject("Spawn Badge");
-        _spawnBadge.transform.SetParent(transform, false);
-        var badgeRect = _spawnBadge.AddComponent<RectTransform>();
-        badgeRect.anchorMin = new Vector2(0.08f, 0.78f);
-        badgeRect.anchorMax = new Vector2(0.92f, 0.96f);
-        badgeRect.offsetMin = Vector2.zero;
-        badgeRect.offsetMax = Vector2.zero;
-        var badgeBg = _spawnBadge.AddComponent<Image>();
-        badgeBg.color = MenuUiFactory.Ink;
-        badgeBg.raycastTarget = false;
-        MenuUiFactory.CreateAnchoredText(_spawnBadge.transform, "Label", "SPAWNING",
-            MenuUiFactory.SmallFontSize, FontStyle.Bold, TextAnchor.MiddleCenter, MenuUiFactory.OnInk);
-        _spawnBadge.SetActive(false);
 
         if (_locked)
         {
@@ -115,6 +107,9 @@ public class CardTileView : MonoBehaviour
 
             MenuUiFactory.CreateAnchoredText(_lockOverlay.transform, "Lock", "LOCK", 28, FontStyle.Bold, TextAnchor.MiddleCenter, Color.white);
         }
+
+        _spawnSelectionFrame = MenuUiFactory.CreateCornerBracketFrame(transform, MenuUiFactory.Ink);
+        _spawnSelectionFrame.SetActive(false);
 
         gameObject.AddComponent<ScrollWheelForwarder>();
     }
@@ -172,14 +167,14 @@ public class CardTileView : MonoBehaviour
 
     public void SetSpawnSelected(bool selected)
     {
-        if (_spawnOutline != null)
+        if (_spawnSelectionFrame != null)
         {
-            _spawnOutline.SetActive(selected);
+            _spawnSelectionFrame.SetActive(selected);
         }
 
-        if (_spawnBadge != null)
+        if (_spawnSelectedLabel != null)
         {
-            _spawnBadge.SetActive(selected);
+            _spawnSelectedLabel.SetActive(selected);
         }
     }
 

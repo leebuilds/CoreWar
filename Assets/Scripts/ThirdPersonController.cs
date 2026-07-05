@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 
 /// <summary>
 /// First-person Rigidbody controller with camera-relative movement and grid building.
@@ -78,8 +77,8 @@ public class ThirdPersonController : MonoBehaviour
     public Color crosshairColor = new Color(0.08f, 0.08f, 0.08f, 0.85f);
 
     [Header("Build Mode")]
-    public Color validPreviewColor = new Color(0.1f, 0.85f, 0.2f, 0.9f);
-    public Color invalidPreviewColor = new Color(0.9f, 0.08f, 0.08f, 0.9f);
+    public Color validPreviewColor = new Color(0.08f, 0.62f, 0.16f, 0.9f);
+    public Color invalidPreviewColor = new Color(0.72f, 0.06f, 0.06f, 0.9f);
     public float selectorMouseScale = 20f;
     public float selectorActivationDistance = 18f;
     public float selectorRadius = 84f;
@@ -162,9 +161,6 @@ public class ThirdPersonController : MonoBehaviour
         _yaw = transform.eulerAngles.y;
         _pitch = 18f;
 
-        Cursor.lockState = CursorLockMode.Locked;
-        Cursor.visible = false;
-
         MenuSettings.EnsureLoaded();
         ApplyMenuSettings();
         MenuSettings.Changed += ApplyMenuSettings;
@@ -183,6 +179,11 @@ public class ThirdPersonController : MonoBehaviour
 
     void LateUpdate()
     {
+        if (!GameSession.IsMatchActive || !SceneFlow.IsGameActive)
+        {
+            return;
+        }
+
         if (IsGameplayBlocked())
         {
             _selectorOpen = false;
@@ -235,6 +236,11 @@ public class ThirdPersonController : MonoBehaviour
 
     void Update()
     {
+        if (!GameSession.IsMatchActive || !SceneFlow.IsGameActive)
+        {
+            return;
+        }
+
         if (Input.GetKeyDown(KeyCode.Escape))
         {
             if (_respawnPicker != null && _respawnPicker.IsOpen)
@@ -281,6 +287,11 @@ public class ThirdPersonController : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (!GameSession.IsMatchActive || !SceneFlow.IsGameActive)
+        {
+            return;
+        }
+
         if (IsGameplayBlocked())
         {
             StopHorizontalMovement();
@@ -1273,8 +1284,8 @@ public class ThirdPersonController : MonoBehaviour
         Material gunMaterial = CreateHeldToolMaterial("Held Gun Material", new Color(0.08f, 0.08f, 0.09f, 1f));
         Material hammerMaterial = CreateHeldToolMaterial("Held Hammer Material", new Color(0.32f, 0.23f, 0.14f, 1f));
         Material metalMaterial = CreateHeldToolMaterial("Held Hammer Head Material", new Color(0.62f, 0.62f, 0.64f, 1f));
-        Material blueprintMaterial = CreateHeldToolMaterial("Held Blueprint Material", new Color(0.08f, 0.28f, 0.9f, 1f));
-        Material flashMaterial = CreateHeldToolMaterial("Muzzle Flash Material", new Color(1f, 0.72f, 0.16f, 1f));
+        Material blueprintMaterial = CreateHeldToolMaterial("Held Blueprint Material", new Color(0.08f, 0.22f, 0.68f, 1f));
+        Material flashMaterial = CreateHeldToolMaterial("Muzzle Flash Material", new Color(0.82f, 0.58f, 0.12f, 1f));
 
         _gunRoot = new GameObject("Held Gun");
         _gunRoot.transform.SetParent(viewCamera.transform, false);
@@ -1483,6 +1494,11 @@ public class ThirdPersonController : MonoBehaviour
 
     void OnGUI()
     {
+        if (!GameSession.IsMatchActive || !SceneFlow.IsGameActive)
+        {
+            return;
+        }
+
         if (IsGameplayBlocked())
         {
             return;
@@ -1556,7 +1572,7 @@ public class ThirdPersonController : MonoBehaviour
             var tool = _activeKit.GetToolAt(i);
             bool selected = i == _selectedHotbarIndex;
             GUI.color = selected
-                ? new Color(0.2f, 0.85f, 0.3f, 0.9f)
+                ? new Color(0.16f, 0.68f, 0.24f, 0.9f)
                 : new Color(0.96f, 0.96f, 0.96f, 0.72f);
 
             var rect = new Rect(startX + (i * (slotSize + slotGap)), y, slotSize, slotSize);
@@ -1633,7 +1649,7 @@ public class ThirdPersonController : MonoBehaviour
 
                 VoxelLightingWorld.BuildPieceType sector = PieceFromRadialAngle(Mathf.Atan2(offset.y, offset.x) * Mathf.Rad2Deg);
                 Color color = sector == _selectedPiece
-                    ? new Color(0.1f, 0.85f, 0.2f, 0.45f)
+                    ? new Color(0.08f, 0.62f, 0.16f, 0.45f)
                     : new Color(0.98f, 0.98f, 0.98f, 0.36f);
                 _radialTexture.SetPixel(x, y, color);
             }
