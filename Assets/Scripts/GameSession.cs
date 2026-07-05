@@ -16,6 +16,12 @@ public static class GameSession
     public static Team SelectedTeam { get; private set; } = Team.Red;
     public static int JerseyNumber { get; private set; } = 7;
     public static bool HasTeamSelected { get; private set; }
+    public static bool HasLoadoutSelected { get; private set; }
+
+    public static string LoadoutCardIdA { get; private set; }
+    public static string LoadoutCardIdB { get; private set; }
+    public static string ActiveCardId { get; private set; }
+    public static CardKitDefinition ActiveKit { get; private set; }
 
     public static Color TeamColor(Team team)
     {
@@ -30,8 +36,39 @@ public static class GameSession
 
     public static void BeginMatch(Team team)
     {
+        BeginMatch(team, null, null, null);
+    }
+
+    public static void BeginMatch(Team team, string loadoutA, string loadoutB, string initialActiveCardId)
+    {
         SelectedTeam = team;
         JerseyNumber = Random.Range(1, 100);
         HasTeamSelected = true;
+
+        LoadoutCardIdA = loadoutA;
+        LoadoutCardIdB = loadoutB;
+        HasLoadoutSelected = !string.IsNullOrEmpty(loadoutA) && !string.IsNullOrEmpty(loadoutB);
+
+        if (HasLoadoutSelected)
+        {
+            SetActiveCard(initialActiveCardId ?? loadoutA);
+        }
+        else
+        {
+            ActiveCardId = null;
+            ActiveKit = CardKitDefinition.DefaultInfantryPlaceholder();
+        }
+    }
+
+    public static void SetActiveCard(string cardId)
+    {
+        ActiveCardId = cardId;
+        var card = CardCatalog.Get(cardId);
+        ActiveKit = card?.kit ?? CardKitDefinition.DefaultInfantryPlaceholder();
+    }
+
+    public static CardDefinition GetActiveCardDefinition()
+    {
+        return CardCatalog.Get(ActiveCardId);
     }
 }

@@ -59,15 +59,35 @@ version should work — if Unity Hub asks, pick your installed 6000.x editor).
 1. Open Unity Hub, choose **Add project from disk**, and select this folder.
 2. Open the project and let Unity import the assets.
 3. Open `Assets/Scenes/MainMenu.unity` and press Play.
-4. Pick a team (Red, Blue, Yellow, or Green), then click **PLAY AS …** to load the arena.
+4. **Sign in** or **create a profile**, then use the hub to manage your
+   collection and start a match.
 
-In the field scene:
+### Main menu flow
+
+| Screen | Purpose |
+|--------|---------|
+| Sign In / Sign Up | Local username + passcode profiles (stored in `persistentDataPath`, not in git) |
+| Hub | Play, Decks, Settings, Logout, Quit |
+| Decks | Browse all 30 class cards; set a two-slot loadout; preview stats |
+| Play | Confirm loadout, tap a card to choose spawn class, start match (Red team for now) |
+
+**Menu controls:**
+
+- **ESC** — back (closes modals first, then previous screen)
+- Buttons play procedural hover/click sounds; **PLAY** on the match screen also
+  plays a gunshot when the arena loads
+
+### In the field scene
 
 - WASD to move (camera-relative)
 - Mouse to look (first-person camera)
 - Space to jump
 - Mouse wheel cycles the hotbar; `1`, `2`, and `3` select slots directly
-- Esc to return to the menu
+- **Esc** — pause menu (game does not freeze; opens Respawn / Settings / Exit Match)
+- After respawn, pick loadout slot A or B from the class picker overlay
+
+While the pause menu or respawn picker is open, gameplay input is ignored, the
+crosshair is hidden, and the cursor is free for UI clicks.
 
 ### Hotbar
 
@@ -83,10 +103,13 @@ from a clamped point near the player when up against walls. Recoil kicks mostly
 upward with a small horizontal component; the crosshair settles away from the
 shot line after each kick (stronger randomness = less predictable aim).
 
-**Hammer:** destroys the first player-built object hit within one voxel of any
-part of the player's body (measured from the capsule surface).
+**Hammer:** destroys the first player-built object hit within **1.5 voxels** of
+any part of the player's body (measured from the capsule surface).
 
 **Blueprint:** full build-mode toolset (see below).
+
+All 30 class cards currently share the same placeholder kit (gun, hammer,
+blueprint). Per-class kits are planned.
 
 ### Build mode (blueprint slot)
 
@@ -111,25 +134,39 @@ Gun bullets are visual prototype projectiles. They pass through player-built
 panels, lose a little velocity, leave temporary bullet-hole marks, and disappear
 after landing or timing out.
 
+## Runtime architecture
+
 The menu UI and the voxel field are generated from code at runtime:
 
-- `Assets/Scripts/MainMenuController.cs` – team picker + play flow
-- `Assets/Scripts/GameSession.cs` – carries team and jersey number into the game
-- `Assets/Scripts/VoxelFieldBuilder.cs` – flat 32x32 grid of white voxels
-  with overhead directional lighting and cast shadows
-- `Assets/Scripts/ThirdPersonController.cs` – first-person controller, hotbar,
-  gun/hammer/blueprint tools, and build-mode placement
-- `Assets/Scripts/ProjectileBullet.cs` – visual bullet flight, pass-through
-  panel impacts, and temporary bullet holes
-- `Assets/Scripts/CapsuleRobotVisual.cs` + `Assets/Scripts/JerseyInkUtility.cs`
-  – capsule robot with pen-and-ink jersey
-- `Assets/Scripts/VoxelLightingWorld.cs` – voxel occupancy, build-piece rules,
-  batch placement, and hammer removal
-- `Assets/Scripts/PenInkShadowEffect.cs` + `Assets/Scripts/PenInkShadowPost.shader`
-  – pen-and-ink crosshatch post effect for shadows
+**Menu & profiles**
+
+- `Assets/Scripts/MainMenuController.cs` — menu scene bootstrap (camera, audio listener, navigator)
+- `Assets/Scripts/UI/MenuNavigator.cs` — sign-in, hub, play, decks, settings routing
+- `Assets/Scripts/UI/MenuWindowFrame.cs` — shared window chrome (title bar, header, footer)
+- `Assets/Scripts/UI/MenuUiFactory.cs` — buttons, inputs, styling tokens
+- `Assets/Scripts/UI/MenuUiSounds.cs` — procedural hover, click, gunshot sounds
+- `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay
+- `Assets/Scripts/UI/RespawnClassPicker.cs` — respawn class selection
+- `Assets/Scripts/UI/CardTileView.cs` — collection card tiles
+- `Assets/Scripts/Profile/` — local profile repository, session, passcode hashing
+- `Assets/Scripts/Cards/` — 30-card catalog, rarity colors, placeholder kits
+
+**Gameplay**
+
+- `Assets/Scripts/GameSession.cs` — team, loadout, and active card into the game scene
+- `Assets/Scripts/VoxelFieldBuilder.cs` — flat 32×32 grid of white voxels with lighting
+- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, tools, pause
+- `Assets/Scripts/ProjectileBullet.cs` — visual bullet flight and bullet holes
+- `Assets/Scripts/CapsuleRobotVisual.cs` + `Assets/Scripts/JerseyInkUtility.cs` — capsule robot with jersey
+- `Assets/Scripts/VoxelLightingWorld.cs` — voxel occupancy, build rules, hammer removal
+- `Assets/Scripts/PenInkShadowEffect.cs` + `Assets/Scripts/PenInkShadowPost.shader` — pen-and-ink shadows
+
+Local profile JSON is written to `Application.persistentDataPath/CoreWar/` and
+is excluded from git via `.gitignore`.
 
 ## Documentation
 
 - [Full game design document](docs/Third_Person_Shooter_Game_Design_v2.md)
+- [Profile, decks, loadout, and menu UI session recap](docs/chats/2026-07-04-profile-decks-loadout-menu-session.md)
 - [Hotbar tools and combat session recap](docs/chats/2026-07-04-hotbar-tools-and-combat-session.md)
 - [FPS build mode session recap](docs/chats/2026-07-03-fps-build-mode-session.md)

@@ -8,13 +8,6 @@ using UnityEngine.SceneManagement;
 [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
 public class ThirdPersonController : MonoBehaviour
 {
-    enum HotbarSlot
-    {
-        Gun,
-        Hammer,
-        Blueprint
-    }
-
     static readonly VoxelLightingWorld.BuildPieceType[] BuildPieceOptions =
     {
         VoxelLightingWorld.BuildPieceType.Wall,
@@ -68,7 +61,7 @@ public class ThirdPersonController : MonoBehaviour
     public int rectangleMaxCells = 12;
 
     [Header("Tools")]
-    public float hammerRangeVoxels = 1f;
+    public float hammerRangeVoxels = 1.5f;
     public float bulletSpeed = 95f;
     public float bulletGravity = 3.5f;
     public float bulletLifetime = 4f;
@@ -98,7 +91,10 @@ public class ThirdPersonController : MonoBehaviour
     bool _grounded;
     bool _selectorOpen;
     Vector2 _selectorDirection;
-    HotbarSlot _selectedHotbarSlot = HotbarSlot.Gun;
+    CardKitDefinition _activeKit;
+    int _selectedHotbarIndex;
+    RespawnClassPicker _respawnPicker;
+    GamePauseMenu _pauseMenu;
     VoxelLightingWorld.BuildPieceType _selectedPiece = VoxelLightingWorld.BuildPieceType.Wall;
     VoxelLightingWorld.BuildPieceCandidate _buildCandidate;
     bool _hasBuildCandidate;
@@ -134,7 +130,12 @@ public class ThirdPersonController : MonoBehaviour
     VoxelLightingWorld.BuildPieceType _radialTexturePiece;
     PhysicsMaterial _slipperyMaterial;
 
-    bool BuildModeActive => _selectedHotbarSlot == HotbarSlot.Blueprint;
+    bool BuildModeActive => SelectedTool == CardHotbarTool.Blueprint;
+
+    CardHotbarTool SelectedTool =>
+        _activeKit == null ? CardHotbarTool.Gun : _activeKit.GetToolAt(_selectedHotbarIndex);
+
+    int HotbarSlotCount => _activeKit == null ? 3 : _activeKit.SlotCount;
 
     void Awake()
     {
@@ -185,7 +186,22 @@ public class ThirdPersonController : MonoBehaviour
             }
         }
 
+        ApplyKitFromSession();
+        _respawnPicker = RespawnClassPicker.Create(transform, cardId =>
+        {
+            GameSession.SetActiveCard(cardId);
+            ApplyKitFromSession();
+        });
+        _pauseMenu = GamePauseMenu.Create(transform, _respawnPicker);
+
         CreateHeldToolVisuals();
+        RefreshHeldToolVisibility();
+    }
+
+    void ApplyKitFromSession()
+    {
+        _activeKit = GameSession.ActiveKit ?? CardKitDefinition.DefaultInfantryPlaceholder();
+        _selectedHotbarIndex = Mathf.Clamp(_selectedHotbarIndex, 0, Mathf.Max(0, HotbarSlotCount - 1));
         RefreshHeldToolVisibility();
     }
 
@@ -193,9 +209,31 @@ public class ThirdPersonController : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Escape))
         {
-            Cursor.lockState = CursorLockMode.None;
-            Cursor.visible = true;
-            SceneManager.LoadScene("MainMenu");
+            if (_respawnPicker != null && _respawnPicker.IsOpen)
+            {
+                _respawnPicker.Hide();
+                return;
+            }
+
+            if (_pauseMenu != null && _pauseMenu.TryHandleEscape())
+            {
+                return;
+            }
+
+            if (_pauseMenu != null)
+            {
+                _pauseMenu.Toggle();
+                return;
+            }
+        }
+
+        if (_pauseMenu != null && _pauseMenu.IsOpen)
+        {
+            return;
+        }
+
+        if (_respawnPicker != null && _respawnPicker.IsOpen)
+        {
             return;
         }
 
@@ -213,8 +251,19 @@ public class ThirdPersonController : MonoBehaviour
 
     void FixedUpdate()
     {
+        if (IsGameplayBlocked())
+        {
+            return;
+        }
+
         UpdateGrounded();
         HandleMovement();
+    }
+
+    bool IsGameplayBlocked()
+    {
+        return (_pauseMenu != null && _pauseMenu.IsOpen) ||
+               (_respawnPicker != null && _respawnPicker.IsOpen);
     }
 
     void HandleLook()
@@ -408,43 +457,43 @@ public class ThirdPersonController : MonoBehaviour
         float scroll = Input.mouseScrollDelta.y;
         if (scroll > 0.01f)
         {
-            SelectHotbarSlot(NextHotbarSlot(1));
+            SelectHotbarIndex(NextHotbarIndex(1));
         }
         else if (scroll < -0.01f)
         {
-            SelectHotbarSlot(NextHotbarSlot(-1));
+            SelectHotbarIndex(NextHotbarIndex(-1));
         }
 
         if (Input.GetKeyDown(KeyCode.Alpha1))
         {
-            SelectHotbarSlot(HotbarSlot.Gun);
+            SelectHotbarIndex(0);
         }
         else if (Input.GetKeyDown(KeyCode.Alpha2))
         {
-            SelectHotbarSlot(HotbarSlot.Hammer);
+            SelectHotbarIndex(1);
         }
         else if (Input.GetKeyDown(KeyCode.Alpha3))
         {
-            SelectHotbarSlot(HotbarSlot.Blueprint);
+            SelectHotbarIndex(2);
         }
     }
 
-    HotbarSlot NextHotbarSlot(int direction)
+    int NextHotbarIndex(int direction)
     {
-        const int slotCount = 3;
-        int next = ((int)_selectedHotbarSlot + direction + slotCount) % slotCount;
-        return (HotbarSlot)next;
+        int slotCount = Mathf.Max(1, HotbarSlotCount);
+        return (_selectedHotbarIndex + direction + slotCount) % slotCount;
     }
 
-    void SelectHotbarSlot(HotbarSlot slot)
+    void SelectHotbarIndex(int index)
     {
-        if (_selectedHotbarSlot == slot)
+        index = Mathf.Clamp(index, 0, Mathf.Max(0, HotbarSlotCount - 1));
+        if (_selectedHotbarIndex == index)
         {
             return;
         }
 
         bool wasBuilding = BuildModeActive;
-        _selectedHotbarSlot = slot;
+        _selectedHotbarIndex = index;
         if (wasBuilding || BuildModeActive)
         {
             ClearBuildInteractionState();
@@ -455,15 +504,15 @@ public class ThirdPersonController : MonoBehaviour
 
     void HandleSelectedToolInput()
     {
-        switch (_selectedHotbarSlot)
+        switch (SelectedTool)
         {
-            case HotbarSlot.Gun:
+            case CardHotbarTool.Gun:
                 HandleGunInput();
                 break;
-            case HotbarSlot.Hammer:
+            case CardHotbarTool.Hammer:
                 HandleHammerInput();
                 break;
-            case HotbarSlot.Blueprint:
+            case CardHotbarTool.Blueprint:
                 HandleBuildingInput();
                 break;
         }
@@ -1217,15 +1266,15 @@ public class ThirdPersonController : MonoBehaviour
     {
         if (_gunRoot != null)
         {
-            _gunRoot.SetActive(_selectedHotbarSlot == HotbarSlot.Gun);
+            _gunRoot.SetActive(SelectedTool == CardHotbarTool.Gun);
         }
         if (_hammerRoot != null)
         {
-            _hammerRoot.SetActive(_selectedHotbarSlot == HotbarSlot.Hammer);
+            _hammerRoot.SetActive(SelectedTool == CardHotbarTool.Hammer);
         }
         if (_blueprintRoot != null)
         {
-            _blueprintRoot.SetActive(_selectedHotbarSlot == HotbarSlot.Blueprint);
+            _blueprintRoot.SetActive(SelectedTool == CardHotbarTool.Blueprint);
         }
     }
 
@@ -1265,7 +1314,7 @@ public class ThirdPersonController : MonoBehaviour
         _gunRoot.transform.localPosition = new Vector3(0.34f, -0.26f, 0.62f - (0.08f * kickProgress));
         if (_muzzleFlashRoot != null)
         {
-            _muzzleFlashRoot.SetActive(_muzzleFlashTimer > 0f && _selectedHotbarSlot == HotbarSlot.Gun);
+            _muzzleFlashRoot.SetActive(_muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.Gun);
             float flashPulse = _muzzleFlashTimer > 0f ? UnityEngine.Random.Range(0.85f, 1.25f) : 1f;
             _muzzleFlashRoot.transform.localScale = new Vector3(0.18f, 0.18f, 0.08f) * flashPulse;
         }
@@ -1385,6 +1434,11 @@ public class ThirdPersonController : MonoBehaviour
 
     void OnGUI()
     {
+        if (_pauseMenu != null && _pauseMenu.IsOpen)
+        {
+            return;
+        }
+
         var style = new GUIStyle(GUI.skin.label)
         {
             fontSize = 14,
@@ -1393,10 +1447,15 @@ public class ThirdPersonController : MonoBehaviour
         GUI.Label(new Rect(12, 8, 1100, 24),
             BuildModeActive
                 ? BuildModeHelpText()
-                : "WASD: move   Mouse: look   Space: jump   Mouse Wheel/1-3: hotbar   Left Click: use tool   Esc: menu",
+                : "WASD: move   Mouse: look   Space: jump   Mouse Wheel/1-3: hotbar   Left Click: use tool   Esc: pause",
             style);
         DrawHotbar();
-        DrawCrosshair();
+
+        if (!IsGameplayBlocked())
+        {
+            DrawCrosshair();
+        }
+
         DrawBuildSelector();
     }
 
@@ -1427,7 +1486,7 @@ public class ThirdPersonController : MonoBehaviour
 
     void DrawHotbar()
     {
-        const int slotCount = 3;
+        int slotCount = HotbarSlotCount;
         const float slotSize = 72f;
         const float slotGap = 10f;
         float totalWidth = (slotCount * slotSize) + ((slotCount - 1) * slotGap);
@@ -1445,8 +1504,8 @@ public class ThirdPersonController : MonoBehaviour
         Color previousColor = GUI.color;
         for (int i = 0; i < slotCount; i++)
         {
-            var slot = (HotbarSlot)i;
-            bool selected = slot == _selectedHotbarSlot;
+            var tool = _activeKit.GetToolAt(i);
+            bool selected = i == _selectedHotbarIndex;
             GUI.color = selected
                 ? new Color(0.2f, 0.85f, 0.3f, 0.9f)
                 : new Color(0.96f, 0.96f, 0.96f, 0.72f);
@@ -1454,7 +1513,7 @@ public class ThirdPersonController : MonoBehaviour
             var rect = new Rect(startX + (i * (slotSize + slotGap)), y, slotSize, slotSize);
             GUI.Box(rect, string.Empty);
             GUI.color = Color.white;
-            GUI.Label(rect, $"{i + 1}\n{DisplayName(slot)}", labelStyle);
+            GUI.Label(rect, $"{i + 1}\n{CardKitDefinition.DisplayName(tool)}", labelStyle);
         }
 
         GUI.color = previousColor;
@@ -1550,21 +1609,6 @@ public class ThirdPersonController : MonoBehaviour
                 return "Trap Door";
             default:
                 return pieceType.ToString();
-        }
-    }
-
-    static string DisplayName(HotbarSlot slot)
-    {
-        switch (slot)
-        {
-            case HotbarSlot.Gun:
-                return "Gun";
-            case HotbarSlot.Hammer:
-                return "Hammer";
-            case HotbarSlot.Blueprint:
-                return "Blueprint";
-            default:
-                return slot.ToString();
         }
     }
 

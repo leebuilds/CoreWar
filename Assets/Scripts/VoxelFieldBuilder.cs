@@ -74,7 +74,18 @@ public class VoxelFieldBuilder : MonoBehaviour
     {
         if (!GameSession.HasTeamSelected)
         {
-            GameSession.BeginMatch(GameSession.Team.Red);
+            if (GameSession.HasLoadoutSelected)
+            {
+                GameSession.BeginMatch(
+                    GameSession.Team.Red,
+                    GameSession.LoadoutCardIdA,
+                    GameSession.LoadoutCardIdB,
+                    GameSession.ActiveCardId);
+            }
+            else
+            {
+                GameSession.BeginMatch(GameSession.Team.Red);
+            }
         }
 
         var player = new GameObject("Player");
