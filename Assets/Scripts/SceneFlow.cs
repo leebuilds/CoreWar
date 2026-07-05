@@ -31,6 +31,12 @@ public static class SceneFlow
     /// </summary>
     public static void ApplyGameInputState()
     {
+        if (GamePauseMenu.IsAnyOpen)
+        {
+            ApplyMenuInputState();
+            return;
+        }
+
         Time.timeScale = 1f;
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -65,7 +71,15 @@ public static class SceneFlow
     /// </summary>
     public static void InitializeGameScene()
     {
-        ApplyGameInputState();
+        if (GameSession.IsInPrepPhase)
+        {
+            ApplyMenuInputState();
+        }
+        else
+        {
+            ApplyGameInputState();
+        }
+
         ResetTransientUiInfrastructure();
         MenuSettings.EnsureLoaded();
     }
@@ -92,11 +106,12 @@ public static class SceneFlow
     }
 
     /// <summary>
-    /// Starts the match clock and loads the game scene after prep completes.
+    /// Loads the arena with prep overlay active (match clock starts after prep completes).
     /// </summary>
-    public static void EnterGameFromPrep()
+    public static void EnterGameForPrep()
     {
-        GameSession.MarkMatchStarted();
-        EnterGame();
+        ProfileSession.TouchActivity();
+        ApplyMenuInputState();
+        SceneManager.LoadScene(GameSceneName, LoadSceneMode.Single);
     }
 }

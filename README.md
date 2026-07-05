@@ -74,7 +74,7 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 | Hub | Play, Decks, Settings, Logout, Quit — shown automatically when a session is still valid (1 hour of inactivity) |
 | Game Modes | Scrollable list of modes; selecting one starts local matchmaking (test one/two player) |
 | Decks | Browse all 30 class cards (scroll starts at top); set a two-slot loadout; preview stats |
-| Match Prep | After matchmaking, pick spawn class, **READY**, or wait for 10s prep countdown |
+| Match Prep | Arena loads behind card pick; press **READY** to look around and cycle hotbar; top banner counts down; movement unlocks when prep ends |
 | Settings | Light/dark theme, UI volume, UI sounds toggle, mouse sensitivity, account info |
 
 **Menu controls:**
@@ -83,23 +83,29 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 - **Mouse wheel** — scroll the decks collection (works even when hovering a card)
 - Most buttons play procedural hover/click sounds; settings toggles and sliders
   are silent (back arrow still clicks)
-- **READY** on the match prep screen also plays a gunshot when the arena loads
-- During matchmaking, a bottom panel shows live status; **Cancel matchmaking** or back/ESC warns before stopping search
+- **READY** on the match prep screen locks your spawn class and dismisses the card window; a small top banner counts down while you look around and cycle hotbar (no crosshair or build previews until prep ends)
+- During matchmaking, a bottom panel shows live status plus **Settings**; **Cancel matchmaking** or back/ESC warns before stopping search
 
 ### In the field scene
 
-- WASD to move (camera-relative)
+- After matchmaking, the arena loads behind the match prep overlay (pick spawn class, then press **READY**)
+- Before **READY**, only the card window is interactive
+- After **READY**, the card window closes, a top banner shows the countdown and ready status, and you can look around and cycle hotbar (no crosshair or build previews; held tool still visible); **Esc** opens the pause menu as usual
+- WASD movement unlocks when the prep countdown finishes
 - Mouse to look (first-person camera)
 - Space to jump
 - Mouse wheel cycles the hotbar; `1`, `2`, and `3` select slots directly
-- **Esc** — pause menu (game does not freeze; opens Respawn / Settings / Exit Match)
+- **Esc** — pause menu (game does not freeze; opens Respawn / Settings / Exit Match); **Exit Match** asks for confirmation; respawn is locked during prep
 - **Exit Match** — fully ends the match and returns to the main menu
 - Top-right **match clock** counts up from match start (`M:SS`); hidden while pause or respawn overlays are open
 - After respawn, pick loadout slot A or B from the class picker overlay
 
-While the pause menu or respawn picker is open, gameplay input is ignored, the
-crosshair is hidden, and the cursor is free for UI clicks. In-match **Settings**
-uses the same form as the hub (without the account section).
+While the pause menu, respawn picker, or other in-match overlays are open,
+gameplay input is ignored, the crosshair is hidden, and the cursor stays free
+for UI clicks. The cursor remains tied to pause (and its sub-windows) until
+pause closes — even if prep finishes while paused. In-match **Settings** uses
+the same form as the hub (without the account section) and respects light/dark
+theme. Matchmaking and match prep overlays also refresh when the theme changes.
 
 ### Hotbar
 
@@ -135,9 +141,10 @@ blueprint). Per-class kits are planned.
 
 Build pieces include walls, windows, ceilings, doors, trap doors, and ladders.
 Placement previews snap toward nearby valid visible positions on the near side of
-geometry, require line of sight to each piece center, avoid occupied slots, and
-show red when the full requested shape cannot be placed. Ctrl-drag still draws
-outlines over occupied cells but skips them for validation and placement.
+geometry, require one complete visible half-face (top, bottom, left, or right)
+for every piece, avoid occupied slots, and show red when the full requested
+shape cannot be placed. Ctrl-drag still draws outlines over occupied cells but
+skips them for validation and placement.
 
 Your robot gets a random jersey number (1–99) each match, with pen-and-ink
 shading on the torn team jersey and the number on the back.
@@ -158,14 +165,15 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/Matchmaking/` — `GameModeDefinition`, `MatchmakingSession`, `IMatchmakingBackend`, local sim backend
 - `Assets/Scripts/UI/GameModeButtonFx.cs` — bullet holes + smoke on selected game mode button
 - `Assets/Scripts/UI/MatchmakingPanel.cs` — bottom matchmaking status panel (feed, timer, count, cancel)
-- `Assets/Scripts/UI/MatchClassSelectPanel.cs` — post-matchmaking spawn picker, READY, 10s prep countdown
+- `Assets/Scripts/UI/MatchClassSelectPanel.cs` — in-arena spawn picker, READY, 10s prep countdown
+- `Assets/Scripts/UI/MatchPrepController.cs` — boots prep overlay after matchmaking loads the game scene
 - `Assets/Scripts/UI/MatchClockHud.cs` — in-match elapsed time HUD (top-right)
 - `Assets/Scripts/UI/MenuWindowFrame.cs` — shared window chrome (military title bar, header, footer)
 - `Assets/Scripts/UI/MenuUiFactory.cs` — buttons, inputs, sliders, light/dark styling tokens
 - `Assets/Scripts/UI/MenuSettings.cs` — persistent client settings (`settings.json`)
 - `Assets/Scripts/UI/MenuSettingsPanel.cs` — shared settings form (hub + pause menu)
 - `Assets/Scripts/UI/MenuUiSounds.cs` — procedural hover, click, gunshot sounds
-- `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay
+- `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay (locked respawn during prep, exit confirm, theme refresh)
 - `Assets/Scripts/UI/RespawnClassPicker.cs` — respawn class selection
 - `Assets/Scripts/UI/CardTileView.cs` — collection card tiles, spawn selection visuals
 - `Assets/Scripts/Profile/` — local profile repository, 1-hour session restore, passcode hashing
@@ -188,6 +196,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/Third_Person_Shooter_Game_Design_v2.md)
+- [In-arena prep, pause polish, and overlay theming session recap](docs/chats/2026-07-05-in-arena-prep-pause-flow-session.md)
 - [Matchmaking, pre-match flow, and menu polish session recap](docs/chats/2026-07-05-matchmaking-prep-flow-session.md)
 - [Settings, theme, session, and menu polish session recap](docs/chats/2026-07-05-settings-theme-menu-polish-session.md)
 - [Profile, decks, loadout, and menu UI session recap](docs/chats/2026-07-04-profile-decks-loadout-menu-session.md)

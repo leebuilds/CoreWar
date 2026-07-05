@@ -41,7 +41,15 @@ public class VoxelFieldBuilder : MonoBehaviour
         CreateLight();
         CreatePlayer(voxelWorld);
         MatchClockHud.Create();
-        GameSession.EnsureMatchClockStarted();
+
+        if (GameSession.IsInPrepPhase)
+        {
+            MatchPrepController.Create();
+        }
+        else
+        {
+            GameSession.EnsureMatchClockStarted();
+        }
     }
 
     void CreateLight()

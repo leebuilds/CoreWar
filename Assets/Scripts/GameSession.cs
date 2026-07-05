@@ -17,6 +17,8 @@ public static class GameSession
     public static Team SelectedTeam { get; private set; } = Team.Red;
     public static int JerseyNumber { get; private set; } = 7;
     public static bool IsMatchActive { get; private set; }
+    public static bool IsInPrepPhase { get; private set; }
+    public static bool IsPrepReady { get; private set; }
     public static bool HasLoadoutSelected { get; private set; }
 
     public static string SelectedGameModeId { get; private set; }
@@ -53,11 +55,26 @@ public static class GameSession
     public static void BeginMatch(Team team, string loadoutA, string loadoutB, string initialActiveCardId,
         string gameModeId, int requiredPlayers)
     {
+        BeginMatch(team, loadoutA, loadoutB, initialActiveCardId, gameModeId, requiredPlayers, inPrepPhase: false);
+    }
+
+    public static void BeginMatchForPrep(Team team, string loadoutA, string loadoutB, string initialActiveCardId,
+        string gameModeId, int requiredPlayers)
+    {
+        BeginMatch(team, loadoutA, loadoutB, initialActiveCardId, gameModeId, requiredPlayers, inPrepPhase: true);
+    }
+
+    static void BeginMatch(Team team, string loadoutA, string loadoutB, string initialActiveCardId,
+        string gameModeId, int requiredPlayers, bool inPrepPhase)
+    {
         SelectedTeam = team;
         JerseyNumber = UnityEngine.Random.Range(1, 100);
         IsMatchActive = true;
+        IsInPrepPhase = inPrepPhase;
+        IsPrepReady = false;
         SelectedGameModeId = gameModeId;
         RequiredPlayers = Mathf.Max(1, requiredPlayers);
+        _matchStartUtcSeconds = 0d;
 
         LoadoutCardIdA = loadoutA;
         LoadoutCardIdB = loadoutB;
@@ -72,6 +89,38 @@ public static class GameSession
             ActiveCardId = null;
             ActiveKit = CardKitDefinition.DefaultInfantryPlaceholder();
         }
+    }
+
+    public static void MarkPrepReady(string activeCardId)
+    {
+        if (!IsInPrepPhase || IsPrepReady)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(activeCardId))
+        {
+            SetActiveCard(activeCardId);
+        }
+
+        IsPrepReady = true;
+    }
+
+    public static void CompletePrep(string activeCardId)
+    {
+        if (!IsInPrepPhase)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrEmpty(activeCardId))
+        {
+            SetActiveCard(activeCardId);
+        }
+
+        IsPrepReady = false;
+        IsInPrepPhase = false;
+        MarkMatchStarted();
     }
 
     public static void MarkMatchStarted()
@@ -118,6 +167,8 @@ public static class GameSession
     public static void EndMatch()
     {
         IsMatchActive = false;
+        IsInPrepPhase = false;
+        IsPrepReady = false;
         HasLoadoutSelected = false;
         SelectedGameModeId = null;
         RequiredPlayers = 1;

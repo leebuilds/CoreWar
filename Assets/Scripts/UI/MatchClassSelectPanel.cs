@@ -12,20 +12,26 @@ public class MatchClassSelectPanel : MonoBehaviour
     const float PrepDuration = 10f;
 
     public event Action<int> Completed;
+    public event Action<int> ReadyPressed;
 
+    GameObject _visualRoot;
     GameObject _root;
+    GameObject _readyBanner;
     Text _prepTimerText;
+    Text _readyBannerText;
     Button _readyButton;
     CardTileView _leftTile;
     CardTileView _rightTile;
+    Button _editDecksLink;
     int _spawnSlotIndex;
     UnityAction _onEditDecks;
     bool _isReady;
     bool _completed;
     bool _prepRunning;
     Coroutine _prepRoutine;
+    float _remainingSeconds;
 
-    public bool IsOpen => _root != null && _root.activeSelf;
+    public bool IsOpen => gameObject.activeSelf;
 
     public static MatchClassSelectPanel Create(Transform parent)
     {
@@ -41,15 +47,14 @@ public class MatchClassSelectPanel : MonoBehaviour
 
     void Build()
     {
-        var blocker = new GameObject("Input Blocker");
-        blocker.transform.SetParent(transform, false);
-        MenuUiFactory.StretchFull(blocker.AddComponent<RectTransform>());
-        var blockerImage = blocker.AddComponent<Image>();
-        blockerImage.color = new Color(0f, 0f, 0f, 0.25f);
-        blockerImage.raycastTarget = true;
+        _visualRoot = new GameObject("Theme Visuals");
+        _visualRoot.transform.SetParent(transform, false);
+        MenuUiFactory.StretchFull(_visualRoot.AddComponent<RectTransform>());
+
+        BuildReadyBanner();
 
         _root = new GameObject("Panel Root");
-        _root.transform.SetParent(transform, false);
+        _root.transform.SetParent(_visualRoot.transform, false);
         var rootRect = _root.AddComponent<RectTransform>();
         rootRect.anchorMin = new Vector2(0.5f, 0.5f);
         rootRect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -114,8 +119,78 @@ public class MatchClassSelectPanel : MonoBehaviour
             new Vector2(0f, -40f), MenuUiFactory.PrimaryButtonSize, OnReadyClicked,
             enabled: ProfileSession.HasCompleteLoadout);
 
-        MenuUiFactory.CreateTextLink(fillGo.transform, "Edit Link", "edit in decks",
+        _editDecksLink = MenuUiFactory.CreateTextLink(fillGo.transform, "Edit Link", "edit in decks",
             new Vector2(0f, -110f), MenuUiFactory.TextLinkSize, () => _onEditDecks?.Invoke());
+    }
+
+    void BuildReadyBanner()
+    {
+        _readyBanner = new GameObject("Ready Banner");
+        _readyBanner.transform.SetParent(_visualRoot.transform, false);
+        var bannerRect = _readyBanner.AddComponent<RectTransform>();
+        bannerRect.anchorMin = new Vector2(0.5f, 1f);
+        bannerRect.anchorMax = new Vector2(0.5f, 1f);
+        bannerRect.pivot = new Vector2(0.5f, 1f);
+        bannerRect.sizeDelta = new Vector2(360f, 44f);
+        bannerRect.anchoredPosition = new Vector2(0f, -20f);
+
+        var borderGo = new GameObject("Border");
+        borderGo.transform.SetParent(_readyBanner.transform, false);
+        MenuUiFactory.StretchFull(borderGo.AddComponent<RectTransform>());
+        borderGo.AddComponent<Image>().color = MenuUiFactory.Ink;
+
+        var fillGo = new GameObject("Fill");
+        fillGo.transform.SetParent(_readyBanner.transform, false);
+        var fillRect = fillGo.AddComponent<RectTransform>();
+        fillRect.anchorMin = Vector2.zero;
+        fillRect.anchorMax = Vector2.one;
+        fillRect.offsetMin = new Vector2(2f, 2f);
+        fillRect.offsetMax = new Vector2(-2f, -2f);
+        fillGo.AddComponent<Image>().color = MenuUiFactory.PanelFill;
+
+        _readyBannerText = MenuUiFactory.CreateAnchoredText(fillGo.transform, "Ready Banner Text", "ready · 0:10",
+            MenuUiFactory.BodyFontSize, FontStyle.Bold, TextAnchor.MiddleCenter, MenuUiFactory.Ink);
+        _readyBanner.SetActive(false);
+    }
+
+    void OnEnable()
+    {
+        MenuSettings.Changed += HandleThemeChanged;
+    }
+
+    void OnDisable()
+    {
+        MenuSettings.Changed -= HandleThemeChanged;
+    }
+
+    void HandleThemeChanged()
+    {
+        int selectedSlot = _spawnSlotIndex;
+        bool showMainWindow = _root != null && _root.activeSelf;
+        bool showReadyBanner = _readyBanner != null && _readyBanner.activeSelf;
+
+        if (_visualRoot != null)
+        {
+            Destroy(_visualRoot);
+        }
+
+        Build();
+        _spawnSlotIndex = selectedSlot;
+        RefreshSpawnSelection();
+
+        if (_readyButton != null)
+        {
+            _readyButton.interactable = !_isReady && ProfileSession.HasCompleteLoadout;
+        }
+
+        if (_editDecksLink != null)
+        {
+            _editDecksLink.gameObject.SetActive(_onEditDecks != null && !_isReady);
+        }
+
+        _root?.SetActive(showMainWindow);
+        _readyBanner?.SetActive(showReadyBanner);
+        UpdateTimerLabels();
     }
 
     CardTileView CreateCardTile(Transform parent, CardDefinition card, int slotIndex, Vector2 position)
@@ -168,13 +243,27 @@ public class MatchClassSelectPanel : MonoBehaviour
             _readyButton.interactable = ProfileSession.HasCompleteLoadout;
         }
 
+        if (_editDecksLink != null)
+        {
+            _editDecksLink.gameObject.SetActive(_onEditDecks != null);
+        }
+
         if (_prepRoutine != null)
         {
             StopCoroutine(_prepRoutine);
         }
 
+        if (_root != null)
+        {
+            _root.SetActive(true);
+        }
+
+        if (_readyBanner != null)
+        {
+            _readyBanner.SetActive(false);
+        }
+
         gameObject.SetActive(true);
-        _root.SetActive(true);
         transform.SetAsLastSibling();
         _prepRoutine = StartCoroutine(PrepCountdown());
     }
@@ -189,6 +278,12 @@ public class MatchClassSelectPanel : MonoBehaviour
 
         _prepRunning = false;
         _completed = false;
+
+        if (_readyBanner != null)
+        {
+            _readyBanner.SetActive(false);
+        }
+
         if (_root != null)
         {
             _root.SetActive(false);
@@ -200,20 +295,18 @@ public class MatchClassSelectPanel : MonoBehaviour
     IEnumerator PrepCountdown()
     {
         _prepRunning = true;
-        float remaining = PrepDuration;
+        _remainingSeconds = PrepDuration;
 
-        while (remaining > 0f && !_completed)
+        while (_remainingSeconds > 0f && !_completed)
         {
-            if (_prepTimerText != null)
-            {
-                int seconds = Mathf.CeilToInt(remaining);
-                _prepTimerText.text = _isReady
-                    ? $"ready · starting in {seconds}"
-                    : $"starting in {seconds}";
-            }
-
+            UpdateTimerLabels();
             yield return null;
-            remaining -= Time.unscaledDeltaTime;
+            _remainingSeconds -= Time.unscaledDeltaTime;
+        }
+
+        if (_readyBannerText != null)
+        {
+            _readyBannerText.text = "starting match";
         }
 
         if (_prepTimerText != null)
@@ -223,6 +316,29 @@ public class MatchClassSelectPanel : MonoBehaviour
 
         _prepRunning = false;
         CompleteSelection();
+    }
+
+    void UpdateTimerLabels()
+    {
+        int seconds = Mathf.CeilToInt(_remainingSeconds);
+        string timerLabel = FormatPrepSeconds(seconds);
+
+        if (_prepTimerText != null)
+        {
+            _prepTimerText.text = _isReady
+                ? $"ready · {timerLabel}"
+                : $"starting in {seconds}";
+        }
+
+        if (_readyBannerText != null && _isReady)
+        {
+            _readyBannerText.text = $"ready · {timerLabel}";
+        }
+    }
+
+    static string FormatPrepSeconds(int seconds)
+    {
+        return $"0:{Mathf.Max(0, seconds):00}";
     }
 
     void OnReadyClicked()
@@ -238,18 +354,21 @@ public class MatchClassSelectPanel : MonoBehaviour
             _readyButton.interactable = false;
         }
 
-        if (_prepRoutine != null)
+        if (_root != null)
         {
-            StopCoroutine(_prepRoutine);
-            _prepRoutine = null;
+            _root.SetActive(false);
         }
 
-        if (_prepTimerText != null)
+        if (_readyBanner != null)
         {
-            _prepTimerText.text = "starting match";
+            _readyBanner.SetActive(true);
+            UpdateTimerLabels();
         }
 
-        CompleteSelection();
+        var profile = ProfileSession.ActiveProfile;
+        var activeCardId = profile.loadoutCardIds[_spawnSlotIndex];
+        GameSession.MarkPrepReady(activeCardId);
+        ReadyPressed?.Invoke(_spawnSlotIndex);
     }
 
     void CompleteSelection()

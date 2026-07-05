@@ -39,8 +39,8 @@ public class MenuNavigator : MonoBehaviour
     bool _bootstrapped;
 
     MatchmakingPanel _matchmakingPanel;
-    MatchClassSelectPanel _classSelectPanel;
     GameObject _cancelMatchmakingOverlay;
+    GameObject _matchmakingSettingsOverlay;
     GameModeButtonFx _activeModeButtonFx;
     string _activeModeId;
 
@@ -88,9 +88,7 @@ public class MenuNavigator : MonoBehaviour
         MenuSettings.Changed += HandleSettingsChanged;
 
         MatchmakingSession.BindRunner(this);
-        _matchmakingPanel = MatchmakingPanel.Create(_root, RequestCancelMatchmaking);
-        _classSelectPanel = MatchClassSelectPanel.Create(_root);
-        _classSelectPanel.Completed += HandlePrepComplete;
+        _matchmakingPanel = MatchmakingPanel.Create(_root, RequestCancelMatchmaking, ShowMatchmakingSettings);
         MatchmakingSession.Completed += HandleMatchmakingCompleted;
         MatchmakingSession.Cancelled += HandleMatchmakingCancelled;
 
@@ -109,11 +107,6 @@ public class MenuNavigator : MonoBehaviour
         MenuSettings.Changed -= HandleSettingsChanged;
         MatchmakingSession.Completed -= HandleMatchmakingCompleted;
         MatchmakingSession.Cancelled -= HandleMatchmakingCancelled;
-
-        if (_classSelectPanel != null)
-        {
-            _classSelectPanel.Completed -= HandlePrepComplete;
-        }
     }
 
     void HandleSettingsChanged()
@@ -176,6 +169,12 @@ public class MenuNavigator : MonoBehaviour
 
     public void HandleBackNavigation()
     {
+        if (_matchmakingSettingsOverlay != null)
+        {
+            HideMatchmakingSettings();
+            return;
+        }
+
         if (_cancelMatchmakingOverlay != null)
         {
             HideCancelMatchmakingModal();
@@ -426,7 +425,7 @@ public class MenuNavigator : MonoBehaviour
 
     bool IsInMatchFlow()
     {
-        return MatchmakingSession.IsActive || (_classSelectPanel != null && _classSelectPanel.IsOpen);
+        return MatchmakingSession.IsActive;
     }
 
     void OnGameModeSelected(GameModeDefinition mode, GameModeButtonFx fx)
@@ -469,26 +468,56 @@ public class MenuNavigator : MonoBehaviour
         if (MatchmakingSession.IsActive)
         {
             MatchmakingSession.Cancel();
+        }
+    }
+
+    void ShowMatchmakingSettings()
+    {
+        if (_matchmakingSettingsOverlay != null)
+        {
             return;
         }
 
-        if (_classSelectPanel != null && _classSelectPanel.IsOpen)
+        _matchmakingSettingsOverlay = MenuUiFactory.CreateModalOverlay(_root, 0.25f);
+        var frame = MenuWindowFrame.CreateScreen(_matchmakingSettingsOverlay.transform, "SETTINGS", showBack: true,
+            "appearance · audio · controls", new Vector2(580f, 680f), showHeader: false, HideMatchmakingSettings);
+        MenuSettingsPanel.Build(frame.Body, showAccountSection: false);
+    }
+
+    void HideMatchmakingSettings()
+    {
+        if (_matchmakingSettingsOverlay != null)
         {
-            ConfirmCancelMatchFlow();
+            Destroy(_matchmakingSettingsOverlay);
+            _matchmakingSettingsOverlay = null;
         }
     }
 
     void HandleMatchmakingCompleted()
     {
         _matchmakingPanel.Hide();
-        _classSelectPanel.Show(() =>
+        StopActiveModeFx();
+
+        if (!ProfileSession.HasCompleteLoadout)
         {
-            ShowCancelMatchmakingModal(() =>
-            {
-                ConfirmCancelMatchFlow();
-                ShowScreen(ScreenId.Decks);
-            });
-        });
+            CleanupMatchFlow();
+            return;
+        }
+
+        var profile = ProfileSession.ActiveProfile;
+        var mode = GameModeDefinition.Get(_activeModeId);
+        ProfileSession.TouchActivity();
+        GameSession.BeginMatchForPrep(
+            GameSession.Team.Red,
+            profile.loadoutCardIds[0],
+            profile.loadoutCardIds[1],
+            profile.loadoutCardIds[0],
+            _activeModeId,
+            mode?.requiredPlayers ?? 1);
+
+        MatchmakingSession.Reset();
+        _activeModeId = null;
+        SceneFlow.EnterGameForPrep();
     }
 
     void HandleMatchmakingCancelled()
@@ -511,7 +540,6 @@ public class MenuNavigator : MonoBehaviour
     {
         StopActiveModeFx();
         _matchmakingPanel?.Hide();
-        _classSelectPanel?.Hide();
         _activeModeId = null;
         _activeModeButtonFx = null;
         MatchmakingSession.Reset();
@@ -521,34 +549,6 @@ public class MenuNavigator : MonoBehaviour
     {
         _activeModeButtonFx?.StopFx();
         _activeModeButtonFx = null;
-    }
-
-    void HandlePrepComplete(int spawnSlotIndex)
-    {
-        if (!ProfileSession.HasCompleteLoadout)
-        {
-            CleanupMatchFlow();
-            return;
-        }
-
-        StopActiveModeFx();
-        _classSelectPanel.Hide();
-        _matchmakingPanel.Hide();
-
-        var profile = ProfileSession.ActiveProfile;
-        var mode = GameModeDefinition.Get(_activeModeId);
-        ProfileSession.TouchActivity();
-        GameSession.BeginMatch(
-            GameSession.Team.Red,
-            profile.loadoutCardIds[0],
-            profile.loadoutCardIds[1],
-            profile.loadoutCardIds[spawnSlotIndex],
-            _activeModeId,
-            mode?.requiredPlayers ?? 1);
-        MenuUiSounds.PlayGunshot();
-        SceneFlow.EnterGameFromPrep();
-        MatchmakingSession.Reset();
-        _activeModeId = null;
     }
 
     void ShowCancelMatchmakingModal(Action onConfirmCancel)

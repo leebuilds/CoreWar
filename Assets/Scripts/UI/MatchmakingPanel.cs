@@ -11,30 +11,41 @@ public class MatchmakingPanel : MonoBehaviour
     Text _timerText;
     Text _countText;
     GameObject _root;
+    GameObject _visualRoot;
+    Action _onCancel;
+    Action _onSettings;
 
-    public static MatchmakingPanel Create(Transform parent, Action onCancel)
+    public static MatchmakingPanel Create(Transform parent, Action onCancel, Action onSettings)
     {
         var host = new GameObject("Matchmaking Panel Host");
         host.transform.SetParent(parent, false);
         MenuUiFactory.StretchFull(host.AddComponent<RectTransform>());
 
         var panel = host.AddComponent<MatchmakingPanel>();
-        panel.Build(onCancel);
+        panel._onCancel = onCancel;
+        panel._onSettings = onSettings;
+        panel.Build();
+        MatchmakingSession.Changed += panel.HandleSnapshotChanged;
+        MenuSettings.Changed += panel.HandleThemeChanged;
         host.SetActive(false);
         return panel;
     }
 
-    void Build(Action onCancel)
+    void Build()
     {
+        _visualRoot = new GameObject("Theme Visuals");
+        _visualRoot.transform.SetParent(transform, false);
+        MenuUiFactory.StretchFull(_visualRoot.AddComponent<RectTransform>());
+
         var blocker = new GameObject("Input Blocker");
-        blocker.transform.SetParent(transform, false);
+        blocker.transform.SetParent(_visualRoot.transform, false);
         MenuUiFactory.StretchFull(blocker.AddComponent<RectTransform>());
         var blockerImage = blocker.AddComponent<Image>();
         blockerImage.color = new Color(0f, 0f, 0f, 0.12f);
         blockerImage.raycastTarget = true;
 
         _root = new GameObject("Panel Root");
-        _root.transform.SetParent(transform, false);
+        _root.transform.SetParent(_visualRoot.transform, false);
         var rootRect = _root.AddComponent<RectTransform>();
         rootRect.anchorMin = new Vector2(0.5f, 0f);
         rootRect.anchorMax = new Vector2(0.5f, 0f);
@@ -82,16 +93,30 @@ public class MatchmakingPanel : MonoBehaviour
         countRect.offsetMin = Vector2.zero;
         countRect.offsetMax = Vector2.zero;
 
-        MenuUiFactory.CreateButton(fillGo.transform, "Cancel Matchmaking", "CANCEL MATCHMAKING",
-            new Vector2(0f, -118f), new Vector2(280f, MenuUiFactory.CompactControlHeight),
-            () => onCancel?.Invoke());
+        MenuUiFactory.CreateButton(fillGo.transform, "Settings", "SETTINGS",
+            new Vector2(0f, -92f), new Vector2(280f, MenuUiFactory.CompactControlHeight),
+            () => _onSettings?.Invoke());
 
-        MatchmakingSession.Changed += HandleSnapshotChanged;
+        MenuUiFactory.CreateButton(fillGo.transform, "Cancel Matchmaking", "CANCEL MATCHMAKING",
+            new Vector2(0f, -142f), new Vector2(280f, MenuUiFactory.CompactControlHeight),
+            () => _onCancel?.Invoke());
     }
 
     void OnDestroy()
     {
         MatchmakingSession.Changed -= HandleSnapshotChanged;
+        MenuSettings.Changed -= HandleThemeChanged;
+    }
+
+    void HandleThemeChanged()
+    {
+        if (_visualRoot != null)
+        {
+            Destroy(_visualRoot);
+        }
+
+        Build();
+        ApplySnapshot(MatchmakingSession.Snapshot);
     }
 
     void Update()

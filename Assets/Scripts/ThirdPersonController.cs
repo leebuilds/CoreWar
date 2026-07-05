@@ -114,6 +114,8 @@ public class ThirdPersonController : MonoBehaviour
     float _gunRecoilKickTimer;
     bool _gunRecoilAimApplied;
     float _sessionHeartbeat;
+    bool _wasInPrepPhase;
+    bool _wasPrepReady;
     readonly List<GameObject> _previewRoots = new List<GameObject>();
     readonly List<VoxelLightingWorld.BuildPieceCandidate> _rectangleCandidates =
         new List<VoxelLightingWorld.BuildPieceCandidate>();
@@ -184,11 +186,25 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        if (IsGameplayBlocked())
+        if (IsUiOverlayBlocking())
         {
             _selectorOpen = false;
             HidePreviewRoots();
             UpdateCameraTransform();
+            return;
+        }
+
+        if (GameSession.IsInPrepPhase && !GameSession.IsPrepReady)
+        {
+            UpdateCameraTransform();
+            return;
+        }
+
+        if (GameSession.IsInPrepPhase && GameSession.IsPrepReady)
+        {
+            UpdateCameraTransform();
+            UpdateHeldToolVisuals();
+            UpdateCharacterAim();
             return;
         }
 
@@ -216,6 +232,8 @@ public class ThirdPersonController : MonoBehaviour
         ApplyKitFromSession();
         ProfileSession.EnsureInitialized();
         ProfileSession.TouchActivity();
+        _wasInPrepPhase = GameSession.IsInPrepPhase;
+        _wasPrepReady = GameSession.IsPrepReady;
         _respawnPicker = RespawnClassPicker.Create(transform, cardId =>
         {
             GameSession.SetActiveCard(cardId);
@@ -240,6 +258,18 @@ public class ThirdPersonController : MonoBehaviour
         {
             return;
         }
+
+        if (_wasInPrepPhase && !GameSession.IsInPrepPhase)
+        {
+            ApplyKitFromSession();
+        }
+        else if (GameSession.IsPrepReady && !_wasPrepReady)
+        {
+            ApplyKitFromSession();
+        }
+
+        _wasInPrepPhase = GameSession.IsInPrepPhase;
+        _wasPrepReady = GameSession.IsPrepReady;
 
         if (Input.GetKeyDown(KeyCode.Escape))
         {
@@ -273,7 +303,19 @@ public class ThirdPersonController : MonoBehaviour
 
         UpdateSessionHeartbeat();
 
+        if (GameSession.IsInPrepPhase && !GameSession.IsPrepReady)
+        {
+            return;
+        }
+
         HandleLook();
+
+        if (GameSession.IsInPrepPhase && GameSession.IsPrepReady)
+        {
+            HandleHotbarInput();
+            return;
+        }
+
         HandleHotbarInput();
         HandleSelectedToolInput();
 
@@ -292,7 +334,7 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        if (IsGameplayBlocked())
+        if (IsMovementBlocked())
         {
             StopHorizontalMovement();
             return;
@@ -302,10 +344,20 @@ public class ThirdPersonController : MonoBehaviour
         HandleMovement();
     }
 
-    bool IsGameplayBlocked()
+    bool IsUiOverlayBlocking()
     {
         return (_pauseMenu != null && _pauseMenu.IsOpen) ||
                (_respawnPicker != null && _respawnPicker.IsOpen);
+    }
+
+    bool IsMovementBlocked()
+    {
+        return IsUiOverlayBlocking() || GameSession.IsInPrepPhase;
+    }
+
+    bool IsGameplayBlocked()
+    {
+        return IsMovementBlocked();
     }
 
     void StopHorizontalMovement()
@@ -1499,8 +1551,19 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        if (IsGameplayBlocked())
+        if (IsUiOverlayBlocking())
         {
+            return;
+        }
+
+        if (GameSession.IsInPrepPhase && !GameSession.IsPrepReady)
+        {
+            return;
+        }
+
+        if (GameSession.IsInPrepPhase && GameSession.IsPrepReady)
+        {
+            DrawHotbar();
             return;
         }
 
@@ -1703,8 +1766,104 @@ public class ThirdPersonController : MonoBehaviour
             return true;
         }
 
+        // The center belongs to all four halves. Reject it once up front before
+        // spending additional raycasts on their surrounding sample grids.
+        if (!HasLineOfSightToBuildPoint(candidate, candidate.Position))
+        {
+            return false;
+        }
+
+        GetBuildCandidateFaceAxes(candidate, out var horizontalAxis, out float horizontalExtent,
+            out var verticalAxis, out float verticalExtent);
+
+        // Keep samples just inside the physical edges so touching neighboring tiles do not
+        // incorrectly occlude a half-face at a shared seam.
+        horizontalExtent *= 0.92f;
+        verticalExtent *= 0.92f;
+
+        return IsBuildHalfFaceVisible(candidate, horizontalAxis, horizontalExtent, verticalAxis, verticalExtent,
+                   -1f, 0f, -1f, 1f) ||
+               IsBuildHalfFaceVisible(candidate, horizontalAxis, horizontalExtent, verticalAxis, verticalExtent,
+                   0f, 1f, -1f, 1f) ||
+               IsBuildHalfFaceVisible(candidate, horizontalAxis, horizontalExtent, verticalAxis, verticalExtent,
+                   -1f, 1f, 0f, 1f) ||
+               IsBuildHalfFaceVisible(candidate, horizontalAxis, horizontalExtent, verticalAxis, verticalExtent,
+                   -1f, 1f, -1f, 0f);
+    }
+
+    static void GetBuildCandidateFaceAxes(
+        VoxelLightingWorld.BuildPieceCandidate candidate,
+        out Vector3 horizontalAxis,
+        out float horizontalExtent,
+        out Vector3 verticalAxis,
+        out float verticalExtent)
+    {
+        Vector3 scale = candidate.Scale;
+        float x = Mathf.Abs(scale.x);
+        float y = Mathf.Abs(scale.y);
+        float z = Mathf.Abs(scale.z);
+
+        if (x <= y && x <= z)
+        {
+            horizontalAxis = candidate.Rotation * Vector3.forward;
+            horizontalExtent = z * 0.5f;
+            verticalAxis = candidate.Rotation * Vector3.up;
+            verticalExtent = y * 0.5f;
+            return;
+        }
+
+        if (z <= x && z <= y)
+        {
+            horizontalAxis = candidate.Rotation * Vector3.right;
+            horizontalExtent = x * 0.5f;
+            verticalAxis = candidate.Rotation * Vector3.up;
+            verticalExtent = y * 0.5f;
+            return;
+        }
+
+        horizontalAxis = candidate.Rotation * Vector3.right;
+        horizontalExtent = x * 0.5f;
+        verticalAxis = candidate.Rotation * Vector3.forward;
+        verticalExtent = z * 0.5f;
+    }
+
+    bool IsBuildHalfFaceVisible(
+        VoxelLightingWorld.BuildPieceCandidate candidate,
+        Vector3 horizontalAxis,
+        float horizontalExtent,
+        Vector3 verticalAxis,
+        float verticalExtent,
+        float horizontalMin,
+        float horizontalMax,
+        float verticalMin,
+        float verticalMax)
+    {
+        for (int verticalSample = 0; verticalSample < 3; verticalSample++)
+        {
+            float vertical = Mathf.Lerp(verticalMin, verticalMax, verticalSample * 0.5f) * verticalExtent;
+            for (int horizontalSample = 0; horizontalSample < 3; horizontalSample++)
+            {
+                float horizontal = Mathf.Lerp(horizontalMin, horizontalMax, horizontalSample * 0.5f) *
+                    horizontalExtent;
+                Vector3 target = candidate.Position +
+                    (horizontalAxis * horizontal) +
+                    (verticalAxis * vertical);
+
+                if (!HasLineOfSightToBuildPoint(candidate, target))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    bool HasLineOfSightToBuildPoint(
+        VoxelLightingWorld.BuildPieceCandidate candidate,
+        Vector3 target)
+    {
         Vector3 origin = viewCamera.transform.position;
-        Vector3 target = candidate.Position;
         Vector3 direction = target - origin;
         float distance = direction.magnitude;
         if (distance <= 0.001f)
