@@ -1,13 +1,20 @@
 using UnityEngine;
 
+public enum ProjectileWeaponType
+{
+    AssaultRifle,
+    Pistol,
+    SniperRifle
+}
+
 /// <summary>
-/// Shared bullet damage and player blindness tuning.
+/// Per-weapon velocity-scaled bullet damage and player blindness tuning.
 /// </summary>
 public static class ProjectileDamage
 {
-    public const float MinSpeedForDamage = 25f;
-    public const float PointBlankBodyDamage = 40f;
-    public const float HeadshotMultiplier = 2f;
+    public const float HeadshotBlindnessMultiplier = 2f;
+    public const float MinSpeedDamageFraction = 0.5f;
+    public const float PlayerBounceMinSpeed = 30f;
 
     const float BlindnessHealthFractionLo = 0.5f;
     const float BlindnessDurationLo = 0.125f;
@@ -15,20 +22,86 @@ public static class ProjectileDamage
     const float BlindnessDurationHi = 2f;
     const float BlindnessCurveExponent = 2.2f;
 
-    public static float ComputeDamage(float impactSpeed, float muzzleSpeed, bool headshot)
+    public static float ComputeDamage(
+        float impactSpeed,
+        float muzzleSpeed,
+        ProjectileWeaponType weaponType,
+        bool headshot)
     {
-        if (impactSpeed < MinSpeedForDamage || muzzleSpeed <= 0.0001f)
+        if (muzzleSpeed <= 0.0001f)
         {
             return 0f;
         }
 
-        float damage = (impactSpeed / muzzleSpeed) * PointBlankBodyDamage;
-        if (headshot)
+        float speedRatio = impactSpeed <= 0f ? 0f : Mathf.Clamp01(impactSpeed / muzzleSpeed);
+        float maxDamage = headshot
+            ? MaxHeadshotDamage(weaponType)
+            : MaxBodyDamage(weaponType);
+        return maxDamage * Mathf.Lerp(MinSpeedDamageFraction, 1f, speedRatio);
+    }
+
+    public static float MaxBodyDamage(ProjectileWeaponType weaponType)
+    {
+        switch (weaponType)
         {
-            damage *= HeadshotMultiplier;
+            case ProjectileWeaponType.SniperRifle:
+                return 60f;
+            case ProjectileWeaponType.Pistol:
+                return 15f;
+            case ProjectileWeaponType.AssaultRifle:
+            default:
+                return 17f;
+        }
+    }
+
+    public static float MaxHeadshotDamage(ProjectileWeaponType weaponType)
+    {
+        switch (weaponType)
+        {
+            case ProjectileWeaponType.SniperRifle:
+                return 130f;
+            case ProjectileWeaponType.Pistol:
+                return 30f;
+            case ProjectileWeaponType.AssaultRifle:
+            default:
+                return 22f;
+        }
+    }
+
+    /// <summary>
+    /// Fraction of speed retained after 100 m of air travel (exponential decay).
+    /// Pistol ~20% loss, AR ~10%, sniper ~2%.
+    /// </summary>
+    public static float AirSpeedRetentionPer100Meters(ProjectileWeaponType weaponType)
+    {
+        switch (weaponType)
+        {
+            case ProjectileWeaponType.Pistol:
+                return 0.80f;
+            case ProjectileWeaponType.AssaultRifle:
+                return 0.90f;
+            case ProjectileWeaponType.SniperRifle:
+                return 0.98f;
+            default:
+                return 0.90f;
+        }
+    }
+
+    public static float AirDragPerMeter(ProjectileWeaponType weaponType)
+    {
+        float retention = Mathf.Clamp(AirSpeedRetentionPer100Meters(weaponType), 0.01f, 0.9999f);
+        return -Mathf.Log(retention) / 100f;
+    }
+
+    public static void ApplyAirDrag(ref Vector3 velocity, ProjectileWeaponType weaponType, float distanceMeters)
+    {
+        if (distanceMeters <= 0f || velocity.sqrMagnitude <= 0.0001f)
+        {
+            return;
         }
 
-        return damage;
+        float drag = Mathf.Exp(-AirDragPerMeter(weaponType) * distanceMeters);
+        velocity *= drag;
     }
 
     /// <summary>
@@ -60,7 +133,7 @@ public static class ProjectileDamage
 
         if (headshot)
         {
-            duration *= HeadshotMultiplier;
+            duration *= HeadshotBlindnessMultiplier;
         }
 
         return duration;

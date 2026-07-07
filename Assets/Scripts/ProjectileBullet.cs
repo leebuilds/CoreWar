@@ -16,13 +16,11 @@ public class ProjectileBullet : MonoBehaviour
     const float VisibilityRange = 50f;
     const float KillY = -12f;
 
-    // Fraction of speed kept per meter of build material: exp(-k * thickness).
-    // Thin panel face (~8 cm) loses ~5%, a full 1 m voxel loses ~50%.
-    const float PenetrationFalloffPerMeter = 0.7f;
-    const float PenetrationProbeMeters = 3f;
+    // Hits that deal no damage bounce off players and dummies.
+    const float DamageEpsilon = 0.001f;
 
-    // Hits below this speed bounce off players and dummies without damage.
-    const float DamageMinSpeed = ProjectileDamage.MinSpeedForDamage;
+    // Speed retained after striking a floor, map surface, or object.
+    const float SurfaceImpactSpeedRetention = 0.5f;
 
     const float Bounciness = 0.72f;
     const float TangentRetentionMapImpact = 1f;
@@ -35,15 +33,17 @@ public class ProjectileBullet : MonoBehaviour
 
     Vector3 _velocity;
     float _muzzleSpeed;
+    ProjectileWeaponType _weaponType;
     bool _physicsPhase;
     Rigidbody _rb;
     Renderer _renderer;
     Camera _camera;
 
-    public void Initialize(Vector3 velocity)
+    public void Initialize(Vector3 velocity, ProjectileWeaponType weaponType)
     {
         _velocity = velocity;
         _muzzleSpeed = velocity.magnitude;
+        _weaponType = weaponType;
         EnsureVisual();
 
         LiveBullets.Add(this);
@@ -93,6 +93,8 @@ public class ProjectileBullet : MonoBehaviour
 
         Vector3 start = transform.position;
         _velocity += Physics.gravity * Time.deltaTime;
+        float travelDistance = _velocity.magnitude * Time.deltaTime;
+        ProjectileDamage.ApplyAirDrag(ref _velocity, _weaponType, travelDistance);
         Vector3 end = start + (_velocity * Time.deltaTime);
         ResolveHits(start, end);
     }
@@ -145,8 +147,9 @@ public class ProjectileBullet : MonoBehaviour
             var hitZone = hit.collider.GetComponent<ShootingRangeHitZone>();
             if (hitZone != null && hitZone.dummy != null)
             {
-                if (TryAbsorbCharacterHit(_velocity.magnitude, () =>
-                    hitZone.dummy.ApplyHit(hitZone.zoneType, _velocity.magnitude, _muzzleSpeed)))
+                bool headshot = hitZone.zoneType == ShootingRangeHitZoneType.Head;
+                if (TryAbsorbCharacterHit(_velocity.magnitude, headshot, () =>
+                    hitZone.dummy.ApplyHit(hitZone.zoneType, _velocity.magnitude, _muzzleSpeed, _weaponType)))
                 {
                     Destroy(gameObject);
                     return;
@@ -164,7 +167,7 @@ public class ProjectileBullet : MonoBehaviour
             var marker = hit.collider.GetComponentInParent<PlayerBuiltVoxel>();
             if (marker != null)
             {
-                PenetrateBuildPiece(hit, direction);
+                PenetrateBuildPiece();
                 continue;
             }
 
@@ -179,17 +182,14 @@ public class ProjectileBullet : MonoBehaviour
         }
     }
 
-    void PenetrateBuildPiece(RaycastHit entry, Vector3 direction)
+    void PenetrateBuildPiece()
     {
-        float thickness = PenetrationProbeMeters;
-        Vector3 probeOrigin = entry.point + (direction * PenetrationProbeMeters);
-        var reverseRay = new Ray(probeOrigin, -direction);
-        if (entry.collider.Raycast(reverseRay, out RaycastHit exit, PenetrationProbeMeters))
-        {
-            thickness = Vector3.Distance(entry.point, exit.point);
-        }
+        ApplySurfaceImpactSpeedLoss();
+    }
 
-        _velocity *= Mathf.Exp(-PenetrationFalloffPerMeter * thickness);
+    void ApplySurfaceImpactSpeedLoss()
+    {
+        _velocity *= SurfaceImpactSpeedRetention;
     }
 
     void BeginPhysicsPhase(RaycastHit hit)
@@ -201,6 +201,7 @@ public class ProjectileBullet : MonoBehaviour
         Vector3 normalVelocity = Vector3.Project(_velocity, hit.normal);
         Vector3 tangentVelocity = _velocity - normalVelocity;
         _velocity = (tangentVelocity * TangentRetentionMapImpact) - (normalVelocity * Bounciness);
+        ApplySurfaceImpactSpeedLoss();
 
         var sphere = gameObject.AddComponent<SphereCollider>();
         sphere.radius = Radius;
@@ -230,8 +231,9 @@ public class ProjectileBullet : MonoBehaviour
         if (hitZone != null && hitZone.dummy != null)
         {
             float impactSpeed = collision.relativeVelocity.magnitude;
-            if (TryAbsorbCharacterHit(impactSpeed, () =>
-                hitZone.dummy.ApplyHit(hitZone.zoneType, impactSpeed, _muzzleSpeed)))
+            bool headshot = hitZone.zoneType == ShootingRangeHitZoneType.Head;
+            if (TryAbsorbCharacterHit(impactSpeed, headshot, () =>
+                hitZone.dummy.ApplyHit(hitZone.zoneType, impactSpeed, _muzzleSpeed, _weaponType)))
             {
                 Destroy(gameObject);
             }
@@ -248,12 +250,18 @@ public class ProjectileBullet : MonoBehaviour
         {
             var contact = collision.GetContact(0);
             TryResolvePlayerHit(collision.collider, contact.point, contact.normal, collision.relativeVelocity.magnitude);
+            return;
         }
+
+        _velocity = _rb.linearVelocity;
+        ApplySurfaceImpactSpeedLoss();
+        _rb.linearVelocity = _velocity;
     }
 
-    bool TryAbsorbCharacterHit(float impactSpeed, System.Func<bool> applyHit)
+    bool TryAbsorbCharacterHit(float impactSpeed, bool headshot, System.Func<bool> applyHit)
     {
-        if (impactSpeed < DamageMinSpeed)
+        float damage = ProjectileDamage.ComputeDamage(impactSpeed, _muzzleSpeed, _weaponType, headshot);
+        if (damage <= DamageEpsilon)
         {
             return false;
         }
@@ -269,18 +277,23 @@ public class ProjectileBullet : MonoBehaviour
             return false;
         }
 
-        if (impactSpeed >= DamageMinSpeed)
+        if (impactSpeed < ProjectileDamage.PlayerBounceMinSpeed)
+        {
+            BounceOffSurface(surfaceNormal, hitPoint);
+            return true;
+        }
+
+        if (impactSpeed > 0f)
         {
             bool headshot = IsHeadshotHit(controller.transform, hitPoint);
-            float damage = ProjectileDamage.ComputeDamage(impactSpeed, _muzzleSpeed, headshot);
+            float damage = ProjectileDamage.ComputeDamage(impactSpeed, _muzzleSpeed, _weaponType, headshot);
             var health = controller.GetComponent<PlayerHealth>();
-            if (damage > 0f && health != null)
+            if (damage > DamageEpsilon && health != null)
             {
                 health.ApplyDamage(damage, headshot);
+                Destroy(gameObject);
+                return true;
             }
-
-            Destroy(gameObject);
-            return true;
         }
 
         if (_physicsPhase)
@@ -309,6 +322,7 @@ public class ProjectileBullet : MonoBehaviour
         Vector3 normalVelocity = Vector3.Project(_velocity, surfaceNormal);
         Vector3 tangentVelocity = _velocity - normalVelocity;
         _velocity = (tangentVelocity * TangentRetentionCharacterBounce) - (normalVelocity * Bounciness);
+        ApplySurfaceImpactSpeedLoss();
 
         if (_physicsPhase && _rb != null)
         {

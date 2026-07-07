@@ -3,6 +3,7 @@ using UnityEngine;
 public enum CardHotbarTool
 {
     AssaultRifle,
+    SniperRifle,
     Pistol,
     Blueprint,
     Hammer
@@ -17,11 +18,30 @@ public class CardKitDefinition
 
     public static CardKitDefinition DefaultInfantryPlaceholder()
     {
+        return Tier1Infantry();
+    }
+
+    public static CardKitDefinition Tier1Infantry()
+    {
         return new CardKitDefinition
         {
             hotbarTools = new[]
             {
                 CardHotbarTool.AssaultRifle,
+                CardHotbarTool.Pistol,
+                CardHotbarTool.Blueprint,
+                CardHotbarTool.Hammer
+            }
+        };
+    }
+
+    public static CardKitDefinition Tier1Sniper()
+    {
+        return new CardKitDefinition
+        {
+            hotbarTools = new[]
+            {
+                CardHotbarTool.SniperRifle,
                 CardHotbarTool.Pistol,
                 CardHotbarTool.Blueprint,
                 CardHotbarTool.Hammer
@@ -47,6 +67,8 @@ public class CardKitDefinition
         {
             case CardHotbarTool.AssaultRifle:
                 return "AR";
+            case CardHotbarTool.SniperRifle:
+                return "Sniper";
             case CardHotbarTool.Pistol:
                 return "Pistol";
             case CardHotbarTool.Hammer:
@@ -77,6 +99,8 @@ public class CardKitDefinition
 
     public static bool IsFirearm(CardHotbarTool tool)
     {
-        return tool == CardHotbarTool.AssaultRifle || tool == CardHotbarTool.Pistol;
+        return tool == CardHotbarTool.AssaultRifle ||
+            tool == CardHotbarTool.SniperRifle ||
+            tool == CardHotbarTool.Pistol;
     }
 }

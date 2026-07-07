@@ -14,6 +14,7 @@ public class PlayerProfile
     public string[] ownedCardIds;
     public string[] loadoutCardIds;
     public string lastActiveUtc;
+    public int profileDataVersion;
 
     public bool HasLoadoutSlot1 =>
         loadoutCardIds != null &&
@@ -26,7 +27,7 @@ public class PlayerProfile
         !string.IsNullOrEmpty(loadoutCardIds[0]) &&
         !string.IsNullOrEmpty(loadoutCardIds[1]);
 
-    public static PlayerProfile CreateNew(string username, string passcodeHash, string passcodeSalt, string[] allCardIds)
+    public static PlayerProfile CreateNew(string username, string passcodeHash, string passcodeSalt, string[] ownedCardIds)
     {
         return new PlayerProfile
         {
@@ -34,9 +35,10 @@ public class PlayerProfile
             username = username,
             passcodeHash = passcodeHash,
             passcodeSalt = passcodeSalt,
-            ownedCardIds = allCardIds,
+            ownedCardIds = ownedCardIds,
             loadoutCardIds = new[] { string.Empty, string.Empty },
-            lastActiveUtc = DateTime.UtcNow.ToString("o")
+            lastActiveUtc = DateTime.UtcNow.ToString("o"),
+            profileDataVersion = ProfileSession.CurrentProfileDataVersion
         };
     }
 

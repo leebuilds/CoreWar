@@ -96,22 +96,28 @@ public class ShootingRangeDummy : MonoBehaviour
         SetVisualActive(true);
     }
 
-    public static float ComputeDamage(float impactSpeed, float muzzleSpeed, ShootingRangeHitZoneType zoneType)
+    public static float ComputeDamage(
+        float impactSpeed,
+        float muzzleSpeed,
+        ProjectileWeaponType weaponType,
+        ShootingRangeHitZoneType zoneType)
     {
         return ProjectileDamage.ComputeDamage(
             impactSpeed,
             muzzleSpeed,
+            weaponType,
             zoneType == ShootingRangeHitZoneType.Head);
     }
 
-    public bool ApplyHit(ShootingRangeHitZoneType zoneType, float impactSpeed, float muzzleSpeed)
+    public bool ApplyHit(ShootingRangeHitZoneType zoneType, float impactSpeed, float muzzleSpeed,
+        ProjectileWeaponType weaponType)
     {
         if (_isDown)
         {
             return false;
         }
 
-        float damage = ComputeDamage(impactSpeed, muzzleSpeed, zoneType);
+        float damage = ComputeDamage(impactSpeed, muzzleSpeed, weaponType, zoneType);
         if (damage <= 0f)
         {
             return false;

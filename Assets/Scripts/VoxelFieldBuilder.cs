@@ -180,6 +180,7 @@ public class VoxelFieldBuilder : MonoBehaviour
         effect.paperBlend = 0.03f;
         effect.inkColor = new Color(0.34f, 0.34f, 0.36f, 1f);
         effect.paperTint = new Color(0.985f, 0.985f, 0.985f, 1f);
+        camObject.AddComponent<SniperScopePostEffect>();
 
         var controller = player.AddComponent<ThirdPersonController>();
         controller.viewCamera = cam;

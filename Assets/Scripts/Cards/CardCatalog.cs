@@ -30,6 +30,14 @@ public static class CardCatalog
         return ids;
     }
 
+    /// <summary>
+    /// Cards unlocked for a brand-new account.
+    /// </summary>
+    public static string[] DefaultOwnedCardIds()
+    {
+        return new[] { "infantry_1", "sniper_1" };
+    }
+
     public static CardDefinition Get(string cardId)
     {
         EnsureInitialized();
@@ -73,6 +81,21 @@ public static class CardCatalog
         }
     }
 
+    static CardKitDefinition ResolveKit(CardEntry entry)
+    {
+        if (entry.SpecialtyKey == "infantry" && entry.Tier == 1)
+        {
+            return CardKitDefinition.Tier1Infantry();
+        }
+
+        if (entry.SpecialtyKey == "sniper" && entry.Tier == 1)
+        {
+            return CardKitDefinition.Tier1Sniper();
+        }
+
+        return CardKitDefinition.DefaultInfantryPlaceholder();
+    }
+
     static CardDefinition CreateCard(CardEntry entry)
     {
         return new CardDefinition
@@ -83,7 +106,7 @@ public static class CardCatalog
             tier = entry.Tier,
             displayName = entry.DisplayName,
             rarity = entry.Rarity,
-            kit = CardKitDefinition.DefaultInfantryPlaceholder(),
+            kit = ResolveKit(entry),
             preview = new CardPreviewStats
             {
                 description = entry.Description,
@@ -157,7 +180,7 @@ public static class CardCatalog
         Entry("sniper", "Sniper", 1, "Sniper", CardRarity.Common,
             "A traditional sniper built around accuracy and positioning. Excels at long-range eliminations but has few special mechanics.",
             7.6f, 90, 4,
-            "Standard Sniper Rifle", "Revolver",
+            "Standard Sniper Rifle", "Service Pistol",
             "Long-range precision with minimal special mechanics.",
             "Standard sabotage tool.",
             "Standard build costs.",

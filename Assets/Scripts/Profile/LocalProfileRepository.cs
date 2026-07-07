@@ -56,7 +56,7 @@ public class LocalProfileRepository : IProfileRepository
 
         var salt = PasscodeUtility.GenerateSalt();
         var hash = PasscodeUtility.HashPasscode(passcode, salt);
-        profile = PlayerProfile.CreateNew(normalized, hash, salt, CardCatalog.AllCardIds());
+        profile = PlayerProfile.CreateNew(normalized, hash, salt, CardCatalog.DefaultOwnedCardIds());
         SaveProfile(profile);
 
         var index = LoadIndex();
@@ -98,6 +98,8 @@ public class LocalProfileRepository : IProfileRepository
             return false;
         }
 
+        ProfileSession.ApplyProfileMigrations(profile);
+        SaveProfile(profile);
         return true;
     }
 

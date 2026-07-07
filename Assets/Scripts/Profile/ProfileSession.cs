@@ -9,6 +9,7 @@ using UnityEngine;
 public static class ProfileSession
 {
     public const double SessionTimeoutHours = 1.0;
+    public const int CurrentProfileDataVersion = 1;
 
     static IProfileRepository _repository;
     static PlayerProfile _activeProfile;
@@ -59,6 +60,7 @@ public static class ProfileSession
     public static void SignIn(PlayerProfile profile)
     {
         EnsureInitialized();
+        ApplyProfileMigrations(profile);
         _activeProfile = profile;
         profile.TouchLastActive();
         _repository.SaveProfile(profile);
@@ -188,7 +190,56 @@ public static class ProfileSession
             return;
         }
 
+        ApplyProfileMigrations(profile);
+        _repository.SaveProfile(profile);
         _activeProfile = profile;
+    }
+
+    public static void ApplyProfileMigrations(PlayerProfile profile)
+    {
+        if (profile == null || profile.profileDataVersion >= CurrentProfileDataVersion)
+        {
+            return;
+        }
+
+        profile.ownedCardIds = CardCatalog.DefaultOwnedCardIds();
+        SanitizeLoadout(profile);
+        profile.profileDataVersion = CurrentProfileDataVersion;
+    }
+
+    static void SanitizeLoadout(PlayerProfile profile)
+    {
+        if (profile.loadoutCardIds == null || profile.loadoutCardIds.Length < 2)
+        {
+            profile.loadoutCardIds = new[] { string.Empty, string.Empty };
+            return;
+        }
+
+        for (int i = 0; i < profile.loadoutCardIds.Length; i++)
+        {
+            if (!ProfileOwnsCard(profile, profile.loadoutCardIds[i]))
+            {
+                profile.loadoutCardIds[i] = string.Empty;
+            }
+        }
+    }
+
+    static bool ProfileOwnsCard(PlayerProfile profile, string cardId)
+    {
+        if (profile?.ownedCardIds == null || string.IsNullOrEmpty(cardId))
+        {
+            return false;
+        }
+
+        foreach (var owned in profile.ownedCardIds)
+        {
+            if (owned == cardId)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     static bool IsSessionExpired(PlayerProfile profile)

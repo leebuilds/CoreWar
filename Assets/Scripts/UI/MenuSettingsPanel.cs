@@ -19,7 +19,8 @@ public static class MenuSettingsPanel
         CreateUiSoundsRow(body, ref y);
 
         CreateSectionLabel(body, "CONTROLS", ref y);
-        CreateSensitivityRow(body, ref y);
+        CreateLookSensitivityRow(body, ref y);
+        CreateAdsSensitivityRow(body, ref y);
 
         if (showAccountSection && ProfileSession.IsSignedIn)
         {
@@ -81,18 +82,34 @@ public static class MenuSettingsPanel
         y -= MenuUiFactory.SettingsRowSpacing;
     }
 
-    static void CreateSensitivityRow(Transform body, ref float y)
+    static void CreateLookSensitivityRow(Transform body, ref float y)
     {
-        var row = CreateRow(body, "Sensitivity Row", y, MenuUiFactory.SettingsLabeledRowHeight);
-        CreateRowLeftLabel(row.transform, "Sensitivity Label", "Mouse sensitivity");
+        var row = CreateRow(body, "Look Sensitivity Row", y, MenuUiFactory.SettingsLabeledRowHeight);
+        CreateRowLeftLabel(row.transform, "Look Sensitivity Label", "Look sensitivity");
 
-        var valueLabel = CreateRowRightLabel(row.transform, "Sensitivity Value",
-            $"{MenuSettings.MouseSensitivity:0.0}x");
+        var valueLabel = CreateRowRightLabel(row.transform, "Look Sensitivity Value",
+            $"{MenuSettings.LookSensitivity:0.0}x");
 
-        CreateRowSlider(row.transform, "Sensitivity Slider", 0.25f, 2.5f, MenuSettings.MouseSensitivity, value =>
+        CreateRowSlider(row.transform, "Look Sensitivity Slider", 0.25f, 2.5f, MenuSettings.LookSensitivity, value =>
         {
-            MenuSettings.SetMouseSensitivity(value);
-            valueLabel.text = $"{MenuSettings.MouseSensitivity:0.0}x";
+            MenuSettings.SetLookSensitivity(value);
+            valueLabel.text = $"{MenuSettings.LookSensitivity:0.0}x";
+        });
+        y -= MenuUiFactory.SettingsSliderRowSpacing;
+    }
+
+    static void CreateAdsSensitivityRow(Transform body, ref float y)
+    {
+        var row = CreateRow(body, "Ads Sensitivity Row", y, MenuUiFactory.SettingsLabeledRowHeight);
+        CreateRowLeftLabel(row.transform, "Ads Sensitivity Label", "ADS sensitivity");
+
+        var valueLabel = CreateRowRightLabel(row.transform, "Ads Sensitivity Value",
+            $"{MenuSettings.AdsSensitivity:0.0}x");
+
+        CreateRowSlider(row.transform, "Ads Sensitivity Slider", 0.25f, 2.5f, MenuSettings.AdsSensitivity, value =>
+        {
+            MenuSettings.SetAdsSensitivity(value);
+            valueLabel.text = $"{MenuSettings.AdsSensitivity:0.0}x";
         });
         y -= MenuUiFactory.SettingsSliderRowSpacing;
     }

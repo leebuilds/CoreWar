@@ -65,8 +65,9 @@ version should work — if Unity Hub asks, pick your installed 6000.x editor).
    collection and start a match. If you signed in within the last hour, the game
    opens straight to the hub — use **Logout** to switch accounts.
 
-Your **light/dark theme**, volume, UI sounds, and mouse sensitivity are saved
-locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
+Your **light/dark theme**, volume, UI sounds, **look sensitivity**, and **ADS
+sensitivity** are saved locally in `persistentDataPath/CoreWar/settings.json`
+and restored every launch.
 
 ### Main menu flow
 
@@ -77,7 +78,7 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 | Game Modes | Scrollable list of modes (locked modes show a padlock); selecting one starts local matchmaking |
 | Decks | Browse all 30 class cards (vertical scroll only); each row is ~1/3 class specialty blurb + ~2/3 three tier cards; set a two-slot loadout; preview stats |
 | Match Prep | Arena loads behind card pick; press **READY** to look around and cycle hotbar; top banner counts down; movement unlocks when prep ends |
-| Settings | Light/dark theme, UI volume, UI sounds toggle, mouse sensitivity, account info |
+| Settings | Light/dark theme, UI volume, UI sounds toggle, look sensitivity, ADS sensitivity, account info |
 
 **Menu controls:**
 
@@ -98,7 +99,11 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 - Red **distance sign on each dummy’s chest**, facing the firing line
 - **No match prep** — instant spawn with crosshair, movement, gun, and full hotbar; starts with **loadout slot 1** card
 - Matchmaking UI still runs but completes immediately (zero delay)
-- Damage scales with bullet impact speed (point-blank body hit = 40 at muzzle velocity); headshots are **2×** damage; hits below **25 m/s** bounce off humans without penetrating; player hits flash the screen red (blindness scales log with damage — 50% HP → 0.125 s, 99% HP → 2 s, headshots **2×** duration; re-hits while blind extend without flashing); **ding** on dummy hit (brighter on headshot); dummies respawn ~3 s after being dropped
+- Damage scales with bullet impact speed per weapon (see **Ballistics** below);
+  headshots use higher per-weapon max values; player hits flash the screen red
+  (blindness scales log with damage — 50% HP → 0.125 s, 99% HP → 2 s, headshots
+  **2×** duration; re-hits while blind extend without flashing); **ding** on dummy
+  hit (brighter on headshot); dummies respawn ~3 s after being dropped
 - Bullets persist until **Reset Map** or until **35** live bullets exist (oldest removed)
 - Terrain uses merged panels (floor, walls, backstop, fence) for performance instead of per-voxel cubes
 - Pause menu (**Esc**): **Choose Character**, **Dummy Stats**, **Test Damage** (debug blindness), **Reset Map**, Settings, Exit Match
@@ -113,7 +118,8 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 - WASD movement unlocks when the prep countdown finishes
 - Mouse to look (first-person camera)
 - Space to jump
-- Mouse wheel cycles the hotbar; `1`, `2`, `F`, and `H` select slots directly
+- Mouse wheel cycles equippable hotbar slots; `1`, `2`, `F`, and `H` select slots directly
+- **E** — class ability (not equippable via scroll)
 - **Esc** — pause menu (game does not freeze; opens Respawn / **Test Damage** / Settings / Exit Match in standard modes); **Exit Match** asks for confirmation; respawn is locked during prep
 - **Exit Match** — fully ends the match and returns to the main menu
 - Top-right **match clock** counts up from match start (`M:SS`); hidden while pause or respawn overlays are open
@@ -130,24 +136,46 @@ theme. Matchmaking and match prep overlays also refresh when the theme changes.
 
 ### Hotbar
 
-Four slots in two groups (weapons, then tools) with key labels in each slot corner:
+Five on-screen slots in three groups (ability, weapons, tools) in the
+**lower-left** corner (~half previous size), with key labels in each slot corner:
 
-| Key | Tool | Action |
+| Key | Slot | Action |
 |-----|------|--------|
-| `1` | AR | Full-auto assault rifle (~400 RPM, high muzzle velocity) |
-| `2` | Pistol | Semi-auto sidearm |
+| `E` | Ability | Class ability (cooldown overlay; not equippable via scroll) |
+| `1` | Primary | AR (Infantry) or Sniper rifle (Sniper) |
+| `2` | Secondary | Pistol |
 | `F` | Build | Enables build mode while selected |
 | `H` | Hammer | Left click swings and destroys one owned build piece |
 
-**AR / Pistol:** fire visible bullets along the crosshair with muzzle flash and recoil kick. The AR holds left click for automatic fire; the pistol is semi-auto per click. Bullets use real-world gravity and spawn from a clamped point near the player when up against walls.
+**Tier 1 kits**
+
+| Card | Primary (`1`) | Secondary (`2`) | Tools |
+|------|---------------|-----------------|-------|
+| Infantry | AR (full auto ~400 RPM) | Pistol (semi-auto) | Build · Hammer |
+| Sniper | Sniper rifle (semi-auto, ADS) | Pistol | Build · Hammer |
+
+**E abilities (tier 1)**
+
+| Card | Ability | Cooldown |
+|------|---------|----------|
+| Sniper | Cycle scope while ADS (Iron → 4× → 10×) | None |
+| Infantry | Speed boost (10 s) | 30 s |
+
+**AR / Pistol / Sniper:** fire visible bullets along the crosshair (or sniper
+spread reticle) with muzzle flash and recoil kick. The AR holds left click for
+automatic fire; pistol and sniper are semi-auto per click. Sniper **right click**
+enters ADS; iron sights use a crosshair, magnified scopes use a red dot with a
+smooth vignette overlay. Bullets use real-world gravity, per-weapon air drag, and
+spawn from a clamped point near the player when up against walls.
 
 **Hammer:** destroys the first player-built object hit within **1.5 voxels** of
 any part of the player's body (measured from the capsule surface).
 
 **Build:** full build-mode toolset (see below).
 
-All 30 class cards currently share the same placeholder kit (AR, pistol, build,
-hammer). Per-class weapons and abilities from the card catalog are planned.
+New accounts unlock only **Infantry (tier 1)** and **Sniper (tier 1)**; other
+cards show LOCK in Decks until earned. Higher-tier and other specialty kits are
+planned.
 
 ### Build mode (blueprint slot)
 
@@ -172,7 +200,28 @@ shading on the torn team jersey and the number on the back.
 Gun bullets behave like small balls thrown at high speed. They pass through
 anything the player builds (losing speed based on how much material they cross),
 then bounce, roll, and settle with real physics when they hit map floors or
-walls. Hits below **25 m/s** bounce off players and dummies without penetrating.
+walls. Surface impacts (floor, map, builds, bounces) retain about **50%** of
+speed.
+
+### Ballistics and damage
+
+| Weapon | Muzzle speed | Max body | Max headshot |
+|--------|--------------|----------|--------------|
+| Pistol | 325 m/s | 15 | 30 |
+| AR | 850 m/s | 17 | 22 |
+| Sniper | 950 m/s | 60 | 130 |
+
+**Damage formula:** `maxDamage × Lerp(0.5, 1.0, impactSpeed / muzzleSpeed)` —
+50% of max at 0 m/s, 100% at muzzle velocity.
+
+**Air drag** (exponential per 100 m): pistol ~20% loss, AR ~10%, sniper ~2%.
+
+**Players:** hits below **30 m/s** bounce off without damage; at **≥ 30 m/s**
+velocity-scaled damage applies and the bullet is destroyed.
+
+**Shooting range dummies:** velocity-scaled damage at all impact speeds (no
+30 m/s bounce).
+
 Landed bullets stay in the world (max 35 live bullets, oldest removed) and hide
 their visual beyond ~50 m to save rendering cost. Arena and range floors use a
 grippy physics material so bullets stop rolling sooner; player movement stays
@@ -218,9 +267,10 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid of white voxels (32×32 standard; 48×680 shooting range), grippy floor + slippery wall physics materials, lighting
 - `Assets/Scripts/ShootingRange/` — merged terrain + firing-line fence, spread dummies, hit zones, session state (bullets, reset)
 - `Assets/Scripts/VoxelMaterialUtility.cs` — solid-color materials for range props and hit flashes
-- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, four-slot hotbar, AR/pistol/build/hammer tools, pause
-- `Assets/Scripts/ProjectileBullet.cs` — hybrid raycast flight + Rigidbody bounce/roll ballistics
-- `Assets/Scripts/ProjectileDamage.cs` — shared velocity damage and blindness duration math
+- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, AR/pistol/sniper/build/hammer, sniper ADS/scopes, E abilities, pause
+- `Assets/Scripts/ProjectileBullet.cs` — hybrid raycast flight + Rigidbody bounce/roll ballistics, air drag, surface speed loss
+- `Assets/Scripts/ProjectileDamage.cs` — per-weapon velocity damage, air drag constants, player bounce threshold
+- `Assets/Scripts/SniperScopePostEffect.cs` + `Assets/Scripts/SniperScopePost.shader` — sniper scope vignette/blur overlay
 - `Assets/Scripts/PlayerHealth.cs` — local player HP and blindness triggers (no death flow yet)
 - `Assets/Scripts/CapsuleRobotVisual.cs` + `Assets/Scripts/JerseyInkUtility.cs` — capsule robot with jersey
 - `Assets/Scripts/VoxelLightingWorld.cs` — voxel occupancy, build rules, hammer removal
@@ -233,6 +283,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/Third_Person_Shooter_Game_Design_v2.md)
+- [Sniper unlocks, ballistics, and abilities session recap](docs/chats/2026-07-07-sniper-unlocks-ballistics-and-abilities-session.md)
 - [Ballistics, hotbar, and player damage session recap](docs/chats/2026-07-07-ballistics-hotbar-and-player-damage-session.md)
 - [Shooting range solo mode and layout polish session recap](docs/chats/2026-07-05-shooting-range-mode-session.md)
 - [Decks collection layout and card catalog session recap](docs/chats/2026-07-05-decks-layout-and-card-catalog-session.md)

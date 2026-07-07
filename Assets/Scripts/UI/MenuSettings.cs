@@ -12,6 +12,7 @@ public class MenuSettingsData
     public float masterVolume = 0.55f;
     public bool uiSoundsEnabled = true;
     public float mouseSensitivity = 1f;
+    public float adsSensitivity = 1f;
 }
 
 public static class MenuSettings
@@ -24,7 +25,11 @@ public static class MenuSettings
     public static bool IsDarkMode => _data.darkMode;
     public static float MasterVolume => Mathf.Clamp01(_data.masterVolume);
     public static bool UiSoundsEnabled => _data.uiSoundsEnabled;
-    public static float MouseSensitivity => Mathf.Clamp(_data.mouseSensitivity, 0.25f, 2.5f);
+    public static float LookSensitivity => Mathf.Clamp(_data.mouseSensitivity, 0.25f, 2.5f);
+    public static float AdsSensitivity => Mathf.Clamp(_data.adsSensitivity, 0.25f, 2.5f);
+
+    /// <summary>Backward-compatible alias for look sensitivity.</summary>
+    public static float MouseSensitivity => LookSensitivity;
 
     public static void EnsureLoaded()
     {
@@ -44,6 +49,10 @@ public static class MenuSettings
         try
         {
             _data = JsonUtility.FromJson<MenuSettingsData>(File.ReadAllText(path)) ?? new MenuSettingsData();
+            if (_data.adsSensitivity <= 0f)
+            {
+                _data.adsSensitivity = 1f;
+            }
         }
         catch (Exception exception)
         {
@@ -85,11 +94,23 @@ public static class MenuSettings
         SaveAndNotify(notify);
     }
 
-    public static void SetMouseSensitivity(float sensitivity, bool notify = false)
+    public static void SetLookSensitivity(float sensitivity, bool notify = false)
     {
         EnsureLoaded();
         _data.mouseSensitivity = Mathf.Clamp(sensitivity, 0.25f, 2.5f);
         SaveAndNotify(notify);
+    }
+
+    public static void SetAdsSensitivity(float sensitivity, bool notify = false)
+    {
+        EnsureLoaded();
+        _data.adsSensitivity = Mathf.Clamp(sensitivity, 0.25f, 2.5f);
+        SaveAndNotify(notify);
+    }
+
+    public static void SetMouseSensitivity(float sensitivity, bool notify = false)
+    {
+        SetLookSensitivity(sensitivity, notify);
     }
 
     static void SaveAndNotify(bool notify)
