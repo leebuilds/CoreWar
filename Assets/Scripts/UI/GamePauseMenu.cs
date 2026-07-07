@@ -11,6 +11,7 @@ public class GamePauseMenu : MonoBehaviour
     RespawnClassPicker _respawnPicker;
     ShootingRangeCharacterPicker _characterPicker;
     ShootingRangeDummyStatsPanel _dummyStatsPanel;
+    PlayerDamageDebugPanel _damageDebugPanel;
     ThirdPersonController _player;
     GameObject _overlayRoot;
     GameObject _settingsOverlay;
@@ -26,6 +27,12 @@ public class GamePauseMenu : MonoBehaviour
         if (_dummyStatsPanel != null && _dummyStatsPanel.IsOpen)
         {
             _dummyStatsPanel.Hide();
+            return true;
+        }
+
+        if (_damageDebugPanel != null && _damageDebugPanel.IsOpen)
+        {
+            _damageDebugPanel.Hide();
             return true;
         }
 
@@ -92,6 +99,8 @@ public class GamePauseMenu : MonoBehaviour
         {
             _dummyStatsPanel = ShootingRangeDummyStatsPanel.Create(transform, null);
         }
+
+        _damageDebugPanel = PlayerDamageDebugPanel.Create(transform, _player, () => Hide());
     }
 
     public void Toggle()
@@ -134,37 +143,41 @@ public class GamePauseMenu : MonoBehaviour
         }
 
         var frame = MenuWindowFrame.CreateScreen(_overlayRoot.transform, "PAUSE", showBack: true,
-            PauseFooterText(), new Vector2(480f, 420f), showHeader: false, Hide);
+            PauseFooterText(), new Vector2(480f, 500f), showHeader: false, Hide);
 
         bool respawnLocked = GameSession.IsInPrepPhase;
         var respawnButton = MenuUiFactory.CreateButton(frame.Body, "Respawn", "RESPAWN",
-            new Vector2(0f, 70f), MenuUiFactory.StandardButtonSize, OpenRespawnPicker, enabled: !respawnLocked);
+            new Vector2(0f, 110f), MenuUiFactory.StandardButtonSize, OpenRespawnPicker, enabled: !respawnLocked);
         if (respawnLocked)
         {
             MenuUiFactory.AddButtonLockIcon(respawnButton.transform);
         }
 
+        MenuUiFactory.CreateButton(frame.Body, "Test Damage", "TEST DAMAGE",
+            new Vector2(0f, 30f), MenuUiFactory.StandardButtonSize, OpenDamageDebug);
         MenuUiFactory.CreateButton(frame.Body, "Settings", "SETTINGS",
-            new Vector2(0f, -10f), MenuUiFactory.StandardButtonSize, ShowSettings);
+            new Vector2(0f, -50f), MenuUiFactory.StandardButtonSize, ShowSettings);
         MenuUiFactory.CreateButton(frame.Body, "Exit Match", "EXIT MATCH",
-            new Vector2(0f, -90f), MenuUiFactory.StandardButtonSize, RequestExitMatch);
+            new Vector2(0f, -130f), MenuUiFactory.StandardButtonSize, RequestExitMatch);
     }
 
     void BuildShootingRangePauseContents()
     {
         var frame = MenuWindowFrame.CreateScreen(_overlayRoot.transform, "PAUSE", showBack: true,
-            PauseFooterText(), new Vector2(480f, 560f), showHeader: false, Hide);
+            PauseFooterText(), new Vector2(480f, 640f), showHeader: false, Hide);
 
         MenuUiFactory.CreateButton(frame.Body, "Choose Character", "CHOOSE CHARACTER",
-            new Vector2(0f, 130f), MenuUiFactory.StandardButtonSize, OpenCharacterPicker);
+            new Vector2(0f, 170f), MenuUiFactory.StandardButtonSize, OpenCharacterPicker);
         MenuUiFactory.CreateButton(frame.Body, "Dummy Stats", "DUMMY STATS",
-            new Vector2(0f, 50f), MenuUiFactory.StandardButtonSize, OpenDummyStats);
+            new Vector2(0f, 90f), MenuUiFactory.StandardButtonSize, OpenDummyStats);
+        MenuUiFactory.CreateButton(frame.Body, "Test Damage", "TEST DAMAGE",
+            new Vector2(0f, 10f), MenuUiFactory.StandardButtonSize, OpenDamageDebug);
         MenuUiFactory.CreateButton(frame.Body, "Reset Map", "RESET MAP",
-            new Vector2(0f, -30f), MenuUiFactory.StandardButtonSize, ResetMap);
+            new Vector2(0f, -70f), MenuUiFactory.StandardButtonSize, ResetMap);
         MenuUiFactory.CreateButton(frame.Body, "Settings", "SETTINGS",
-            new Vector2(0f, -110f), MenuUiFactory.StandardButtonSize, ShowSettings);
+            new Vector2(0f, -150f), MenuUiFactory.StandardButtonSize, ShowSettings);
         MenuUiFactory.CreateButton(frame.Body, "Exit Match", "EXIT MATCH",
-            new Vector2(0f, -190f), MenuUiFactory.StandardButtonSize, RequestExitMatch);
+            new Vector2(0f, -230f), MenuUiFactory.StandardButtonSize, RequestExitMatch);
     }
 
     static string PauseFooterText()
@@ -237,6 +250,11 @@ public class GamePauseMenu : MonoBehaviour
     void OpenDummyStats()
     {
         _dummyStatsPanel?.Show();
+    }
+
+    void OpenDamageDebug()
+    {
+        _damageDebugPanel?.Show();
     }
 
     void ResetMap()

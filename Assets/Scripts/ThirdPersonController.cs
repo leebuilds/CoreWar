@@ -61,10 +61,9 @@ public class ThirdPersonController : MonoBehaviour
 
     [Header("Tools")]
     public float hammerRangeVoxels = 1.5f;
-    public float bulletSpeed = 95f;
-    public float bulletGravity = 3.5f;
-    public float bulletLifetime = 4f;
-    public float bulletLandedLifetime = 2.5f;
+    public float pistolBulletSpeed = 95f;
+    public float assaultRifleBulletSpeed = 155f;
+    public float assaultRifleRpm = 400f;
     public float gunRecoilVerticalRandomness = 3.2f;
     public float gunRecoilHorizontalRandomness = 0.18f;
     public float gunRecoilKickDuration = 0.11f;
@@ -103,10 +102,13 @@ public class ThirdPersonController : MonoBehaviour
     bool _scrollTargetLocked;
     Vector3Int _scrollLockedCell;
     bool _mouseMovedThisFrame;
-    GameObject _gunRoot;
+    GameObject _pistolRoot;
+    GameObject _assaultRifleRoot;
     GameObject _hammerRoot;
     GameObject _blueprintRoot;
-    GameObject _muzzleFlashRoot;
+    GameObject _pistolMuzzleFlashRoot;
+    GameObject _assaultRifleMuzzleFlashRoot;
+    float _weaponFireCooldown;
     float _gunKickTimer;
     float _muzzleFlashTimer;
     float _hammerSwingTimer;
@@ -139,9 +141,11 @@ public class ThirdPersonController : MonoBehaviour
     bool BuildModeActive => SelectedTool == CardHotbarTool.Blueprint;
 
     CardHotbarTool SelectedTool =>
-        _activeKit == null ? CardHotbarTool.Gun : _activeKit.GetToolAt(_selectedHotbarIndex);
+        _activeKit == null ? CardHotbarTool.AssaultRifle : _activeKit.GetToolAt(_selectedHotbarIndex);
 
-    int HotbarSlotCount => _activeKit == null ? 3 : _activeKit.SlotCount;
+    int HotbarSlotCount => _activeKit == null ? 4 : _activeKit.SlotCount;
+
+    float AssaultRifleFireInterval => 60f / Mathf.Max(1f, assaultRifleRpm);
 
     void Awake()
     {
@@ -240,12 +244,6 @@ public class ThirdPersonController : MonoBehaviour
         _wasInPrepPhase = GameSession.IsInPrepPhase;
         _wasPrepReady = GameSession.IsPrepReady;
 
-        if (GameSession.IsShootingRange)
-        {
-            bulletLifetime = 12f;
-            bulletLandedLifetime = 999f;
-        }
-
         _respawnPicker = RespawnClassPicker.Create(transform, cardId =>
         {
             GameSession.SetActiveCard(cardId);
@@ -320,6 +318,8 @@ public class ThirdPersonController : MonoBehaviour
         transform.position = respawnPosition;
         _grounded = false;
         Physics.SyncTransforms();
+
+        GetComponent<PlayerHealth>()?.RefillHealth();
     }
 
     bool TryFindValidRespawnPosition(out Vector3 respawnPosition)
@@ -788,9 +788,13 @@ public class ThirdPersonController : MonoBehaviour
         {
             SelectHotbarIndex(1);
         }
-        else if (Input.GetKeyDown(KeyCode.Alpha3))
+        else if (Input.GetKeyDown(KeyCode.F))
         {
             SelectHotbarIndex(2);
+        }
+        else if (Input.GetKeyDown(KeyCode.H))
+        {
+            SelectHotbarIndex(3);
         }
     }
 
@@ -810,6 +814,7 @@ public class ThirdPersonController : MonoBehaviour
 
         bool wasBuilding = BuildModeActive;
         _selectedHotbarIndex = index;
+        _weaponFireCooldown = 0f;
         if (wasBuilding || BuildModeActive)
         {
             ClearBuildInteractionState();
@@ -822,8 +827,11 @@ public class ThirdPersonController : MonoBehaviour
     {
         switch (SelectedTool)
         {
-            case CardHotbarTool.Gun:
-                HandleGunInput();
+            case CardHotbarTool.AssaultRifle:
+                HandleAssaultRifleInput();
+                break;
+            case CardHotbarTool.Pistol:
+                HandlePistolInput();
                 break;
             case CardHotbarTool.Hammer:
                 HandleHammerInput();
@@ -834,15 +842,36 @@ public class ThirdPersonController : MonoBehaviour
         }
     }
 
-    void HandleGunInput()
+    void HandleAssaultRifleInput()
+    {
+        if (_weaponFireCooldown > 0f)
+        {
+            _weaponFireCooldown = Mathf.Max(0f, _weaponFireCooldown - Time.deltaTime);
+        }
+
+        if (!Input.GetMouseButton(0))
+        {
+            return;
+        }
+
+        if (_weaponFireCooldown > 0f)
+        {
+            return;
+        }
+
+        FireWeapon(assaultRifleBulletSpeed, 0.75f);
+        _weaponFireCooldown = AssaultRifleFireInterval;
+    }
+
+    void HandlePistolInput()
     {
         if (Input.GetMouseButtonDown(0))
         {
-            FireGun();
+            FireWeapon(pistolBulletSpeed, 1f);
         }
     }
 
-    void FireGun()
+    void FireWeapon(float muzzleSpeed, float recoilScale)
     {
         if (viewCamera == null)
         {
@@ -854,17 +883,13 @@ public class ThirdPersonController : MonoBehaviour
         var bullet = new GameObject("Projectile Bullet");
         bullet.transform.position = spawnPosition;
         bullet.transform.rotation = Quaternion.LookRotation(shotRay.direction, Vector3.up);
-        bullet.AddComponent<ProjectileBullet>().Initialize(
-            shotRay.direction * bulletSpeed,
-            bulletGravity,
-            bulletLifetime,
-            bulletLandedLifetime);
+        bullet.AddComponent<ProjectileBullet>().Initialize(shotRay.direction * muzzleSpeed);
 
         _gunKickTimer = 0.08f;
         _muzzleFlashTimer = 0.045f;
         _gunRecoilPeak = new Vector2(
-            UnityEngine.Random.Range(-gunRecoilHorizontalRandomness, gunRecoilHorizontalRandomness),
-            UnityEngine.Random.Range(gunRecoilVerticalRandomness * 0.55f, gunRecoilVerticalRandomness));
+            UnityEngine.Random.Range(-gunRecoilHorizontalRandomness, gunRecoilHorizontalRandomness) * recoilScale,
+            UnityEngine.Random.Range(gunRecoilVerticalRandomness * 0.55f, gunRecoilVerticalRandomness) * recoilScale);
         float verticalRetention = UnityEngine.Random.Range(0.35f, 0.58f);
         _gunRecoilResidual = new Vector2(_gunRecoilPeak.x, _gunRecoilPeak.y * verticalRetention);
         _gunRecoilKickTimer = gunRecoilKickDuration;
@@ -1532,7 +1557,7 @@ public class ThirdPersonController : MonoBehaviour
 
     void CreateHeldToolVisuals()
     {
-        if (viewCamera == null || _gunRoot != null)
+        if (viewCamera == null || _pistolRoot != null)
         {
             return;
         }
@@ -1543,15 +1568,27 @@ public class ThirdPersonController : MonoBehaviour
         Material blueprintMaterial = CreateHeldToolMaterial("Held Blueprint Material", new Color(0.08f, 0.22f, 0.68f, 1f));
         Material flashMaterial = CreateHeldToolMaterial("Muzzle Flash Material", new Color(0.82f, 0.58f, 0.12f, 1f));
 
-        _gunRoot = new GameObject("Held Gun");
-        _gunRoot.transform.SetParent(viewCamera.transform, false);
-        _gunRoot.transform.localPosition = new Vector3(0.34f, -0.26f, 0.62f);
-        _gunRoot.transform.localRotation = Quaternion.Euler(0f, -5f, 0f);
-        CreateHeldCube(_gunRoot.transform, "Gun Body", new Vector3(0f, 0f, 0f), new Vector3(0.24f, 0.16f, 0.28f), gunMaterial);
-        CreateHeldCube(_gunRoot.transform, "Gun Barrel", new Vector3(0.04f, 0.03f, 0.28f), new Vector3(0.1f, 0.1f, 0.42f), gunMaterial);
-        CreateHeldCube(_gunRoot.transform, "Gun Grip", new Vector3(-0.04f, -0.17f, -0.04f), new Vector3(0.08f, 0.26f, 0.1f), gunMaterial);
-        _muzzleFlashRoot = CreateHeldCube(_gunRoot.transform, "Muzzle Flash", new Vector3(0.04f, 0.03f, 0.52f), new Vector3(0.18f, 0.18f, 0.08f), flashMaterial);
-        _muzzleFlashRoot.SetActive(false);
+        _pistolRoot = new GameObject("Held Pistol");
+        _pistolRoot.transform.SetParent(viewCamera.transform, false);
+        _pistolRoot.transform.localPosition = new Vector3(0.34f, -0.26f, 0.62f);
+        _pistolRoot.transform.localRotation = Quaternion.Euler(0f, -5f, 0f);
+        CreateHeldCube(_pistolRoot.transform, "Pistol Body", new Vector3(0f, 0f, 0f), new Vector3(0.24f, 0.16f, 0.28f), gunMaterial);
+        CreateHeldCube(_pistolRoot.transform, "Pistol Barrel", new Vector3(0.04f, 0.03f, 0.28f), new Vector3(0.1f, 0.1f, 0.42f), gunMaterial);
+        CreateHeldCube(_pistolRoot.transform, "Pistol Grip", new Vector3(-0.04f, -0.17f, -0.04f), new Vector3(0.08f, 0.26f, 0.1f), gunMaterial);
+        _pistolMuzzleFlashRoot = CreateHeldCube(_pistolRoot.transform, "Pistol Muzzle Flash", new Vector3(0.04f, 0.03f, 0.52f), new Vector3(0.18f, 0.18f, 0.08f), flashMaterial);
+        _pistolMuzzleFlashRoot.SetActive(false);
+
+        _assaultRifleRoot = new GameObject("Held Assault Rifle");
+        _assaultRifleRoot.transform.SetParent(viewCamera.transform, false);
+        _assaultRifleRoot.transform.localPosition = new Vector3(0.3f, -0.24f, 0.58f);
+        _assaultRifleRoot.transform.localRotation = Quaternion.Euler(0f, -4f, 0f);
+        CreateHeldCube(_assaultRifleRoot.transform, "AR Body", new Vector3(0f, 0f, 0f), new Vector3(0.18f, 0.14f, 0.52f), gunMaterial);
+        CreateHeldCube(_assaultRifleRoot.transform, "AR Barrel", new Vector3(0.03f, 0.02f, 0.42f), new Vector3(0.08f, 0.08f, 0.62f), gunMaterial);
+        CreateHeldCube(_assaultRifleRoot.transform, "AR Stock", new Vector3(-0.02f, -0.02f, -0.28f), new Vector3(0.1f, 0.12f, 0.22f), gunMaterial);
+        CreateHeldCube(_assaultRifleRoot.transform, "AR Grip", new Vector3(0f, -0.14f, -0.02f), new Vector3(0.07f, 0.18f, 0.08f), gunMaterial);
+        CreateHeldCube(_assaultRifleRoot.transform, "AR Mag", new Vector3(0f, -0.12f, 0.08f), new Vector3(0.06f, 0.16f, 0.1f), gunMaterial);
+        _assaultRifleMuzzleFlashRoot = CreateHeldCube(_assaultRifleRoot.transform, "AR Muzzle Flash", new Vector3(0.03f, 0.02f, 0.74f), new Vector3(0.16f, 0.16f, 0.08f), flashMaterial);
+        _assaultRifleMuzzleFlashRoot.SetActive(false);
 
         _hammerRoot = new GameObject("Held Hammer");
         _hammerRoot.transform.SetParent(viewCamera.transform, false);
@@ -1580,14 +1617,21 @@ public class ThirdPersonController : MonoBehaviour
 
     void RefreshHeldToolVisibility()
     {
-        if (_gunRoot != null)
+        if (_pistolRoot != null)
         {
-            _gunRoot.SetActive(SelectedTool == CardHotbarTool.Gun);
+            _pistolRoot.SetActive(SelectedTool == CardHotbarTool.Pistol);
         }
+
+        if (_assaultRifleRoot != null)
+        {
+            _assaultRifleRoot.SetActive(SelectedTool == CardHotbarTool.AssaultRifle);
+        }
+
         if (_hammerRoot != null)
         {
             _hammerRoot.SetActive(SelectedTool == CardHotbarTool.Hammer);
         }
+
         if (_blueprintRoot != null)
         {
             _blueprintRoot.SetActive(SelectedTool == CardHotbarTool.Blueprint);
@@ -1596,7 +1640,7 @@ public class ThirdPersonController : MonoBehaviour
 
     void UpdateHeldToolVisuals()
     {
-        if (_gunRoot == null || _hammerRoot == null)
+        if (_pistolRoot == null || _assaultRifleRoot == null || _hammerRoot == null)
         {
             return;
         }
@@ -1627,12 +1671,23 @@ public class ThirdPersonController : MonoBehaviour
         float kickProgress = _gunKickTimer > 0f
             ? Mathf.Sin((1f - (_gunKickTimer / 0.08f)) * Mathf.PI)
             : 0f;
-        _gunRoot.transform.localPosition = new Vector3(0.34f, -0.26f, 0.62f - (0.08f * kickProgress));
-        if (_muzzleFlashRoot != null)
+        _pistolRoot.transform.localPosition = new Vector3(0.34f, -0.26f, 0.62f - (0.08f * kickProgress));
+        _assaultRifleRoot.transform.localPosition = new Vector3(0.3f, -0.24f, 0.58f - (0.06f * kickProgress));
+
+        bool showPistolFlash = _muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.Pistol;
+        bool showArFlash = _muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.AssaultRifle;
+        float flashPulse = _muzzleFlashTimer > 0f ? UnityEngine.Random.Range(0.85f, 1.25f) : 1f;
+
+        if (_pistolMuzzleFlashRoot != null)
         {
-            _muzzleFlashRoot.SetActive(_muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.Gun);
-            float flashPulse = _muzzleFlashTimer > 0f ? UnityEngine.Random.Range(0.85f, 1.25f) : 1f;
-            _muzzleFlashRoot.transform.localScale = new Vector3(0.18f, 0.18f, 0.08f) * flashPulse;
+            _pistolMuzzleFlashRoot.SetActive(showPistolFlash);
+            _pistolMuzzleFlashRoot.transform.localScale = new Vector3(0.18f, 0.18f, 0.08f) * flashPulse;
+        }
+
+        if (_assaultRifleMuzzleFlashRoot != null)
+        {
+            _assaultRifleMuzzleFlashRoot.SetActive(showArFlash);
+            _assaultRifleMuzzleFlashRoot.transform.localScale = new Vector3(0.16f, 0.16f, 0.08f) * flashPulse;
         }
 
         float swingProgress = _hammerSwingTimer > 0f
@@ -1755,40 +1810,40 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        if (IsUiOverlayBlocking())
+        if (!IsUiOverlayBlocking())
         {
-            return;
+            if (GameSession.IsInPrepPhase && !GameSession.IsPrepReady)
+            {
+                // Card pick only — no gameplay HUD yet.
+            }
+            else if (GameSession.IsInPrepPhase && GameSession.IsPrepReady)
+            {
+                DrawHotbar();
+            }
+            else
+            {
+                var style = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = 14,
+                    normal = { textColor = new Color(0.15f, 0.15f, 0.15f) }
+                };
+                GUI.Label(new Rect(12, 8, 1100, 24),
+                    BuildModeActive
+                        ? BuildModeHelpText()
+                        : "WASD: move   Mouse: look   Space: jump   Wheel/1-2/F/H: hotbar   Left Click: use tool   Esc: pause",
+                    style);
+                DrawHotbar();
+
+                if (!IsGameplayBlocked())
+                {
+                    DrawCrosshair();
+                }
+
+                DrawBuildSelector();
+            }
         }
 
-        if (GameSession.IsInPrepPhase && !GameSession.IsPrepReady)
-        {
-            return;
-        }
-
-        if (GameSession.IsInPrepPhase && GameSession.IsPrepReady)
-        {
-            DrawHotbar();
-            return;
-        }
-
-        var style = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 14,
-            normal = { textColor = new Color(0.15f, 0.15f, 0.15f) }
-        };
-        GUI.Label(new Rect(12, 8, 1100, 24),
-            BuildModeActive
-                ? BuildModeHelpText()
-                : "WASD: move   Mouse: look   Space: jump   Mouse Wheel/1-3: hotbar   Left Click: use tool   Esc: pause",
-            style);
-        DrawHotbar();
-
-        if (!IsGameplayBlocked())
-        {
-            DrawCrosshair();
-        }
-
-        DrawBuildSelector();
+        PlayerBulletHitFlash.DrawOverlay();
     }
 
     void DrawCrosshair()
@@ -1821,7 +1876,12 @@ public class ThirdPersonController : MonoBehaviour
         int slotCount = HotbarSlotCount;
         const float slotSize = 72f;
         const float slotGap = 10f;
-        float totalWidth = (slotCount * slotSize) + ((slotCount - 1) * slotGap);
+        const float groupGap = 20f;
+
+        float groupOneWidth = (2f * slotSize) + slotGap;
+        float groupTwoWidth = (Mathf.Max(0, slotCount - 2) * slotSize)
+            + (Mathf.Max(0, slotCount - 3) * slotGap);
+        float totalWidth = groupOneWidth + (slotCount > 2 ? groupGap + groupTwoWidth : 0f);
         float startX = (Screen.width - totalWidth) * 0.5f;
         float y = Screen.height - slotSize - 22f;
 
@@ -1833,19 +1893,37 @@ public class ThirdPersonController : MonoBehaviour
             normal = { textColor = Color.black }
         };
 
+        var keyStyle = new GUIStyle(GUI.skin.label)
+        {
+            alignment = TextAnchor.UpperLeft,
+            fontSize = 11,
+            fontStyle = FontStyle.Bold,
+            normal = { textColor = new Color(0.2f, 0.2f, 0.2f, 0.9f) }
+        };
+
         Color previousColor = GUI.color;
+        float cursorX = startX;
+        var kit = _activeKit ?? CardKitDefinition.DefaultInfantryPlaceholder();
         for (int i = 0; i < slotCount; i++)
         {
-            var tool = _activeKit.GetToolAt(i);
+            if (i == 2)
+            {
+                cursorX += groupGap;
+            }
+
+            var tool = kit.GetToolAt(i);
             bool selected = i == _selectedHotbarIndex;
             GUI.color = selected
                 ? new Color(0.16f, 0.68f, 0.24f, 0.9f)
                 : new Color(0.96f, 0.96f, 0.96f, 0.72f);
 
-            var rect = new Rect(startX + (i * (slotSize + slotGap)), y, slotSize, slotSize);
+            var rect = new Rect(cursorX, y, slotSize, slotSize);
             GUI.Box(rect, string.Empty);
             GUI.color = Color.white;
-            GUI.Label(rect, $"{i + 1}\n{CardKitDefinition.DisplayName(tool)}", labelStyle);
+            GUI.Label(new Rect(rect.x + 6f, rect.y + 4f, 24f, 18f), CardKitDefinition.HotbarKeyLabel(i), keyStyle);
+            GUI.Label(rect, CardKitDefinition.DisplayName(tool), labelStyle);
+
+            cursorX += slotSize + slotGap;
         }
 
         GUI.color = previousColor;
@@ -2160,7 +2238,7 @@ public class ThirdPersonController : MonoBehaviour
             orientationHelp = $"   {orientationHelp}";
         }
 
-        return $"BLUEPRINT ({_selectedPiece})   Mouse Wheel/1-3: hotbar   Left Click: place{dragHelp}{orientationHelp}{lockHelp}   Right Click + Mouse Direction: select   Esc: menu";
+        return $"BLUEPRINT ({_selectedPiece})   Wheel/1-2/F/H: hotbar   Left Click: place{dragHelp}{orientationHelp}{lockHelp}   Right Click + Mouse Direction: select   Esc: menu";
     }
 
     static Vector3Int PerpendicularHorizontalAxis(Vector3Int axis)

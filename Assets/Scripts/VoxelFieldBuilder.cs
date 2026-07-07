@@ -26,9 +26,12 @@ public class VoxelFieldBuilder : MonoBehaviour
 
         var voxelMaterial = CreateVoxelMaterial();
         var slipperyColliderMaterial = CreateSlipperyColliderMaterial();
-        Vector3 gridOrigin = isRange
-            ? new Vector3(-gridWidth * 0.5f * voxelSize, -0.5f * voxelSize, ShootingRangeSession.GridOriginWorldZ * voxelSize)
-            : ComputeCenteredGridOrigin();
+        var floorColliderMaterial = CreateGrippyFloorColliderMaterial();
+        Vector3 gridOrigin = ComputeCenteredGridOrigin();
+        if (isRange)
+        {
+            gridOrigin.z = ShootingRangeSession.GridOriginWorldZ * voxelSize;
+        }
 
         var fieldRoot = new GameObject("Voxel Field").transform;
         var builtRoot = new GameObject("Built Voxels").transform;
@@ -43,7 +46,7 @@ public class VoxelFieldBuilder : MonoBehaviour
             slipperyColliderMaterial,
             builtRoot);
 
-        BuildField(voxelMaterial, slipperyColliderMaterial, voxelWorld, fieldRoot, gridOrigin, isRange);
+        BuildField(voxelMaterial, floorColliderMaterial, voxelWorld, fieldRoot, gridOrigin, isRange);
 
         if (isRange)
         {
@@ -55,6 +58,7 @@ public class VoxelFieldBuilder : MonoBehaviour
                 gridWidth,
                 gridLength,
                 voxelMaterial,
+                floorColliderMaterial,
                 slipperyColliderMaterial);
 
             ShootingRangeBuilder.BuildTargets(
@@ -68,6 +72,7 @@ public class VoxelFieldBuilder : MonoBehaviour
         CreateLight(isRange);
         var player = CreatePlayer(voxelWorld, isRange);
         MatchClockHud.Create();
+        PlayerBulletHitFlash.Create();
 
         if (GameSession.IsInPrepPhase)
         {
@@ -183,6 +188,8 @@ public class VoxelFieldBuilder : MonoBehaviour
         controller.characterVisual = visualRoot.transform;
         controller.voxelWorld = voxelWorld;
 
+        player.AddComponent<PlayerHealth>();
+
         return player;
     }
 
@@ -247,6 +254,20 @@ public class VoxelFieldBuilder : MonoBehaviour
         {
             dynamicFriction = 0f,
             staticFriction = 0f,
+            bounciness = 0f,
+            frictionCombine = PhysicsMaterialCombine.Minimum,
+            bounceCombine = PhysicsMaterialCombine.Minimum
+        };
+    }
+
+    static PhysicsMaterial CreateGrippyFloorColliderMaterial()
+    {
+        // High friction for rolling bullets (Maximum combine on the ball wins).
+        // Minimum combine keeps player movement slippery on the same floor.
+        return new PhysicsMaterial("VoxelFloorGrip")
+        {
+            dynamicFriction = 2f,
+            staticFriction = 2.2f,
             bounciness = 0f,
             frictionCombine = PhysicsMaterialCombine.Minimum,
             bounceCombine = PhysicsMaterialCombine.Minimum

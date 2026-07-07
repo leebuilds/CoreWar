@@ -19,15 +19,18 @@ public static class ShootingRangeTerrain
         int gridWidth,
         int gridLength,
         Material floorMaterial,
-        PhysicsMaterial colliderMaterial)
+        PhysicsMaterial floorColliderMaterial,
+        PhysicsMaterial wallColliderMaterial)
     {
         var terrainRoot = new GameObject("Shooting Range Terrain").transform;
         terrainRoot.SetParent(root, false);
 
         float lengthMeters = gridLength * voxelSize;
         float widthMeters = gridWidth * voxelSize;
-        float centerX = gridOrigin.x + (gridWidth - 1) * 0.5f * voxelSize;
-        float centerZ = gridOrigin.z + (gridLength - 1) * 0.5f * voxelSize;
+        float minX = gridOrigin.x - 0.5f * voxelSize;
+        float minZ = gridOrigin.z - 0.5f * voxelSize;
+        float centerX = minX + widthMeters * 0.5f;
+        float centerZ = minZ + lengthMeters * 0.5f;
         float groundY = gridOrigin.y;
 
         var floorMaterialInstance = new Material(floorMaterial)
@@ -37,6 +40,7 @@ public static class ShootingRangeTerrain
         if (floorMaterialInstance.HasProperty("_MainTex"))
         {
             floorMaterialInstance.mainTextureScale = new Vector2(gridWidth, gridLength);
+            floorMaterialInstance.mainTextureOffset = Vector2.zero;
         }
 
         CreatePanel(
@@ -45,7 +49,7 @@ public static class ShootingRangeTerrain
             new Vector3(centerX, groundY, centerZ),
             new Vector3(widthMeters * VoxelLightingWorld.SealOverlap, voxelSize, lengthMeters * VoxelLightingWorld.SealOverlap),
             floorMaterialInstance,
-            colliderMaterial,
+            floorColliderMaterial,
             castShadows: false);
 
         float wallHeight = WallHeightCells * voxelSize;
@@ -59,7 +63,7 @@ public static class ShootingRangeTerrain
             new Vector3(leftWallX, wallCenterY, centerZ),
             new Vector3(voxelSize, wallHeight, lengthMeters),
             floorMaterial,
-            colliderMaterial,
+            wallColliderMaterial,
             castShadows: true);
 
         CreatePanel(
@@ -68,7 +72,7 @@ public static class ShootingRangeTerrain
             new Vector3(rightWallX, wallCenterY, centerZ),
             new Vector3(voxelSize, wallHeight, lengthMeters),
             floorMaterial,
-            colliderMaterial,
+            wallColliderMaterial,
             castShadows: true);
 
         float backstopZ = gridOrigin.z + BackstopCellZ * voxelSize;
@@ -79,15 +83,20 @@ public static class ShootingRangeTerrain
             new Vector3(centerX, groundY + backstopHeight * 0.5f, backstopZ),
             new Vector3(widthMeters, backstopHeight, voxelSize),
             floorMaterial,
-            colliderMaterial,
+            wallColliderMaterial,
             castShadows: true);
 
-        BuildFiringLineFence(terrainRoot, colliderMaterial);
+        BuildFiringLineFence(terrainRoot, wallColliderMaterial, gridOrigin, voxelSize, gridWidth);
 
         RegisterOccupancy(voxelWorld, gridWidth, gridLength);
     }
 
-    static void BuildFiringLineFence(Transform parent, PhysicsMaterial colliderMaterial)
+    static void BuildFiringLineFence(
+        Transform parent,
+        PhysicsMaterial colliderMaterial,
+        Vector3 gridOrigin,
+        float voxelSize,
+        int gridWidth)
     {
         var fenceRoot = new GameObject("Firing Line Fence").transform;
         fenceRoot.SetParent(parent, false);
@@ -95,16 +104,20 @@ public static class ShootingRangeTerrain
         var fenceMaterial = VoxelMaterialUtility.CreateSolidMaterial(new Color(0.42f, 0.40f, 0.38f), "Range Fence");
         var postMaterial = VoxelMaterialUtility.CreateSolidMaterial(new Color(0.36f, 0.34f, 0.32f), "Range Fence Post");
         const float fenceZ = ShootingRangeSession.FiringLineWorldZ;
-        const float fenceWidth = 24f;
         const float postSpacing = 4f;
         const float lowerHeight = 0.55f;
         const float upperRailHeight = 0.1f;
         const float upperRailY = 1.05f;
 
+        float fenceMinX = gridOrigin.x;
+        float fenceMaxX = gridOrigin.x + (gridWidth - 1) * voxelSize;
+        float fenceWidth = gridWidth * voxelSize;
+        float fenceCenterX = gridOrigin.x + (gridWidth - 1) * 0.5f * voxelSize;
+
         CreateFencePanel(
             fenceRoot,
             "Fence Lower Panel",
-            new Vector3(0f, lowerHeight * 0.5f, fenceZ),
+            new Vector3(fenceCenterX, lowerHeight * 0.5f, fenceZ),
             new Vector3(fenceWidth, lowerHeight, 0.18f),
             fenceMaterial,
             colliderMaterial);
@@ -112,16 +125,16 @@ public static class ShootingRangeTerrain
         CreateFencePanel(
             fenceRoot,
             "Fence Upper Rail",
-            new Vector3(0f, upperRailY, fenceZ),
+            new Vector3(fenceCenterX, upperRailY, fenceZ),
             new Vector3(fenceWidth, upperRailHeight, 0.12f),
             postMaterial,
             colliderMaterial);
 
         int postCount = Mathf.FloorToInt(fenceWidth / postSpacing) + 1;
-        float startX = -fenceWidth * 0.5f;
+        float postStep = postCount > 1 ? (fenceMaxX - fenceMinX) / (postCount - 1) : 0f;
         for (int i = 0; i < postCount; i++)
         {
-            float x = startX + i * postSpacing;
+            float x = fenceMinX + i * postStep;
             CreateFencePanel(
                 fenceRoot,
                 $"Fence Post {i}",

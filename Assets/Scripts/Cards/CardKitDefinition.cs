@@ -2,9 +2,10 @@ using UnityEngine;
 
 public enum CardHotbarTool
 {
-    Gun,
-    Hammer,
-    Blueprint
+    AssaultRifle,
+    Pistol,
+    Blueprint,
+    Hammer
 }
 
 /// <summary>
@@ -20,20 +21,21 @@ public class CardKitDefinition
         {
             hotbarTools = new[]
             {
-                CardHotbarTool.Gun,
-                CardHotbarTool.Hammer,
-                CardHotbarTool.Blueprint
+                CardHotbarTool.AssaultRifle,
+                CardHotbarTool.Pistol,
+                CardHotbarTool.Blueprint,
+                CardHotbarTool.Hammer
             }
         };
     }
 
-    public int SlotCount => hotbarTools == null || hotbarTools.Length == 0 ? 3 : hotbarTools.Length;
+    public int SlotCount => hotbarTools == null || hotbarTools.Length == 0 ? 4 : hotbarTools.Length;
 
     public CardHotbarTool GetToolAt(int index)
     {
         if (hotbarTools == null || hotbarTools.Length == 0)
         {
-            return (CardHotbarTool)(index % 3);
+            return (CardHotbarTool)(index % 4);
         }
 
         return hotbarTools[Mathf.Clamp(index, 0, hotbarTools.Length - 1)];
@@ -43,14 +45,38 @@ public class CardKitDefinition
     {
         switch (tool)
         {
-            case CardHotbarTool.Gun:
-                return "Gun";
+            case CardHotbarTool.AssaultRifle:
+                return "AR";
+            case CardHotbarTool.Pistol:
+                return "Pistol";
             case CardHotbarTool.Hammer:
                 return "Hammer";
             case CardHotbarTool.Blueprint:
-                return "Blueprint";
+                return "Build";
             default:
                 return tool.ToString();
         }
+    }
+
+    public static string HotbarKeyLabel(int slotIndex)
+    {
+        switch (slotIndex)
+        {
+            case 0:
+                return "1";
+            case 1:
+                return "2";
+            case 2:
+                return "F";
+            case 3:
+                return "H";
+            default:
+                return (slotIndex + 1).ToString();
+        }
+    }
+
+    public static bool IsFirearm(CardHotbarTool tool)
+    {
+        return tool == CardHotbarTool.AssaultRifle || tool == CardHotbarTool.Pistol;
     }
 }

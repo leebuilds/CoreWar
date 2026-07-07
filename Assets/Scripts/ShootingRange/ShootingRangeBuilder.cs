@@ -56,7 +56,7 @@ public static class ShootingRangeBuilder
         var textGo = new GameObject("Sign Text");
         textGo.transform.SetParent(signRoot.transform, false);
         textGo.transform.localPosition = new Vector3(0f, 0f, -0.03f);
-        textGo.transform.localRotation = Quaternion.identity;
+        textGo.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
         textGo.transform.localScale = Vector3.one;
 
         var text = textGo.AddComponent<TextMesh>();

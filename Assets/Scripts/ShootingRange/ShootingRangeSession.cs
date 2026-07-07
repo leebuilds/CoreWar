@@ -6,7 +6,6 @@ using UnityEngine;
 /// </summary>
 public static class ShootingRangeSession
 {
-    public const int MaxProjectileEntities = 100;
     public static readonly int[] TargetDistancesMeters = { 10, 50, 100, 200, 300, 400, 500, 600 };
 
     public const float FiringLineWorldZ = 0f;
@@ -14,7 +13,6 @@ public static class ShootingRangeSession
     public const float TargetSpreadRightX = 16f;
     public const float TargetSpreadLeftX = -16f;
 
-    static readonly List<GameObject> _projectileEntities = new List<GameObject>();
     static readonly List<ShootingRangeDummy> _dummies = new List<ShootingRangeDummy>();
 
     static float _dummyMaxHealth = 100f;
@@ -47,7 +45,6 @@ public static class ShootingRangeSession
         _voxelWorld = voxelWorld;
         _player = player;
         _dummyMaxHealth = 100f;
-        _projectileEntities.Clear();
         _dummies.Clear();
     }
 
@@ -67,30 +64,6 @@ public static class ShootingRangeSession
         }
     }
 
-    public static void RegisterProjectileEntity(GameObject entity)
-    {
-        if (entity == null)
-        {
-            return;
-        }
-
-        _projectileEntities.Add(entity);
-        while (_projectileEntities.Count > MaxProjectileEntities)
-        {
-            var oldest = _projectileEntities[0];
-            _projectileEntities.RemoveAt(0);
-            if (oldest != null)
-            {
-                Object.Destroy(oldest);
-            }
-        }
-    }
-
-    public static void UnregisterProjectileEntity(GameObject entity)
-    {
-        _projectileEntities.Remove(entity);
-    }
-
     public static void ResetAllDummies()
     {
         for (int i = 0; i < _dummies.Count; i++)
@@ -101,15 +74,7 @@ public static class ShootingRangeSession
 
     public static void ClearProjectileEntities()
     {
-        for (int i = _projectileEntities.Count - 1; i >= 0; i--)
-        {
-            if (_projectileEntities[i] != null)
-            {
-                Object.Destroy(_projectileEntities[i]);
-            }
-        }
-
-        _projectileEntities.Clear();
+        ProjectileBullet.DestroyAll();
     }
 
     public static void ResetMap()

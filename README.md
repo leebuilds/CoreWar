@@ -98,10 +98,10 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 - Red **distance sign on each dummy’s chest**, facing the firing line
 - **No match prep** — instant spawn with crosshair, movement, gun, and full hotbar; starts with **loadout slot 1** card
 - Matchmaking UI still runs but completes immediately (zero delay)
-- Body hits deal 30 damage, head hits 60; **ding** sound on hit (brighter ding on headshot); dummies respawn ~3 s after being dropped
-- Bullets and bullet holes persist until **Reset Map** or until **100** combined projectile entities exist (oldest removed)
+- Damage scales with bullet impact speed (point-blank body hit = 40 at muzzle velocity); headshots are **2×** damage; hits below **25 m/s** bounce off humans without penetrating; player hits flash the screen red (blindness scales log with damage — 50% HP → 0.125 s, 99% HP → 2 s, headshots **2×** duration; re-hits while blind extend without flashing); **ding** on dummy hit (brighter on headshot); dummies respawn ~3 s after being dropped
+- Bullets persist until **Reset Map** or until **35** live bullets exist (oldest removed)
 - Terrain uses merged panels (floor, walls, backstop, fence) for performance instead of per-voxel cubes
-- Pause menu (**Esc**): **Choose Character** (owned cards only, full collection overlay with game visible behind), **Dummy Stats** (logarithmic HP slider 10–1000), **Reset Map**, Settings, Exit Match
+- Pause menu (**Esc**): **Choose Character**, **Dummy Stats**, **Test Damage** (debug blindness), **Reset Map**, Settings, Exit Match
 - Choose Character teleports you back to the firing-line spawn and resets velocity/recoil
 - No stats are saved from range sessions
 
@@ -113,8 +113,8 @@ locally in `persistentDataPath/CoreWar/settings.json` and restored every launch.
 - WASD movement unlocks when the prep countdown finishes
 - Mouse to look (first-person camera)
 - Space to jump
-- Mouse wheel cycles the hotbar; `1`, `2`, and `3` select slots directly
-- **Esc** — pause menu (game does not freeze; opens Respawn / Settings / Exit Match); **Exit Match** asks for confirmation; respawn is locked during prep
+- Mouse wheel cycles the hotbar; `1`, `2`, `F`, and `H` select slots directly
+- **Esc** — pause menu (game does not freeze; opens Respawn / **Test Damage** / Settings / Exit Match in standard modes); **Exit Match** asks for confirmation; respawn is locked during prep
 - **Exit Match** — fully ends the match and returns to the main menu
 - Top-right **match clock** counts up from match start (`M:SS`); hidden while pause or respawn overlays are open
 - After respawn, pick loadout slot A or B from the class picker overlay; the
@@ -130,25 +130,24 @@ theme. Matchmaking and match prep overlays also refresh when the theme changes.
 
 ### Hotbar
 
-| Slot | Tool | Action |
-|------|------|--------|
-| 1 | Gun | Left click fires a semi-auto placeholder gun |
-| 2 | Hammer | Left click swings and destroys one owned build piece |
-| 3 | Blueprint | Enables build mode while selected |
+Four slots in two groups (weapons, then tools) with key labels in each slot corner:
 
-**Gun:** fires a fast visible bullet along the current crosshair aim, then
-applies a brief recoil kick. Bullets have light gravity, muzzle flash, and spawn
-from a clamped point near the player when up against walls. Recoil kicks mostly
-upward with a small horizontal component; the crosshair settles away from the
-shot line after each kick (stronger randomness = less predictable aim).
+| Key | Tool | Action |
+|-----|------|--------|
+| `1` | AR | Full-auto assault rifle (~400 RPM, high muzzle velocity) |
+| `2` | Pistol | Semi-auto sidearm |
+| `F` | Build | Enables build mode while selected |
+| `H` | Hammer | Left click swings and destroys one owned build piece |
+
+**AR / Pistol:** fire visible bullets along the crosshair with muzzle flash and recoil kick. The AR holds left click for automatic fire; the pistol is semi-auto per click. Bullets use real-world gravity and spawn from a clamped point near the player when up against walls.
 
 **Hammer:** destroys the first player-built object hit within **1.5 voxels** of
 any part of the player's body (measured from the capsule surface).
 
-**Blueprint:** full build-mode toolset (see below).
+**Build:** full build-mode toolset (see below).
 
-All 30 class cards currently share the same placeholder kit (gun, hammer,
-blueprint). Per-class weapons and abilities from the card catalog are planned.
+All 30 class cards currently share the same placeholder kit (AR, pistol, build,
+hammer). Per-class weapons and abilities from the card catalog are planned.
 
 ### Build mode (blueprint slot)
 
@@ -170,9 +169,14 @@ skips them for validation and placement.
 Your robot gets a random jersey number (1–99) each match, with pen-and-ink
 shading on the torn team jersey and the number on the back.
 
-Gun bullets are visual prototype projectiles. They pass through player-built
-panels, lose a little velocity, leave temporary bullet-hole marks, and disappear
-after landing or timing out.
+Gun bullets behave like small balls thrown at high speed. They pass through
+anything the player builds (losing speed based on how much material they cross),
+then bounce, roll, and settle with real physics when they hit map floors or
+walls. Hits below **25 m/s** bounce off players and dummies without penetrating.
+Landed bullets stay in the world (max 35 live bullets, oldest removed) and hide
+their visual beyond ~50 m to save rendering cost. Arena and range floors use a
+grippy physics material so bullets stop rolling sooner; player movement stays
+slippery on the same surfaces.
 
 ## Runtime architecture
 
@@ -194,10 +198,12 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/UI/MenuSettings.cs` — persistent client settings (`settings.json`)
 - `Assets/Scripts/UI/MenuSettingsPanel.cs` — shared settings form (hub + pause menu)
 - `Assets/Scripts/UI/MenuUiSounds.cs` — procedural hover, click, gunshot sounds
-- `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay (range mode: Choose Character, Dummy Stats, Reset Map)
+- `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay (range: Choose Character, Dummy Stats; all modes: Test Damage debug)
 - `Assets/Scripts/UI/RespawnClassPicker.cs` — respawn class selection
 - `Assets/Scripts/UI/ShootingRangeCharacterPicker.cs` — owned-card collection overlay for range character swaps
 - `Assets/Scripts/UI/ShootingRangeDummyStatsPanel.cs` — logarithmic dummy HP slider
+- `Assets/Scripts/UI/PlayerBulletHitFlash.cs` — full-screen red/black blindness on player bullet hits
+- `Assets/Scripts/UI/PlayerDamageDebugPanel.cs` — pause-menu test damage slider (debug blindness tuning)
 - `Assets/Scripts/UI/DecksCollectionView.cs` — shared owned-card scroll builder
 - `Assets/Scripts/UI/CardTileView.cs` — collection card tiles (compact + deck-row sizing), spawn selection visuals
 - `Assets/Scripts/UI/DecksLayout.cs` — decks window and row width constants
@@ -209,11 +215,13 @@ The menu UI and the voxel field are generated from code at runtime:
 **Gameplay**
 
 - `Assets/Scripts/GameSession.cs` — team, loadout, game mode, match clock, and active card into the game scene
-- `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid of white voxels (32×32 standard; 48×680 shooting range) with lighting
+- `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid of white voxels (32×32 standard; 48×680 shooting range), grippy floor + slippery wall physics materials, lighting
 - `Assets/Scripts/ShootingRange/` — merged terrain + firing-line fence, spread dummies, hit zones, session state (bullets, reset)
 - `Assets/Scripts/VoxelMaterialUtility.cs` — solid-color materials for range props and hit flashes
-- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, tools, pause
-- `Assets/Scripts/ProjectileBullet.cs` — visual bullet flight and bullet holes
+- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, four-slot hotbar, AR/pistol/build/hammer tools, pause
+- `Assets/Scripts/ProjectileBullet.cs` — hybrid raycast flight + Rigidbody bounce/roll ballistics
+- `Assets/Scripts/ProjectileDamage.cs` — shared velocity damage and blindness duration math
+- `Assets/Scripts/PlayerHealth.cs` — local player HP and blindness triggers (no death flow yet)
 - `Assets/Scripts/CapsuleRobotVisual.cs` + `Assets/Scripts/JerseyInkUtility.cs` — capsule robot with jersey
 - `Assets/Scripts/VoxelLightingWorld.cs` — voxel occupancy, build rules, hammer removal
 - `Assets/Scripts/PenInkShadowEffect.cs` + `Assets/Scripts/PenInkShadowPost.shader` — pen-and-ink shadows
@@ -225,6 +233,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/Third_Person_Shooter_Game_Design_v2.md)
+- [Ballistics, hotbar, and player damage session recap](docs/chats/2026-07-07-ballistics-hotbar-and-player-damage-session.md)
 - [Shooting range solo mode and layout polish session recap](docs/chats/2026-07-05-shooting-range-mode-session.md)
 - [Decks collection layout and card catalog session recap](docs/chats/2026-07-05-decks-layout-and-card-catalog-session.md)
 - [In-arena prep, pause polish, and overlay theming session recap](docs/chats/2026-07-05-in-arena-prep-pause-flow-session.md)

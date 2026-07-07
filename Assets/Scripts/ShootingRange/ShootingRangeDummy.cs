@@ -6,8 +6,6 @@ using UnityEngine;
 /// </summary>
 public class ShootingRangeDummy : MonoBehaviour
 {
-    const int BodyDamage = 30;
-    const int HeadDamage = 60;
     const float RespawnDelaySeconds = 3f;
 
     ShootingRangeHitZone _headZone;
@@ -98,14 +96,27 @@ public class ShootingRangeDummy : MonoBehaviour
         SetVisualActive(true);
     }
 
-    public bool ApplyHit(ShootingRangeHitZoneType zoneType)
+    public static float ComputeDamage(float impactSpeed, float muzzleSpeed, ShootingRangeHitZoneType zoneType)
+    {
+        return ProjectileDamage.ComputeDamage(
+            impactSpeed,
+            muzzleSpeed,
+            zoneType == ShootingRangeHitZoneType.Head);
+    }
+
+    public bool ApplyHit(ShootingRangeHitZoneType zoneType, float impactSpeed, float muzzleSpeed)
     {
         if (_isDown)
         {
             return false;
         }
 
-        int damage = zoneType == ShootingRangeHitZoneType.Head ? HeadDamage : BodyDamage;
+        float damage = ComputeDamage(impactSpeed, muzzleSpeed, zoneType);
+        if (damage <= 0f)
+        {
+            return false;
+        }
+
         bool headshot = zoneType == ShootingRangeHitZoneType.Head;
         _currentHealth = Mathf.Max(0f, _currentHealth - damage);
         MenuUiSounds.PlayRangeDing(headshot);
@@ -140,7 +151,7 @@ public class ShootingRangeDummy : MonoBehaviour
 
     IEnumerator FlashRoutine(bool headshot)
     {
-        var flash = headshot ? new Color(1f, 0.35f, 0.35f) : new Color(1f, 0.75f, 0.35f);
+        var flash = headshot ? new Color(1f, 0.2f, 0.2f) : new Color(0.9f, 0.12f, 0.12f);
         var flashTexture = VoxelMaterialUtility.GetSolidTexture(flash);
 
         for (int i = 0; i < _flashRenderers.Length; i++)
