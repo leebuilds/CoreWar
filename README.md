@@ -104,9 +104,9 @@ and restored every launch.
   (blindness scales log with damage — 50% HP → 0.125 s, 99% HP → 2 s, headshots
   **2×** duration; re-hits while blind extend without flashing); **ding** on dummy
   hit (brighter on headshot); dummies respawn ~3 s after being dropped
-- Bullets persist until **Reset Map** or until **35** live bullets exist (oldest removed)
+- Bullets are visible dark spheres while in flight; destroyed on map hit (no bounce)
 - Terrain uses merged panels (floor, walls, backstop, fence) for performance instead of per-voxel cubes
-- Pause menu (**Esc**): **Choose Character**, **Dummy Stats**, **Test Damage** (debug blindness), **Reset Map**, Settings, Exit Match
+- Pause menu (**Esc**): **Choose Character**, **Dummy Stats**, **Reset Map**, Settings, Exit Match
 - Choose Character teleports you back to the firing-line spawn and resets velocity/recoil
 - No stats are saved from range sessions
 
@@ -120,7 +120,7 @@ and restored every launch.
 - Space to jump
 - Mouse wheel cycles equippable hotbar slots; `1`, `2`, `F`, and `H` select slots directly
 - **E** — class ability (not equippable via scroll)
-- **Esc** — pause menu (game does not freeze; opens Respawn / **Test Damage** / Settings / Exit Match in standard modes); **Exit Match** asks for confirmation; respawn is locked during prep
+- **Esc** — pause menu (game does not freeze; opens Respawn / Settings / Exit Match in standard modes); **Exit Match** asks for confirmation; respawn is locked during prep
 - **Exit Match** — fully ends the match and returns to the main menu
 - Top-right **match clock** counts up from match start (`M:SS`); hidden while pause or respawn overlays are open
 - After respawn, pick loadout slot A or B from the class picker overlay; the
@@ -137,7 +137,10 @@ theme. Matchmaking and match prep overlays also refresh when the theme changes.
 ### Hotbar
 
 Five on-screen slots in three groups (ability, weapons, tools) in the
-**lower-left** corner (~half previous size), with key labels in each slot corner:
+**lower-left** corner (~half previous size), with procedural icons and key labels
+in each slot corner. While holding a firearm, a small white ammo panel with a
+thin black border appears above the row showing `reserve / mag` (left = reserve,
+right = magazine).
 
 | Key | Slot | Action |
 |-----|------|--------|
@@ -146,6 +149,7 @@ Five on-screen slots in three groups (ability, weapons, tools) in the
 | `2` | Secondary | Pistol |
 | `F` | Build | Enables build mode while selected |
 | `H` | Hammer | Left click swings and destroys one owned build piece |
+| `R` | — | Reload the held firearm (blocked during draw/reload) |
 
 **Tier 1 kits**
 
@@ -158,15 +162,30 @@ Five on-screen slots in three groups (ability, weapons, tools) in the
 
 | Card | Ability | Cooldown |
 |------|---------|----------|
-| Sniper | Cycle scope while ADS (Iron → 4× → 10×) | None |
+| Sniper | Cycle scope (Iron → 4× → 10×); works without ADS; while ADS uses swap animation | None |
 | Infantry | Speed boost (10 s) | 30 s |
 
+**Ammo (per weapon, separate pools)**
+
+| Weapon | Start (reserve / mag) | Reload |
+|--------|------------------------|--------|
+| Pistol | 150 / 12 | 1.2 s full mag |
+| AR | 200 / 30 | 1.5 s full mag |
+| Sniper | 40 / 5 | 1.5 s start + 0.8 s per round (interruptible after first round) |
+
+Reload blocks shooting, hotbar swap, and E ability (sniper fully locked through
+start + first round). Gun dips during reload; sniper per-round reload adds a quick
+bob. Ammo resets on match start, respawn, and character reset.
+
 **AR / Pistol / Sniper:** fire visible bullets along the crosshair (or sniper
-spread reticle) with muzzle flash and recoil kick. The AR holds left click for
-automatic fire; pistol and sniper are semi-auto per click. Sniper **right click**
-enters ADS; iron sights use a crosshair, magnified scopes use a red dot with a
-smooth vignette overlay. Bullets use real-world gravity, per-weapon air drag, and
-spawn from a clamped point near the player when up against walls.
+spread reticle) with muzzle flash, per-weapon gunshot audio, and recoil kick. The
+AR holds left click for automatic fire; pistol and sniper are semi-auto per click.
+Each firearm has a draw animation (pistol 0.6 s, AR 1.1 s, sniper 2.0 s) before
+you can shoot, reload, or ADS. Sniper **right click** enters ADS; iron sights use
+a smaller crosshair with peripheral blur (no dark vignette); magnified scopes use
+a red dot, hide the gun model, and apply blur + dark vignette. Bullets use
+real-world gravity, per-weapon air drag, and spawn from a clamped point near the
+player when up against walls.
 
 **Hammer:** destroys the first player-built object hit within **1.5 voxels** of
 any part of the player's body (measured from the capsule surface).
@@ -197,17 +216,17 @@ skips them for validation and placement.
 Your robot gets a random jersey number (1–99) each match, with pen-and-ink
 shading on the torn team jersey and the number on the back.
 
-Gun bullets behave like small balls thrown at high speed. They pass through
-anything the player builds (losing speed based on how much material they cross),
-then bounce, roll, and settle with real physics when they hit map floors or
-walls. Surface impacts (floor, map, builds, bounces) retain about **50%** of
-speed.
+Gun bullets use raycast-integrated flight with gravity and air drag. They pass
+through anything the player builds (losing speed based on how much material they
+cross), then stop and are destroyed when they hit map floors or walls — no
+bounce. Sniper rounds above **500 m/s** can penetrate players/dummies with speed
+and accuracy penalties per hit.
 
 ### Ballistics and damage
 
 | Weapon | Muzzle speed | Max body | Max headshot |
 |--------|--------------|----------|--------------|
-| Pistol | 325 m/s | 15 | 30 |
+| Pistol | 325 m/s | 13 | 30 |
 | AR | 850 m/s | 17 | 22 |
 | Sniper | 950 m/s | 60 | 130 |
 
@@ -216,16 +235,15 @@ speed.
 
 **Air drag** (exponential per 100 m): pistol ~20% loss, AR ~10%, sniper ~2%.
 
-**Players:** hits below **30 m/s** bounce off without damage; at **≥ 30 m/s**
-velocity-scaled damage applies and the bullet is destroyed.
+**Players:** hits below **30 m/s** apply no damage and destroy the bullet; at
+**≥ 30 m/s** velocity-scaled damage applies and the bullet is destroyed (sniper
+can penetrate above **500 m/s**).
 
-**Shooting range dummies:** velocity-scaled damage at all impact speeds (no
-30 m/s bounce).
+**Shooting range dummies:** velocity-scaled damage at all impact speeds.
 
-Landed bullets stay in the world (max 35 live bullets, oldest removed) and hide
-their visual beyond ~50 m to save rendering cost. Arena and range floors use a
-grippy physics material so bullets stop rolling sooner; player movement stays
-slippery on the same surfaces.
+Bullets are visible dark spheres while airborne (no global cap; 20 s failsafe
+destroy). Holding fire during match prep does not trigger a shot when gametime
+starts — release the mouse first.
 
 ## Runtime architecture
 
@@ -247,7 +265,7 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/UI/MenuSettings.cs` — persistent client settings (`settings.json`)
 - `Assets/Scripts/UI/MenuSettingsPanel.cs` — shared settings form (hub + pause menu)
 - `Assets/Scripts/UI/MenuUiSounds.cs` — procedural hover, click, gunshot sounds
-- `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay (range: Choose Character, Dummy Stats; all modes: Test Damage debug)
+- `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay (range: Choose Character, Dummy Stats; all modes: Settings, Exit Match)
 - `Assets/Scripts/UI/RespawnClassPicker.cs` — respawn class selection
 - `Assets/Scripts/UI/ShootingRangeCharacterPicker.cs` — owned-card collection overlay for range character swaps
 - `Assets/Scripts/UI/ShootingRangeDummyStatsPanel.cs` — logarithmic dummy HP slider
@@ -267,10 +285,12 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid of white voxels (32×32 standard; 48×680 shooting range), grippy floor + slippery wall physics materials, lighting
 - `Assets/Scripts/ShootingRange/` — merged terrain + firing-line fence, spread dummies, hit zones, session state (bullets, reset)
 - `Assets/Scripts/VoxelMaterialUtility.cs` — solid-color materials for range props and hit flashes
-- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, AR/pistol/sniper/build/hammer, sniper ADS/scopes, E abilities, pause
-- `Assets/Scripts/ProjectileBullet.cs` — hybrid raycast flight + Rigidbody bounce/roll ballistics, air drag, surface speed loss
-- `Assets/Scripts/ProjectileDamage.cs` — per-weapon velocity damage, air drag constants, player bounce threshold
-- `Assets/Scripts/SniperScopePostEffect.cs` + `Assets/Scripts/SniperScopePost.shader` — sniper scope vignette/blur overlay
+- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, ammo/reload, AR/pistol/sniper/build/hammer, sniper ADS/scopes, E abilities, pause
+- `Assets/Scripts/WeaponAmmo.cs` — per-weapon reserve + magazine pools and reload timing defaults
+- `Assets/Scripts/UI/HotbarIconDrawer.cs` — procedural hotbar slot icons
+- `Assets/Scripts/ProjectileBullet.cs` — raycast bullet flight, air drag, build penetration, sniper player penetration
+- `Assets/Scripts/ProjectileDamage.cs` — per-weapon velocity damage, air drag constants, player hit threshold
+- `Assets/Scripts/SniperScopePostEffect.cs` + `Assets/Scripts/SniperScopePost.shader` — sniper ADS blur overlay (iron sights: blur only; magnified: blur + vignette)
 - `Assets/Scripts/PlayerHealth.cs` — local player HP and blindness triggers (no death flow yet)
 - `Assets/Scripts/CapsuleRobotVisual.cs` + `Assets/Scripts/JerseyInkUtility.cs` — capsule robot with jersey
 - `Assets/Scripts/VoxelLightingWorld.cs` — voxel occupancy, build rules, hammer removal
@@ -283,6 +303,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/Third_Person_Shooter_Game_Design_v2.md)
+- [Ammo, reload, ballistics rewrite, and hotbar icons session recap](docs/chats/2026-07-07-ammo-reload-ballistics-and-hotbar-icons-session.md)
 - [Sniper unlocks, ballistics, and abilities session recap](docs/chats/2026-07-07-sniper-unlocks-ballistics-and-abilities-session.md)
 - [Ballistics, hotbar, and player damage session recap](docs/chats/2026-07-07-ballistics-hotbar-and-player-damage-session.md)
 - [Shooting range solo mode and layout polish session recap](docs/chats/2026-07-05-shooting-range-mode-session.md)

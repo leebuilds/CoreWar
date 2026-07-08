@@ -47,7 +47,7 @@ public static class ProjectileDamage
             case ProjectileWeaponType.SniperRifle:
                 return 60f;
             case ProjectileWeaponType.Pistol:
-                return 15f;
+                return 13f;
             case ProjectileWeaponType.AssaultRifle:
             default:
                 return 17f;
@@ -61,10 +61,10 @@ public static class ProjectileDamage
             case ProjectileWeaponType.SniperRifle:
                 return 130f;
             case ProjectileWeaponType.Pistol:
-                return 30f;
+                return 26f;
             case ProjectileWeaponType.AssaultRifle:
             default:
-                return 22f;
+                return 23f;
         }
     }
 

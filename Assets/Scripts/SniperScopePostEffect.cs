@@ -1,7 +1,7 @@
 using UnityEngine;
 
 /// <summary>
-/// Darkens and blurs the screen outside the magnified sniper scope ring.
+/// Blurs the screen outside the sniper ADS clear zone. Magnified scopes also darken the periphery.
 /// </summary>
 [RequireComponent(typeof(Camera))]
 [DefaultExecutionOrder(100)]
@@ -17,6 +17,12 @@ public class SniperScopePostEffect : MonoBehaviour
 
     [Range(0f, 0.03f)]
     public float blurSize10x = 0.02f;
+
+    [Range(0f, 0.03f)]
+    public float blurSizeIron = 0.007f;
+
+    [Range(0.05f, 0.9f)]
+    public float ironSightScopeRadius = 0.62f;
 
     [Range(0f, 1f)]
     public float vignetteDarkness4x = 0.88f;
@@ -59,7 +65,7 @@ public class SniperScopePostEffect : MonoBehaviour
 
     void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
-        if (!_active || _blend <= 0.001f || _scopeIndex < 1)
+        if (!_active || _blend <= 0.001f || _scopeIndex < 0)
         {
             Graphics.Blit(source, destination);
             return;
@@ -80,12 +86,14 @@ public class SniperScopePostEffect : MonoBehaviour
             };
         }
 
+        bool ironSights = _scopeIndex == 0;
         bool tenX = _scopeIndex >= 2;
-        float blurSize = tenX ? blurSize10x : blurSize4x;
-        float vignetteDarkness = tenX ? vignetteDarkness10x : vignetteDarkness4x;
-        float darkBandWidth = tenX ? darkBandWidth10x : darkBandWidth4x;
+        float scopeRadiusValue = ironSights ? ironSightScopeRadius : scopeRadius;
+        float blurSize = ironSights ? blurSizeIron : (tenX ? blurSize10x : blurSize4x);
+        float vignetteDarkness = ironSights ? 0f : (tenX ? vignetteDarkness10x : vignetteDarkness4x);
+        float darkBandWidth = ironSights ? darkBandWidth4x : (tenX ? darkBandWidth10x : darkBandWidth4x);
 
-        _material.SetFloat("_ScopeRadius", scopeRadius);
+        _material.SetFloat("_ScopeRadius", scopeRadiusValue);
         _material.SetFloat("_ScopeBlend", _blend);
         _material.SetFloat("_VignetteDarkness", vignetteDarkness);
         _material.SetFloat("_BlurSize", blurSize);

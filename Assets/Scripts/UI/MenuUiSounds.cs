@@ -74,14 +74,31 @@ public static class MenuUiSounds
 
     public static void PlayGunshot()
     {
+        PlayWeaponGunshot(ProjectileWeaponType.Pistol);
+    }
+
+    public static void PlayWeaponGunshot(ProjectileWeaponType weaponType)
+    {
         EnsureInitialized();
-        _source.pitch = Random.Range(0.92f, 1.02f);
+        if (!MenuSettings.UiSoundsEnabled)
+        {
+            return;
+        }
+
+        float pitch = weaponType switch
+        {
+            ProjectileWeaponType.AssaultRifle => Random.Range(0.82f, 0.9f),
+            ProjectileWeaponType.SniperRifle => Random.Range(0.68f, 0.76f),
+            _ => Random.Range(0.98f, 1.08f)
+        };
+
+        _source.pitch = pitch;
         if (_gunshotClip == null)
         {
             _gunshotClip = CreateGunshotClip();
         }
 
-        _source.PlayOneShot(_gunshotClip);
+        _source.PlayOneShot(_gunshotClip, weaponType == ProjectileWeaponType.SniperRifle ? 0.62f : 0.48f);
     }
 
     public static void PlayRangeDing(bool headshot)
