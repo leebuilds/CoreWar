@@ -7,18 +7,22 @@ using UnityEngine.UI;
 /// </summary>
 public class ShootingRangeCharacterPicker : MonoBehaviour
 {
-    Canvas _canvas;
     GameObject _overlayRoot;
     Action<string> _onCardSelected;
+    Action _onBack;
+    Action _onBeforeSelect;
     bool _isOpen;
+    RectTransform _layer;
 
     public bool IsOpen => _isOpen;
 
     public static ShootingRangeCharacterPicker Create(Transform parent, Action<string> onCardSelected)
     {
-        var go = new GameObject("Shooting Range Character Picker");
-        go.transform.SetParent(parent, false);
-        var picker = go.AddComponent<ShootingRangeCharacterPicker>();
+        GameUICanvas.EnsureExists();
+        var layer = GameUICanvas.CreateInteractionLayer("Character Picker", 190);
+        var hostRect = GameUICanvas.CreateScreenHost(layer, "Shooting Range Character Picker");
+        var picker = hostRect.gameObject.AddComponent<ShootingRangeCharacterPicker>();
+        picker._layer = layer;
         picker.Build(onCardSelected);
         return picker;
     }
@@ -26,47 +30,37 @@ public class ShootingRangeCharacterPicker : MonoBehaviour
     void Build(Action<string> onCardSelected)
     {
         _onCardSelected = onCardSelected;
-        MenuUiFactory.EnsureEventSystem();
-
-        var canvasGo = new GameObject("Picker Canvas");
-        canvasGo.transform.SetParent(transform, false);
-        _canvas = canvasGo.AddComponent<Canvas>();
-        _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        _canvas.sortingOrder = 210;
-
-        var scaler = canvasGo.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
-        canvasGo.AddComponent<GraphicRaycaster>();
 
         _overlayRoot = new GameObject("Overlay Root");
-        _overlayRoot.transform.SetParent(canvasGo.transform, false);
+        _overlayRoot.transform.SetParent(transform, false);
         MenuUiFactory.StretchFull(_overlayRoot.AddComponent<RectTransform>());
         _overlayRoot.SetActive(false);
     }
 
-    public void Show()
+    public void Show(Action onBack = null, Action onBeforeSelect = null)
     {
         if (_isOpen)
         {
             return;
         }
 
+        _onBack = onBack;
+        _onBeforeSelect = onBeforeSelect;
+
         ClearOverlayChildren();
         _isOpen = true;
         _overlayRoot.SetActive(true);
 
+        MenuUiFactory.EnsureEventSystem();
+        GameUICanvas.BringLayerToFront(_layer);
         SceneFlow.ApplyMenuInputState();
         MatchClockHud.Instance?.SetVisible(false);
 
-        var dim = new GameObject("Dim");
-        dim.transform.SetParent(_overlayRoot.transform, false);
-        dim.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.45f);
-        MenuUiFactory.StretchFull(dim.GetComponent<RectTransform>());
+        MenuUiFactory.CreateFullscreenDim(_overlayRoot.transform, 0.45f);
 
         var frame = MenuWindowFrame.CreateScreen(_overlayRoot.transform, "CHOOSE CHARACTER", showBack: true,
-            "select an owned card · game visible behind", DecksLayout.WindowSize, showHeader: true, () => Hide());
+            "select an owned card · game visible behind", DecksLayout.WindowSize, showHeader: true, GoBack,
+            animateFade: false);
 
         var bodyRect = frame.Body;
         var bodyLayout = bodyRect.gameObject.AddComponent<LayoutElement>();
@@ -84,10 +78,34 @@ public class ShootingRangeCharacterPicker : MonoBehaviour
         });
     }
 
+    public bool TryGoBack()
+    {
+        if (_onBack == null)
+        {
+            return false;
+        }
+
+        GoBack();
+        return true;
+    }
+
+    void GoBack()
+    {
+        var callback = _onBack;
+        _onBack = null;
+        _onBeforeSelect = null;
+        Hide(resumeGameplay: false);
+        callback?.Invoke();
+    }
+
     void SelectCard(string cardId)
     {
+        var beforeSelect = _onBeforeSelect;
+        _onBack = null;
+        _onBeforeSelect = null;
+        beforeSelect?.Invoke();
         _onCardSelected?.Invoke(cardId);
-        Hide();
+        Hide(resumeGameplay: true);
     }
 
     public void Hide()
@@ -98,6 +116,8 @@ public class ShootingRangeCharacterPicker : MonoBehaviour
     public void Hide(bool resumeGameplay)
     {
         _isOpen = false;
+        _onBack = null;
+        _onBeforeSelect = null;
         if (_overlayRoot != null)
         {
             _overlayRoot.SetActive(false);

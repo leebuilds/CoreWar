@@ -3,71 +3,39 @@ using UnityEngine;
 using UnityEngine.UI;
 
 /// <summary>
-/// Logarithmic dummy health slider for shooting range tuning.
+/// Logarithmic dummy health slider for shooting range tuning (pause submenu).
 /// </summary>
 public class ShootingRangeDummyStatsPanel : MonoBehaviour
 {
-    GameObject _overlayRoot;
-    Slider _slider;
     Text _valueLabel;
-    Action _onApplied;
-    bool _isOpen;
+    Slider _slider;
+    Action _onClosed;
 
-    public bool IsOpen => _isOpen;
-
-    public static ShootingRangeDummyStatsPanel Create(Transform parent, Action onApplied)
+    public static void BuildInto(Transform parent, Action onClosed)
     {
-        var go = new GameObject("Shooting Range Dummy Stats");
-        go.transform.SetParent(parent, false);
-        var panel = go.AddComponent<ShootingRangeDummyStatsPanel>();
-        panel._onApplied = onApplied;
-        panel.Build();
-        return panel;
+        var host = new GameObject("Dummy Stats Controller");
+        host.transform.SetParent(parent, false);
+        var panel = host.AddComponent<ShootingRangeDummyStatsPanel>();
+        panel._onClosed = onClosed;
+        panel.BuildUi(parent);
     }
 
-    void Build()
+    void BuildUi(Transform parent)
     {
-        MenuUiFactory.EnsureEventSystem();
+        MenuUiFactory.CreateFullscreenDim(parent, 0.35f);
 
-        var canvasGo = new GameObject("Dummy Stats Canvas");
-        canvasGo.transform.SetParent(transform, false);
-        var canvas = canvasGo.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 260;
-
-        var scaler = canvasGo.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
-        canvasGo.AddComponent<GraphicRaycaster>();
-
-        _overlayRoot = new GameObject("Overlay Root");
-        _overlayRoot.transform.SetParent(canvasGo.transform, false);
-        MenuUiFactory.StretchFull(_overlayRoot.AddComponent<RectTransform>());
-        _overlayRoot.SetActive(false);
-    }
-
-    public void Show()
-    {
-        if (_isOpen)
-        {
-            return;
-        }
-
-        ClearOverlayChildren();
-        _isOpen = true;
-        _overlayRoot.SetActive(true);
-
-        var dimGo = MenuUiFactory.CreateModalOverlay(_overlayRoot.transform, 0.35f);
-        var frame = MenuWindowFrame.CreateScreen(dimGo.transform, "DUMMY STATS", showBack: true,
-            "target health · 10 to 1000 hp", new Vector2(560f, 360f), showHeader: false, () => Hide());
+        var frame = MenuWindowFrame.CreateScreen(parent, "DUMMY STATS", showBack: true,
+            "target health · 10 to 1000 hp", new Vector2(560f, 360f), showHeader: false, Close,
+            animateFade: false);
 
         _valueLabel = MenuUiFactory.CreateText(frame.Body, "Health Value", "100 HP",
-            36, FontStyle.Bold, TextAnchor.MiddleCenter, new Vector2(0f, 70f), new Vector2(420f, 50f), MenuUiFactory.Ink);
+            36, FontStyle.Bold, TextAnchor.MiddleCenter, new Vector2(0f, 70f), new Vector2(420f, 50f),
+            MenuUiFactory.Ink);
 
         _slider = MenuUiFactory.CreateSlider(frame.Body, "Health Slider",
             new Vector2(0f, -10f), new Vector2(420f, MenuUiFactory.CompactControlHeight),
-            0f, 1f, ShootingRangeSession.HealthValueToSlider(ShootingRangeSession.DummyMaxHealth), OnSliderChanged);
+            0f, 1f, ShootingRangeSession.HealthValueToSlider(ShootingRangeSession.DummyMaxHealth),
+            OnSliderChanged);
 
         MenuUiFactory.CreateButton(frame.Body, "Apply", "APPLY",
             new Vector2(0f, -90f), MenuUiFactory.StandardButtonSize, ApplyAndClose);
@@ -93,35 +61,17 @@ public class ShootingRangeDummyStatsPanel : MonoBehaviour
 
     void ApplyAndClose()
     {
-        ShootingRangeSession.DummyMaxHealth = ShootingRangeSession.HealthSliderToValue(_slider.value);
-        ShootingRangeSession.ResetAllDummies();
-        _onApplied?.Invoke();
-        Hide();
+        if (_slider != null)
+        {
+            ShootingRangeSession.DummyMaxHealth = ShootingRangeSession.HealthSliderToValue(_slider.value);
+            ShootingRangeSession.ResetAllDummies();
+        }
+
+        Close();
     }
 
-    public void Hide()
+    void Close()
     {
-        _isOpen = false;
-        if (_overlayRoot != null)
-        {
-            _overlayRoot.SetActive(false);
-        }
-
-        ClearOverlayChildren();
-        _slider = null;
-        _valueLabel = null;
-    }
-
-    void ClearOverlayChildren()
-    {
-        if (_overlayRoot == null)
-        {
-            return;
-        }
-
-        for (int i = _overlayRoot.transform.childCount - 1; i >= 0; i--)
-        {
-            Destroy(_overlayRoot.transform.GetChild(i).gameObject);
-        }
+        _onClosed?.Invoke();
     }
 }

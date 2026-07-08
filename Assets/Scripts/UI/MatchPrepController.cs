@@ -6,6 +6,7 @@ using UnityEngine;
 public class MatchPrepController : MonoBehaviour
 {
     MatchClassSelectPanel _panel;
+    RectTransform _layer;
 
     public static MatchPrepController Create()
     {
@@ -22,17 +23,17 @@ public class MatchPrepController : MonoBehaviour
 
     void Initialize()
     {
-        MenuUiFactory.EnsureEventSystem();
+        GameUICanvas.EnsureExists();
+        var layer = GameUICanvas.CreateInteractionLayer("Match Prep", 180);
+        _layer = layer;
+        transform.SetParent(layer, false);
 
-        RectTransform root;
-        MenuUiFactory.CreateCanvas("Prep Canvas", out root);
-        var canvas = root.GetComponent<Canvas>();
-        canvas.sortingOrder = 200;
-
-        _panel = MatchClassSelectPanel.Create(root);
+        _panel = MatchClassSelectPanel.Create(layer);
         _panel.ReadyPressed += HandlePrepReady;
         _panel.Completed += HandlePrepComplete;
         _panel.Show();
+        MenuUiFactory.EnsureEventSystem();
+        GameUICanvas.BringLayerToFront(_layer);
         SceneFlow.ApplyMenuInputState();
         MatchClockHud.Instance?.SetVisible(false);
     }

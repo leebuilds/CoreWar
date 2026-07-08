@@ -88,7 +88,7 @@ public class SniperScopePostEffect : MonoBehaviour
 
         bool ironSights = _scopeIndex == 0;
         bool tenX = _scopeIndex >= 2;
-        float scopeRadiusValue = ironSights ? ironSightScopeRadius : scopeRadius;
+        float scopeRadiusValue = ironSights ? ironSightScopeRadius : this.scopeRadius;
         float blurSize = ironSights ? blurSizeIron : (tenX ? blurSize10x : blurSize4x);
         float vignetteDarkness = ironSights ? 0f : (tenX ? vignetteDarkness10x : vignetteDarkness4x);
         float darkBandWidth = ironSights ? darkBandWidth4x : (tenX ? darkBandWidth10x : darkBandWidth4x);

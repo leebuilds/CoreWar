@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -6,15 +7,24 @@ using UnityEngine.UI;
 /// </summary>
 public class GamePauseMenu : MonoBehaviour
 {
+    enum PauseSubMenu
+    {
+        None,
+        Settings,
+        ExitConfirm,
+        DummyStats
+    }
+
     static GamePauseMenu _instance;
 
     RespawnClassPicker _respawnPicker;
     ShootingRangeCharacterPicker _characterPicker;
-    ShootingRangeDummyStatsPanel _dummyStatsPanel;
     ThirdPersonController _player;
+    RectTransform _layer;
     GameObject _overlayRoot;
-    GameObject _settingsOverlay;
-    GameObject _exitConfirmOverlay;
+    GameObject _pauseMainContent;
+    GameObject _activeSubMenu;
+    PauseSubMenu _activeSubMenuKind = PauseSubMenu.None;
     bool _isOpen;
     bool _settingsSubscribed;
 
@@ -23,26 +33,14 @@ public class GamePauseMenu : MonoBehaviour
 
     public bool TryHandleEscape()
     {
-        if (_dummyStatsPanel != null && _dummyStatsPanel.IsOpen)
-        {
-            _dummyStatsPanel.Hide();
-            return true;
-        }
-
         if (!_isOpen)
         {
             return false;
         }
 
-        if (_exitConfirmOverlay != null)
+        if (_activeSubMenuKind != PauseSubMenu.None)
         {
-            HideExitMatchConfirm();
-            return true;
-        }
-
-        if (_settingsOverlay != null)
-        {
-            HideSettingsOverlay();
+            CloseSubMenu();
             return true;
         }
 
@@ -56,10 +54,13 @@ public class GamePauseMenu : MonoBehaviour
         ShootingRangeCharacterPicker characterPicker = null,
         ThirdPersonController player = null)
     {
-        var go = new GameObject("Game Pause Menu");
-        go.transform.SetParent(parent, false);
+        GameUICanvas.EnsureExists();
+        var layer = GameUICanvas.CreateInteractionLayer("Pause Menu", 200);
+        var hostRect = GameUICanvas.CreateScreenHost(layer, "Game Pause Menu");
+        var go = hostRect.gameObject;
         var menu = go.AddComponent<GamePauseMenu>();
         _instance = menu;
+        menu._layer = layer;
         menu._respawnPicker = respawnPicker;
         menu._characterPicker = characterPicker;
         menu._player = player;
@@ -69,29 +70,10 @@ public class GamePauseMenu : MonoBehaviour
 
     void Build()
     {
-        MenuUiFactory.EnsureEventSystem();
-
-        var canvasGo = new GameObject("Pause Canvas");
-        canvasGo.transform.SetParent(transform, false);
-        var canvas = canvasGo.AddComponent<Canvas>();
-        canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        canvas.sortingOrder = 250;
-
-        var scaler = canvasGo.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
-        canvasGo.AddComponent<GraphicRaycaster>();
-
         _overlayRoot = new GameObject("Pause Overlay Root");
-        _overlayRoot.transform.SetParent(canvasGo.transform, false);
+        _overlayRoot.transform.SetParent(transform, false);
         MenuUiFactory.StretchFull(_overlayRoot.AddComponent<RectTransform>());
         _overlayRoot.SetActive(false);
-
-        if (GameSession.IsShootingRange)
-        {
-            _dummyStatsPanel = ShootingRangeDummyStatsPanel.Create(transform, null);
-        }
     }
 
     public void Toggle()
@@ -113,28 +95,35 @@ public class GamePauseMenu : MonoBehaviour
             return;
         }
 
-        HideSettingsOverlay();
-        ClearOverlayChildren();
+        ClearOverlayContent();
         _isOpen = true;
         _overlayRoot.SetActive(true);
 
+        MenuUiFactory.EnsureEventSystem();
+        GameUICanvas.BringLayerToFront(_layer);
         SceneFlow.ApplyMenuInputState();
         MatchClockHud.Instance?.SetVisible(false);
-        BuildPauseContents();
+        BuildPauseMainContent();
     }
 
-    void BuildPauseContents()
+    void BuildPauseMainContent()
     {
-        CreateDim(_overlayRoot.transform, 0.35f);
+        _pauseMainContent = CreateSubmenuRoot("Pause Main");
+        MenuUiFactory.CreateFullscreenDim(_pauseMainContent.transform, 0.35f);
 
         if (GameSession.IsShootingRange)
         {
-            BuildShootingRangePauseContents();
+            BuildShootingRangePauseContents(_pauseMainContent.transform);
             return;
         }
 
-        var frame = MenuWindowFrame.CreateScreen(_overlayRoot.transform, "PAUSE", showBack: true,
-            PauseFooterText(), new Vector2(480f, 420f), showHeader: false, Hide);
+        BuildStandardPauseContents(_pauseMainContent.transform);
+    }
+
+    void BuildStandardPauseContents(Transform parent)
+    {
+        var frame = MenuWindowFrame.CreateScreen(parent, "PAUSE", showBack: true,
+            PauseFooterText(), new Vector2(480f, 420f), showHeader: false, Hide, animateFade: false);
 
         bool respawnLocked = GameSession.IsInPrepPhase;
         var respawnButton = MenuUiFactory.CreateButton(frame.Body, "Respawn", "RESPAWN",
@@ -147,24 +136,24 @@ public class GamePauseMenu : MonoBehaviour
         MenuUiFactory.CreateButton(frame.Body, "Settings", "SETTINGS",
             new Vector2(0f, -10f), MenuUiFactory.StandardButtonSize, ShowSettings);
         MenuUiFactory.CreateButton(frame.Body, "Exit Match", "EXIT MATCH",
-            new Vector2(0f, -90f), MenuUiFactory.StandardButtonSize, RequestExitMatch);
+            new Vector2(0f, -90f), MenuUiFactory.StandardButtonSize, ShowExitMatchConfirm);
     }
 
-    void BuildShootingRangePauseContents()
+    void BuildShootingRangePauseContents(Transform parent)
     {
-        var frame = MenuWindowFrame.CreateScreen(_overlayRoot.transform, "PAUSE", showBack: true,
-            PauseFooterText(), new Vector2(480f, 560f), showHeader: false, Hide);
+        var frame = MenuWindowFrame.CreateScreen(parent, "PAUSE", showBack: true,
+            PauseFooterText(), new Vector2(480f, 560f), showHeader: false, Hide, animateFade: false);
 
         MenuUiFactory.CreateButton(frame.Body, "Choose Character", "CHOOSE CHARACTER",
             new Vector2(0f, 130f), MenuUiFactory.StandardButtonSize, OpenCharacterPicker);
         MenuUiFactory.CreateButton(frame.Body, "Dummy Stats", "DUMMY STATS",
-            new Vector2(0f, 50f), MenuUiFactory.StandardButtonSize, OpenDummyStats);
+            new Vector2(0f, 50f), MenuUiFactory.StandardButtonSize, ShowDummyStats);
         MenuUiFactory.CreateButton(frame.Body, "Reset Map", "RESET MAP",
             new Vector2(0f, -30f), MenuUiFactory.StandardButtonSize, ResetMap);
         MenuUiFactory.CreateButton(frame.Body, "Settings", "SETTINGS",
             new Vector2(0f, -110f), MenuUiFactory.StandardButtonSize, ShowSettings);
         MenuUiFactory.CreateButton(frame.Body, "Exit Match", "EXIT MATCH",
-            new Vector2(0f, -190f), MenuUiFactory.StandardButtonSize, RequestExitMatch);
+            new Vector2(0f, -190f), MenuUiFactory.StandardButtonSize, ShowExitMatchConfirm);
     }
 
     static string PauseFooterText()
@@ -181,9 +170,7 @@ public class GamePauseMenu : MonoBehaviour
 
     public void Hide(bool resumeGameplay)
     {
-        HideExitMatchConfirm();
-        HideSettingsOverlay();
-        ClearOverlayChildren();
+        ClearOverlayContent();
         _isOpen = false;
         if (_overlayRoot != null)
         {
@@ -217,6 +204,36 @@ public class GamePauseMenu : MonoBehaviour
         }
     }
 
+    void OpenSubMenu(PauseSubMenu kind, Action<GameObject> build)
+    {
+        if (_pauseMainContent != null)
+        {
+            _pauseMainContent.SetActive(false);
+        }
+
+        ClearActiveSubMenu();
+        _activeSubMenuKind = kind;
+        _activeSubMenu = CreateSubmenuRoot(kind.ToString());
+        build(_activeSubMenu);
+    }
+
+    void CloseSubMenu()
+    {
+        ClearActiveSubMenu();
+        if (_pauseMainContent != null)
+        {
+            _pauseMainContent.SetActive(true);
+        }
+    }
+
+    GameObject CreateSubmenuRoot(string name)
+    {
+        var submenu = new GameObject(name);
+        submenu.transform.SetParent(_overlayRoot.transform, false);
+        MenuUiFactory.StretchFull(submenu.AddComponent<RectTransform>());
+        return submenu;
+    }
+
     void OpenRespawnPicker()
     {
         if (GameSession.IsInPrepPhase)
@@ -224,19 +241,47 @@ public class GamePauseMenu : MonoBehaviour
             return;
         }
 
-        Hide();
-        _respawnPicker?.Show();
+        HideOverlayForChildPicker();
+        _respawnPicker?.Show(
+            onBack: RestoreOverlayFromChildPicker,
+            onBeforeSelect: () => Hide(resumeGameplay: true));
     }
 
     void OpenCharacterPicker()
     {
-        Hide();
-        _characterPicker?.Show();
+        HideOverlayForChildPicker();
+        _characterPicker?.Show(
+            onBack: RestoreOverlayFromChildPicker,
+            onBeforeSelect: () => Hide(resumeGameplay: true));
     }
 
-    void OpenDummyStats()
+    void HideOverlayForChildPicker()
     {
-        _dummyStatsPanel?.Show();
+        if (_overlayRoot != null)
+        {
+            _overlayRoot.SetActive(false);
+        }
+    }
+
+    void RestoreOverlayFromChildPicker()
+    {
+        if (_overlayRoot != null)
+        {
+            _overlayRoot.SetActive(true);
+        }
+
+        MenuUiFactory.EnsureEventSystem();
+        GameUICanvas.BringLayerToFront(_layer);
+        SceneFlow.ApplyMenuInputState();
+        MatchClockHud.Instance?.SetVisible(false);
+    }
+
+    void ShowDummyStats()
+    {
+        OpenSubMenu(PauseSubMenu.DummyStats, submenu =>
+        {
+            ShootingRangeDummyStatsPanel.BuildInto(submenu.transform, CloseSubMenu);
+        });
     }
 
     void ResetMap()
@@ -246,18 +291,34 @@ public class GamePauseMenu : MonoBehaviour
 
     void ShowSettings()
     {
-        if (_settingsOverlay != null)
-        {
-            return;
-        }
-
         EnsureSettingsSubscription();
-        _settingsOverlay = MenuUiFactory.CreateModalOverlay(_overlayRoot.transform, 0.25f);
-        var frame = MenuWindowFrame.CreateScreen(_settingsOverlay.transform, "SETTINGS", showBack: true,
-            "appearance · audio · controls", new Vector2(580f, 680f), showHeader: false,
-            HideSettingsOverlay);
+        OpenSubMenu(PauseSubMenu.Settings, submenu =>
+        {
+            MenuUiFactory.CreateFullscreenDim(submenu.transform, 0.35f);
+            var frame = MenuWindowFrame.CreateScreen(submenu.transform, "SETTINGS", showBack: true,
+                "appearance · audio · controls", new Vector2(580f, 680f), showHeader: false,
+                CloseSubMenu, animateFade: false);
+            MenuSettingsPanel.Build(frame.Body, showAccountSection: false);
+        });
+    }
 
-        MenuSettingsPanel.Build(frame.Body, showAccountSection: false);
+    void ShowExitMatchConfirm()
+    {
+        OpenSubMenu(PauseSubMenu.ExitConfirm, submenu =>
+        {
+            MenuUiFactory.CreateFullscreenDim(submenu.transform, 0.35f);
+            var frame = MenuWindowFrame.CreateScreen(submenu.transform, "EXIT MATCH?", showBack: false,
+                "you will return to the hub", new Vector2(480f, 320f), showHeader: false,
+                CloseSubMenu, animateFade: false);
+
+            MenuUiFactory.CreateButton(frame.Body, "Stay Button", "STAY",
+                new Vector2(0f, 40f), MenuUiFactory.StandardButtonSize, CloseSubMenu);
+            MenuUiFactory.CreateButton(frame.Body, "Exit Match Button", "EXIT MATCH",
+                new Vector2(0f, -40f), MenuUiFactory.StandardButtonSize, () =>
+                {
+                    SceneFlow.EnterMainMenu();
+                });
+        });
     }
 
     void EnsureSettingsSubscription()
@@ -278,15 +339,17 @@ public class GamePauseMenu : MonoBehaviour
             return;
         }
 
-        bool reopenSettings = _settingsOverlay != null;
-        HideSettingsOverlay();
-        HideExitMatchConfirm();
-        ClearOverlayChildren();
-        BuildPauseContents();
+        bool reopenSettings = _activeSubMenuKind == PauseSubMenu.Settings;
+        ClearOverlayContent();
+        BuildPauseMainContent();
 
         if (reopenSettings)
         {
             ShowSettings();
+        }
+        else if (_pauseMainContent != null)
+        {
+            _pauseMainContent.SetActive(true);
         }
     }
 
@@ -303,62 +366,27 @@ public class GamePauseMenu : MonoBehaviour
         }
     }
 
-    void HideSettingsOverlay()
+    void ClearActiveSubMenu()
     {
-        if (_settingsOverlay != null)
+        if (_activeSubMenu != null)
         {
-            Destroy(_settingsOverlay);
-            _settingsOverlay = null;
-        }
-    }
-
-    void RequestExitMatch()
-    {
-        ShowExitMatchConfirm();
-    }
-
-    void ShowExitMatchConfirm()
-    {
-        if (_exitConfirmOverlay != null)
-        {
-            return;
+            Destroy(_activeSubMenu);
+            _activeSubMenu = null;
         }
 
-        var frame = MenuWindowFrame.CreateModal(_overlayRoot.transform, "EXIT MATCH?", showBack: false,
-            "you will return to the hub", new Vector2(480f, 320f), HideExitMatchConfirm);
-        _exitConfirmOverlay = frame.transform.parent.gameObject;
-
-        MenuUiFactory.CreateButton(frame.Body, "Stay Button", "STAY",
-            new Vector2(0f, 40f), MenuUiFactory.StandardButtonSize, HideExitMatchConfirm);
-        MenuUiFactory.CreateButton(frame.Body, "Exit Match Button", "EXIT MATCH",
-            new Vector2(0f, -40f), MenuUiFactory.StandardButtonSize, () =>
-            {
-                HideExitMatchConfirm();
-                SceneFlow.EnterMainMenu();
-            });
+        _activeSubMenuKind = PauseSubMenu.None;
     }
 
-    void HideExitMatchConfirm()
+    void ClearOverlayContent()
     {
-        if (_exitConfirmOverlay != null)
+        ClearActiveSubMenu();
+
+        if (_pauseMainContent != null)
         {
-            Destroy(_exitConfirmOverlay);
-            _exitConfirmOverlay = null;
+            Destroy(_pauseMainContent);
+            _pauseMainContent = null;
         }
-    }
 
-    static void CreateDim(Transform parent, float alpha)
-    {
-        var dim = new GameObject("Dim");
-        dim.transform.SetParent(parent, false);
-        dim.transform.SetAsFirstSibling();
-        var dimImage = dim.AddComponent<Image>();
-        dimImage.color = new Color(0f, 0f, 0f, alpha);
-        MenuUiFactory.StretchFull(dim.GetComponent<RectTransform>());
-    }
-
-    void ClearOverlayChildren()
-    {
         if (_overlayRoot == null)
         {
             return;

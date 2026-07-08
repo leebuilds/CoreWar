@@ -18,19 +18,19 @@ public class MenuWindowFrame : MonoBehaviour
     Coroutine _fadeRoutine;
 
     public static MenuWindowFrame CreateScreen(Transform parent, string title, bool showBack,
-        string footerText, Vector2 size, bool showHeader, UnityAction onBack)
+        string footerText, Vector2 size, bool showHeader, UnityAction onBack, bool animateFade = false)
     {
-        return Create(parent, title, showBack, footerText, size, showHeader, onBack, modal: false);
+        return Create(parent, title, showBack, footerText, size, showHeader, onBack, modal: false, animateFade);
     }
 
     public static MenuWindowFrame CreateModal(Transform parent, string title, bool showBack,
-        string footerText, Vector2 size, UnityAction onBack)
+        string footerText, Vector2 size, UnityAction onBack, bool animateFade = false)
     {
-        return Create(parent, title, showBack, footerText, size, showHeader: false, onBack, modal: true);
+        return Create(parent, title, showBack, footerText, size, showHeader: false, onBack, modal: true, animateFade);
     }
 
     static MenuWindowFrame Create(Transform parent, string title, bool showBack, string footerText,
-        Vector2 size, bool showHeader, UnityAction onBack, bool modal)
+        Vector2 size, bool showHeader, UnityAction onBack, bool modal, bool animateFade)
     {
         Transform host = parent;
         if (modal)
@@ -42,18 +42,27 @@ public class MenuWindowFrame : MonoBehaviour
         go.transform.SetParent(host, false);
 
         var frame = go.AddComponent<MenuWindowFrame>();
-        frame.Build(title, showBack, footerText, size, showHeader, onBack);
+        frame.Build(title, showBack, footerText, size, showHeader, onBack, animateFade);
 
         if (modal)
         {
             go.transform.SetAsLastSibling();
         }
 
-        frame.PlayShowAnimation();
+        if (animateFade)
+        {
+            frame.PlayShowAnimation();
+        }
+        else
+        {
+            frame.SetFullyVisible();
+        }
+
         return frame;
     }
 
-    void Build(string title, bool showBack, string footerText, Vector2 size, bool showHeader, UnityAction onBack)
+    void Build(string title, bool showBack, string footerText, Vector2 size, bool showHeader, UnityAction onBack,
+        bool animateFade)
     {
         Root = gameObject.AddComponent<RectTransform>();
         Root.anchorMin = new Vector2(0.5f, 0.5f);
@@ -62,7 +71,7 @@ public class MenuWindowFrame : MonoBehaviour
         Root.sizeDelta = size;
 
         _canvasGroup = gameObject.AddComponent<CanvasGroup>();
-        _canvasGroup.alpha = 0f;
+        _canvasGroup.alpha = animateFade ? 0f : 1f;
 
         CreateBorderFill();
 
@@ -156,6 +165,20 @@ public class MenuWindowFrame : MonoBehaviour
 
         FooterText.text = text ?? string.Empty;
         FooterText.color = isError ? MenuUiFactory.Error : MenuUiFactory.MutedInk;
+    }
+
+    public void SetFullyVisible()
+    {
+        if (_fadeRoutine != null)
+        {
+            StopCoroutine(_fadeRoutine);
+            _fadeRoutine = null;
+        }
+
+        if (_canvasGroup != null)
+        {
+            _canvasGroup.alpha = 1f;
+        }
     }
 
     public void PlayShowAnimation()

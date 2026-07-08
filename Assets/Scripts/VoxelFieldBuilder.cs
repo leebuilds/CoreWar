@@ -16,6 +16,7 @@ public class VoxelFieldBuilder : MonoBehaviour
     void Awake()
     {
         SceneFlow.InitializeGameScene();
+        GameUICanvas.EnsureExists();
 
         bool isRange = GameSession.IsShootingRange;
         if (isRange)
@@ -71,6 +72,7 @@ public class VoxelFieldBuilder : MonoBehaviour
 
         CreateLight(isRange);
         var player = CreatePlayer(voxelWorld, isRange);
+        GameplayHud.Create();
         MatchClockHud.Create();
         PlayerBulletHitFlash.Create();
 

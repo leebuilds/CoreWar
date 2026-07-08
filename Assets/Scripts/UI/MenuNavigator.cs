@@ -81,6 +81,7 @@ public class MenuNavigator : MonoBehaviour
         }
 
         _bootstrapped = true;
+        MenuUiFactory.EnsureEventSystem();
         MenuSettings.EnsureLoaded();
         ApplyMenuBackground();
         ProfileSession.EnsureInitialized();

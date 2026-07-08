@@ -1,9 +1,9 @@
 using UnityEngine;
+using UnityEngine.UI;
 
 /// <summary>
 /// Full-screen blindness when the local player is struck. Hold is pitch black;
-/// fade in and fade out pass through red. Drawn via ThirdPersonController.OnGUI.
-/// Re-hits while already blind skip the flash and restart the hold timer.
+/// fade in and fade out pass through red. Re-hits while already blind skip the flash.
 /// </summary>
 public class PlayerBulletHitFlash : MonoBehaviour
 {
@@ -18,19 +18,29 @@ public class PlayerBulletHitFlash : MonoBehaviour
     static readonly Color RedFlash = new Color(0.82f, 0.08f, 0.08f, 1f);
     static readonly Color Blackout = new Color(0f, 0f, 0f, 1f);
 
+    Image _redImage;
+    Image _blackImage;
     float _remaining;
     float _totalDuration;
     bool _skipFadeIn;
 
     public static PlayerBulletHitFlash Create()
     {
-        var host = new GameObject("Player Bullet Hit Flash");
-        return host.AddComponent<PlayerBulletHitFlash>();
+        if (Instance != null)
+        {
+            return Instance;
+        }
+
+        GameUICanvas.EnsureExists();
+        var layer = GameUICanvas.CreateLayer("Hit Flash");
+        var hostRect = GameUICanvas.CreateScreenHost(layer, "Player Bullet Hit Flash");
+        return hostRect.gameObject.AddComponent<PlayerBulletHitFlash>();
     }
 
     void Awake()
     {
         Instance = this;
+        Build();
     }
 
     void OnDestroy()
@@ -41,6 +51,27 @@ public class PlayerBulletHitFlash : MonoBehaviour
         }
     }
 
+    void Build()
+    {
+        _redImage = CreateFlashImage("Red Flash", new Color(RedFlash.r, RedFlash.g, RedFlash.b, 0f));
+        _blackImage = CreateFlashImage("Black Flash", new Color(Blackout.r, Blackout.g, Blackout.b, 0f));
+        _redImage.raycastTarget = false;
+        _blackImage.raycastTarget = false;
+        SetVisible(false);
+    }
+
+    Image CreateFlashImage(string name, Color color)
+    {
+        var go = new GameObject(name);
+        go.transform.SetParent(transform, false);
+        MenuUiFactory.StretchFull(go.AddComponent<RectTransform>());
+        var image = go.AddComponent<Image>();
+        image.sprite = MenuUiFactory.WhiteSprite;
+        image.color = color;
+        image.raycastTarget = false;
+        return image;
+    }
+
     void Update()
     {
         if (_remaining > 0f)
@@ -49,39 +80,39 @@ public class PlayerBulletHitFlash : MonoBehaviour
             if (_remaining <= 0f)
             {
                 _skipFadeIn = false;
+                SetVisible(false);
+                return;
             }
         }
-    }
 
-    public static void DrawOverlay()
-    {
-        if (Instance == null || Instance._remaining <= 0f)
+        if (_remaining <= 0f)
         {
             return;
         }
 
         ComputeAlphas(
-            Instance._totalDuration,
-            Instance._remaining,
-            Instance._skipFadeIn,
+            _totalDuration,
+            _remaining,
+            _skipFadeIn,
             out float blackAlpha,
             out float redAlpha);
-        var screen = new Rect(0f, 0f, Screen.width, Screen.height);
-        Color previousColor = GUI.color;
 
-        if (redAlpha > 0.001f)
+        SetVisible(true);
+        _redImage.color = new Color(RedFlash.r, RedFlash.g, RedFlash.b, redAlpha);
+        _blackImage.color = new Color(Blackout.r, Blackout.g, Blackout.b, blackAlpha);
+    }
+
+    void SetVisible(bool visible)
+    {
+        if (_redImage != null)
         {
-            GUI.color = new Color(RedFlash.r, RedFlash.g, RedFlash.b, redAlpha);
-            GUI.DrawTexture(screen, Texture2D.whiteTexture);
+            _redImage.gameObject.SetActive(visible);
         }
 
-        if (blackAlpha > 0.001f)
+        if (_blackImage != null)
         {
-            GUI.color = new Color(Blackout.r, Blackout.g, Blackout.b, blackAlpha);
-            GUI.DrawTexture(screen, Texture2D.whiteTexture);
+            _blackImage.gameObject.SetActive(visible);
         }
-
-        GUI.color = previousColor;
     }
 
     static void ComputeAlphas(float totalDuration, float remaining, bool skipFadeIn,

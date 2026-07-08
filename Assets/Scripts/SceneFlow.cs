@@ -63,6 +63,7 @@ public static class SceneFlow
     {
         ApplyMenuInputState();
         ResetTransientUiInfrastructure();
+        MenuUiFactory.EnsureEventSystem();
         MenuSettings.EnsureLoaded();
     }
 
@@ -81,6 +82,7 @@ public static class SceneFlow
         }
 
         ResetTransientUiInfrastructure();
+        MenuUiFactory.EnsureEventSystem();
         MenuSettings.EnsureLoaded();
     }
 

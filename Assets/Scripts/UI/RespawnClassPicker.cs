@@ -7,18 +7,22 @@ using UnityEngine.UI;
 /// </summary>
 public class RespawnClassPicker : MonoBehaviour
 {
-    Canvas _canvas;
     GameObject _overlayRoot;
     Action<string> _onCardSelected;
+    Action _onBack;
+    Action _onBeforeSelect;
     bool _isOpen;
+    RectTransform _layer;
 
     public bool IsOpen => _isOpen;
 
     public static RespawnClassPicker Create(Transform parent, Action<string> onCardSelected)
     {
-        var go = new GameObject("Respawn Class Picker");
-        go.transform.SetParent(parent, false);
-        var picker = go.AddComponent<RespawnClassPicker>();
+        GameUICanvas.EnsureExists();
+        var layer = GameUICanvas.CreateInteractionLayer("Respawn Picker", 190);
+        var hostRect = GameUICanvas.CreateScreenHost(layer, "Respawn Class Picker");
+        var picker = hostRect.gameObject.AddComponent<RespawnClassPicker>();
+        picker._layer = layer;
         picker.Build(onCardSelected);
         return picker;
     }
@@ -26,53 +30,63 @@ public class RespawnClassPicker : MonoBehaviour
     void Build(Action<string> onCardSelected)
     {
         _onCardSelected = onCardSelected;
-        MenuUiFactory.EnsureEventSystem();
-
-        var canvasGo = new GameObject("Picker Canvas");
-        canvasGo.transform.SetParent(transform, false);
-        _canvas = canvasGo.AddComponent<Canvas>();
-        _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-        _canvas.sortingOrder = 200;
-
-        var scaler = canvasGo.AddComponent<CanvasScaler>();
-        scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-        scaler.referenceResolution = new Vector2(1920, 1080);
-        scaler.matchWidthOrHeight = 0.5f;
-        canvasGo.AddComponent<GraphicRaycaster>();
 
         _overlayRoot = new GameObject("Overlay Root");
-        _overlayRoot.transform.SetParent(canvasGo.transform, false);
+        _overlayRoot.transform.SetParent(transform, false);
         MenuUiFactory.StretchFull(_overlayRoot.AddComponent<RectTransform>());
         _overlayRoot.SetActive(false);
     }
 
-    public void Show()
+    public void Show(Action onBack = null, Action onBeforeSelect = null)
     {
         if (_isOpen)
         {
             return;
         }
 
+        _onBack = onBack;
+        _onBeforeSelect = onBeforeSelect;
+
         ClearOverlayChildren();
         _isOpen = true;
         _overlayRoot.SetActive(true);
 
+        MenuUiFactory.EnsureEventSystem();
+        GameUICanvas.BringLayerToFront(_layer);
         SceneFlow.ApplyMenuInputState();
         MatchClockHud.Instance?.SetVisible(false);
 
-        var dim = new GameObject("Dim");
-        dim.transform.SetParent(_overlayRoot.transform, false);
-        dim.AddComponent<Image>().color = new Color(0f, 0f, 0f, 0.55f);
-        MenuUiFactory.StretchFull(dim.GetComponent<RectTransform>());
+        MenuUiFactory.CreateFullscreenDim(_overlayRoot.transform, 0.55f);
 
-        MenuUiFactory.CreateText(_overlayRoot.transform, "Title", "CHOOSE CLASS",
-            52, FontStyle.Bold, TextAnchor.MiddleCenter, new Vector2(0f, 280f), new Vector2(900f, 80f), MenuUiFactory.Ink);
+        var frame = MenuWindowFrame.CreateScreen(_overlayRoot.transform, "CHOOSE CLASS", showBack: true,
+            "pick a loadout card to respawn", new Vector2(980f, 560f), showHeader: false, GoBack,
+            animateFade: false);
 
         var cardA = CardCatalog.Get(GameSession.LoadoutCardIdA);
         var cardB = CardCatalog.Get(GameSession.LoadoutCardIdB);
 
-        CreatePickerCard(_overlayRoot.transform, cardA, new Vector2(-420f, 0f), GameSession.LoadoutCardIdA);
-        CreatePickerCard(_overlayRoot.transform, cardB, new Vector2(420f, 0f), GameSession.LoadoutCardIdB);
+        CreatePickerCard(frame.Body, cardA, new Vector2(-220f, 0f), GameSession.LoadoutCardIdA);
+        CreatePickerCard(frame.Body, cardB, new Vector2(220f, 0f), GameSession.LoadoutCardIdB);
+    }
+
+    public bool TryGoBack()
+    {
+        if (_onBack == null)
+        {
+            return false;
+        }
+
+        GoBack();
+        return true;
+    }
+
+    void GoBack()
+    {
+        var callback = _onBack;
+        _onBack = null;
+        _onBeforeSelect = null;
+        Hide(resumeGameplay: false);
+        callback?.Invoke();
     }
 
     void CreatePickerCard(Transform parent, CardDefinition card, Vector2 position, string cardId)
@@ -93,8 +107,12 @@ public class RespawnClassPicker : MonoBehaviour
 
     void SelectCard(string cardId)
     {
+        var beforeSelect = _onBeforeSelect;
+        _onBack = null;
+        _onBeforeSelect = null;
+        beforeSelect?.Invoke();
         _onCardSelected?.Invoke(cardId);
-        Hide();
+        Hide(resumeGameplay: true);
     }
 
     public void Hide()
@@ -105,6 +123,8 @@ public class RespawnClassPicker : MonoBehaviour
     public void Hide(bool resumeGameplay)
     {
         _isOpen = false;
+        _onBack = null;
+        _onBeforeSelect = null;
         if (_overlayRoot != null)
         {
             _overlayRoot.SetActive(false);

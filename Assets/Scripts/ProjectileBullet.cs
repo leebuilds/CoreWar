@@ -16,7 +16,8 @@ public class ProjectileBullet : MonoBehaviour
     const float DamageEpsilon = 0.001f;
     const float SurfaceImpactSpeedRetention = 0.5f;
     const float SniperPlayerSpeedRetention = 0.85f;
-    const float SniperAccuracyDeflectionDegrees = 1.2f;
+    const float SniperAccuracyDeflectionDegrees = 0.24f;
+    const float MinApparentSizeDistanceMeters = 50f;
 
     static readonly List<ProjectileBullet> LiveBullets = new List<ProjectileBullet>();
     static Material _bulletMaterial;
@@ -27,12 +28,19 @@ public class ProjectileBullet : MonoBehaviour
     float _spawnTime;
     readonly HashSet<GameObject> _penetratedCharacters = new HashSet<GameObject>();
     Renderer _renderer;
+    Transform _bulletVisual;
 
-    public void Initialize(Vector3 velocity, ProjectileWeaponType weaponType)
+    GameObject _ownerRoot;
+    bool _canHitOwner;
+
+    public void Initialize(Vector3 velocity, ProjectileWeaponType weaponType, GameObject ownerRoot = null,
+        bool canHitOwner = false)
     {
         _velocity = velocity;
         _muzzleSpeed = velocity.magnitude;
         _weaponType = weaponType;
+        _ownerRoot = ownerRoot;
+        _canHitOwner = canHitOwner;
         _spawnTime = Time.time;
         EnsureVisual();
 
@@ -77,6 +85,7 @@ public class ProjectileBullet : MonoBehaviour
         ProjectileDamage.ApplyAirDrag(ref _velocity, _weaponType, travelDistance);
         Vector3 end = start + (_velocity * Time.deltaTime);
         ResolveHits(start, end);
+        UpdateBulletVisualScale();
     }
 
     void ResolveHits(Vector3 start, Vector3 intendedEnd)
@@ -122,6 +131,11 @@ public class ProjectileBullet : MonoBehaviour
             var controller = hit.collider.GetComponentInParent<ThirdPersonController>();
             if (controller != null)
             {
+                if (ShouldIgnoreCharacter(controller.gameObject))
+                {
+                    continue;
+                }
+
                 if (TryResolveCharacterHit(
                     controller.gameObject,
                     hit.point,
@@ -151,6 +165,11 @@ public class ProjectileBullet : MonoBehaviour
         {
             transform.rotation = Quaternion.LookRotation(_velocity.normalized, Vector3.up);
         }
+    }
+
+    bool ShouldIgnoreCharacter(GameObject characterRoot)
+    {
+        return !_canHitOwner && _ownerRoot != null && characterRoot == _ownerRoot;
     }
 
     bool TryResolveCharacterHit(
@@ -260,17 +279,38 @@ public class ProjectileBullet : MonoBehaviour
     {
         if (transform.childCount > 0)
         {
-            _renderer = transform.GetChild(0).GetComponent<Renderer>();
+            _bulletVisual = transform.GetChild(0);
+            _renderer = _bulletVisual.GetComponent<Renderer>();
             return;
         }
 
         var bullet = GameObject.CreatePrimitive(PrimitiveType.Sphere);
         bullet.name = "Bullet Visual";
         bullet.transform.SetParent(transform, false);
-        bullet.transform.localScale = Vector3.one * (Radius * 2f);
+        _bulletVisual = bullet.transform;
+        _bulletVisual.localScale = Vector3.one * (Radius * 2f);
         _renderer = bullet.GetComponent<MeshRenderer>();
         _renderer.sharedMaterial = BulletMaterial();
         Destroy(bullet.GetComponent<Collider>());
+    }
+
+    void UpdateBulletVisualScale()
+    {
+        if (_bulletVisual == null)
+        {
+            return;
+        }
+
+        Camera camera = Camera.main;
+        if (camera == null)
+        {
+            return;
+        }
+
+        float distance = Vector3.Distance(camera.transform.position, transform.position);
+        float diameter = Radius * 2f;
+        float scale = diameter * Mathf.Max(1f, distance / MinApparentSizeDistanceMeters);
+        _bulletVisual.localScale = Vector3.one * scale;
     }
 
     static Material BulletMaterial()

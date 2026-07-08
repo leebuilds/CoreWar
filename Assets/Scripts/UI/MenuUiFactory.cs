@@ -171,6 +171,25 @@ public static class MenuUiFactory
     public const float CardHoverScale = 1.04f;
 
     static Font _font;
+    static Sprite _whiteSprite;
+
+    public static Sprite WhiteSprite
+    {
+        get
+        {
+            if (_whiteSprite == null)
+            {
+                var texture = Texture2D.whiteTexture;
+                _whiteSprite = Sprite.Create(
+                    texture,
+                    new Rect(0f, 0f, texture.width, texture.height),
+                    new Vector2(0.5f, 0.5f));
+                _whiteSprite.name = "UI White Sprite";
+            }
+
+            return _whiteSprite;
+        }
+    }
 
     public static Font Font
     {
@@ -207,13 +226,22 @@ public static class MenuUiFactory
         overlayGo.transform.SetParent(parent, false);
         MenuUiFactory.StretchFull(overlayGo.AddComponent<RectTransform>());
 
-        var dim = new GameObject("Dim");
-        dim.transform.SetParent(overlayGo.transform, false);
-        var dimImage = dim.AddComponent<Image>();
-        dimImage.color = new Color(0f, 0f, 0f, dimAlpha);
-        StretchFull(dim.GetComponent<RectTransform>());
+        CreateFullscreenDim(overlayGo.transform, dimAlpha);
 
         return overlayGo;
+    }
+
+    public static Image CreateFullscreenDim(Transform parent, float dimAlpha, bool blockRaycasts = true)
+    {
+        var dim = new GameObject("Dim");
+        dim.transform.SetParent(parent, false);
+        dim.transform.SetAsFirstSibling();
+        var dimImage = dim.AddComponent<Image>();
+        dimImage.sprite = WhiteSprite;
+        dimImage.color = new Color(0f, 0f, 0f, dimAlpha);
+        dimImage.raycastTarget = blockRaycasts;
+        StretchFull(dim.GetComponent<RectTransform>());
+        return dimImage;
     }
 
     public static void CreateDivider(Transform parent, bool top)
@@ -289,6 +317,7 @@ public static class MenuUiFactory
         rect.sizeDelta = new Vector2(BackButtonSize, BackButtonSize);
 
         var borderImage = go.AddComponent<Image>();
+        borderImage.sprite = WhiteSprite;
         borderImage.color = MilitaryPanelBorder;
 
         var button = go.AddComponent<Button>();
@@ -513,6 +542,7 @@ public static class MenuUiFactory
         }
 
         var borderImage = go.AddComponent<Image>();
+        borderImage.sprite = WhiteSprite;
         borderImage.color = enabled ? Ink : Disabled;
 
         var button = go.AddComponent<Button>();
@@ -528,6 +558,7 @@ public static class MenuUiFactory
         var innerRect = innerGo.AddComponent<RectTransform>();
         ApplyInnerBorder(innerRect);
         var innerImage = innerGo.AddComponent<Image>();
+        innerImage.sprite = WhiteSprite;
         innerImage.color = enabled ? ButtonFill : DisabledFill;
 
         CreateAnchoredText(innerGo.transform, "Label", label, ButtonFontSize, FontStyle.Bold, TextAnchor.MiddleCenter,
@@ -731,13 +762,16 @@ public static class MenuUiFactory
         rect.sizeDelta = size;
 
         var border = go.AddComponent<Image>();
+        border.sprite = WhiteSprite;
         border.color = Ink;
 
         var innerGo = new GameObject("Inner");
         innerGo.transform.SetParent(go.transform, false);
         var innerRect = innerGo.AddComponent<RectTransform>();
         ApplyInnerBorder(innerRect);
-        innerGo.AddComponent<Image>().color = InputFill;
+        var innerImage = innerGo.AddComponent<Image>();
+        innerImage.sprite = WhiteSprite;
+        innerImage.color = InputFill;
 
         var textGo = new GameObject("Text");
         textGo.transform.SetParent(innerGo.transform, false);
@@ -772,6 +806,7 @@ public static class MenuUiFactory
         placeholderRect.offsetMax = new Vector2(-InputTextPaddingH, -InputTextPaddingV);
 
         var input = go.AddComponent<InputField>();
+        input.targetGraphic = border;
         input.textComponent = text;
         input.placeholder = placeholderText;
         if (password)
@@ -941,14 +976,48 @@ public static class MenuUiFactory
 
     public static void EnsureEventSystem()
     {
-        if (Object.FindAnyObjectByType<EventSystem>() != null)
+        var systems = Object.FindObjectsByType<EventSystem>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        EventSystem keeper = null;
+
+        foreach (var system in systems)
         {
+            if (system == null)
+            {
+                continue;
+            }
+
+            if (keeper != null)
+            {
+                Object.Destroy(system.gameObject);
+                continue;
+            }
+
+            keeper = system;
+        }
+
+        if (keeper == null)
+        {
+            var go = new GameObject("EventSystem");
+            keeper = go.AddComponent<EventSystem>();
+            go.AddComponent<StandaloneInputModule>();
             return;
         }
 
-        var go = new GameObject("EventSystem");
-        go.AddComponent<EventSystem>();
-        go.AddComponent<StandaloneInputModule>();
+        if (!keeper.gameObject.activeInHierarchy)
+        {
+            keeper.gameObject.SetActive(true);
+        }
+
+        if (keeper.GetComponent<StandaloneInputModule>() == null)
+        {
+            var existingModule = keeper.GetComponent<BaseInputModule>();
+            if (existingModule != null)
+            {
+                Object.Destroy(existingModule);
+            }
+
+            keeper.gameObject.AddComponent<StandaloneInputModule>();
+        }
     }
 
     public static void QuitApplication()

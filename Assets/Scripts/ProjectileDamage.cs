@@ -70,20 +70,20 @@ public static class ProjectileDamage
 
     /// <summary>
     /// Fraction of speed retained after 100 m of air travel (exponential decay).
-    /// Pistol ~20% loss, AR ~10%, sniper ~2%.
+    /// Pistol ~25% loss, AR ~5%, sniper ~2%.
     /// </summary>
     public static float AirSpeedRetentionPer100Meters(ProjectileWeaponType weaponType)
     {
         switch (weaponType)
         {
             case ProjectileWeaponType.Pistol:
-                return 0.80f;
+                return 0.75f;
             case ProjectileWeaponType.AssaultRifle:
-                return 0.90f;
+                return 0.95f;
             case ProjectileWeaponType.SniperRifle:
                 return 0.98f;
             default:
-                return 0.90f;
+                return 0.95f;
         }
     }
 

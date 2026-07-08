@@ -212,6 +212,120 @@ public class ThirdPersonController : MonoBehaviour
 
     int HotbarSlotCount => _activeKit == null ? 4 : _activeKit.SlotCount;
 
+    public static ThirdPersonController Local { get; private set; }
+
+    public bool IsHudOverlayBlocking => IsUiOverlayBlocking();
+    public bool IsHudGameplayBlocked => IsGameplayBlocked();
+    public CardKitDefinition ActiveKit => _activeKit ?? CardKitDefinition.DefaultInfantryPlaceholder();
+    public int SelectedHotbarIndex => _selectedHotbarIndex;
+    public int EquippableHotbarCount => HotbarSlotCount;
+    public float HotbarReloadOverlayFill => ReloadOverlayFill();
+    public float HotbarAbilityOverlayFill => AbilityCooldownOverlayFill();
+    public bool IsAbilityReadyForHud => IsAbilityReady();
+    public bool IsFirearmSelected => IsFirearmTool(SelectedTool);
+    public WeaponAmmoPool CurrentAmmo => GetAmmoPoolForSelectedTool();
+    public bool IsBuildSelectorOpen => _selectorOpen;
+    public float BuildSelectorRadius => selectorRadius;
+    public int BuildPieceOptionCount => BuildPieceOptions.Length;
+    public int SniperScopeIndex => _sniperScopeIndex;
+    public string ActiveCardSpecialtyForHud => ActiveCardSpecialty();
+
+    public Texture2D GetBuildSelectorTexture()
+    {
+        EnsureRadialTexture();
+        return _radialTexture;
+    }
+
+    public string GetBuildPieceDisplayName(int index)
+    {
+        return DisplayName(BuildPieceOptions[Mathf.Clamp(index, 0, BuildPieceOptions.Length - 1)]);
+    }
+
+    public void GetCrosshairPresentation(
+        out bool showStandard,
+        out float gap,
+        out float length,
+        out float thickness,
+        out Color color,
+        out bool showRedDot,
+        out bool showScopeLabel,
+        out int scopeIndex,
+        out float scopeRadiusFraction)
+    {
+        showStandard = false;
+        gap = crosshairGap;
+        length = crosshairLength;
+        thickness = crosshairThickness;
+        color = crosshairColor;
+        showRedDot = false;
+        showScopeLabel = false;
+        scopeIndex = _sniperScopeIndex;
+        scopeRadiusFraction = SniperScopePostEffect.Instance != null
+            ? SniperScopePostEffect.Instance.scopeRadius
+            : (1f / 3f);
+
+        if (_isReloading)
+        {
+            if (SelectedTool == CardHotbarTool.SniperRifle &&
+                _sniperAimingHeld &&
+                _sniperScopeSwapPhase != 1 &&
+                IsMagnifiedSniperScope(_sniperScopeIndex))
+            {
+                showRedDot = true;
+                showScopeLabel = true;
+            }
+
+            FinalizeScopeLabel(ref showScopeLabel);
+            return;
+        }
+
+        if (SelectedTool == CardHotbarTool.SniperRifle)
+        {
+            bool showHipCrosshair = !_sniperAimingHeld || _sniperScopeSwapPhase == 1;
+            if (showHipCrosshair)
+            {
+                showStandard = true;
+                gap = sniperHipFireCrosshairGap;
+                length = sniperHipFireCrosshairLength;
+            }
+            else if (_sniperAimingHeld)
+            {
+                if (_sniperScopeIndex == 0)
+                {
+                    showStandard = true;
+                    gap = weaponCrosshairGap;
+                    length = weaponCrosshairLength;
+                }
+                else if (_sniperScopeOverlayBlend > 0.05f)
+                {
+                    showRedDot = true;
+                    showScopeLabel = true;
+                }
+            }
+
+            FinalizeScopeLabel(ref showScopeLabel);
+            return;
+        }
+
+        if (SelectedTool == CardHotbarTool.AssaultRifle)
+        {
+            showStandard = true;
+            gap = weaponCrosshairGap;
+            length = weaponCrosshairLength;
+            return;
+        }
+
+        showStandard = true;
+    }
+
+    void FinalizeScopeLabel(ref bool showScopeLabel)
+    {
+        if (showScopeLabel)
+        {
+            showScopeLabel = _sniperScopeSwapPhase == 0 && IsMagnifiedSniperScope(_sniperScopeIndex);
+        }
+    }
+
     float AssaultRifleFireInterval => 60f / Mathf.Max(1f, assaultRifleRpm);
 
     void Awake()
@@ -244,6 +358,11 @@ public class ThirdPersonController : MonoBehaviour
 
     void OnDestroy()
     {
+        if (Local == this)
+        {
+            Local = null;
+        }
+
         MenuSettings.Changed -= ApplyMenuSettings;
         ProfileSession.TouchActivity();
     }
@@ -350,6 +469,7 @@ public class ThirdPersonController : MonoBehaviour
 
         _pauseMenu = GamePauseMenu.Create(transform, _respawnPicker, _characterPicker, this);
 
+        Local = this;
         CreateHeldToolVisuals();
         RefreshHeldToolVisibility();
         BeginWeaponDraw(SelectedTool);
@@ -570,12 +690,22 @@ public class ThirdPersonController : MonoBehaviour
         {
             if (_characterPicker != null && _characterPicker.IsOpen)
             {
+                if (_characterPicker.TryGoBack())
+                {
+                    return;
+                }
+
                 _characterPicker.Hide();
                 return;
             }
 
             if (_respawnPicker != null && _respawnPicker.IsOpen)
             {
+                if (_respawnPicker.TryGoBack())
+                {
+                    return;
+                }
+
                 _respawnPicker.Hide();
                 return;
             }
@@ -1267,13 +1397,13 @@ public class ThirdPersonController : MonoBehaviour
 
     void TrySniperScopeAbility()
     {
-        if (SelectedTool != CardHotbarTool.SniperRifle || _sniperScopeSwapPhase != 0)
+        if (_sniperScopeSwapPhase != 0)
         {
             return;
         }
 
         int nextScopeIndex = (_sniperScopeIndex + 1) % 3;
-        if (_sniperAimingHeld)
+        if (SelectedTool == CardHotbarTool.SniperRifle && _sniperAimingHeld)
         {
             BeginSniperScopeSwap(nextScopeIndex);
             return;
@@ -1529,7 +1659,7 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        if (!TryFireWeapon(CardHotbarTool.AssaultRifle, assaultRifleBulletSpeed, 0.75f, ProjectileWeaponType.AssaultRifle))
+        if (!TryFireWeapon(CardHotbarTool.AssaultRifle, assaultRifleBulletSpeed, 0.675f, ProjectileWeaponType.AssaultRifle))
         {
             return;
         }
@@ -1554,7 +1684,7 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        TryFireWeapon(CardHotbarTool.Pistol, pistolBulletSpeed, 0.5f, ProjectileWeaponType.Pistol);
+        TryFireWeapon(CardHotbarTool.Pistol, pistolBulletSpeed, 0.425f, ProjectileWeaponType.Pistol);
     }
 
     void HandleSniperRifleInput()
@@ -1593,7 +1723,7 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        float recoilScale = _sniperAimingHeld ? 2.7f : 4.8f;
+        float recoilScale = _sniperAimingHeld ? 2.835f : 5.04f;
         if (!TryFireSniperWeapon(sniperBulletSpeed, recoilScale))
         {
             return;
@@ -1949,7 +2079,8 @@ public class ThirdPersonController : MonoBehaviour
         var bullet = new GameObject("Projectile Bullet");
         bullet.transform.position = spawnPosition;
         bullet.transform.rotation = Quaternion.LookRotation(shotRay.direction, Vector3.up);
-        bullet.AddComponent<ProjectileBullet>().Initialize(shotRay.direction * muzzleSpeed, weaponType);
+        bullet.AddComponent<ProjectileBullet>().Initialize(
+            shotRay.direction * muzzleSpeed, weaponType, gameObject);
 
         _gunKickTimer = 0.08f;
         _muzzleFlashTimer = 0.045f;
@@ -2918,355 +3049,6 @@ public class ThirdPersonController : MonoBehaviour
         bar.localScale = localScale;
     }
 
-    void OnGUI()
-    {
-        if (!GameSession.IsMatchActive || !SceneFlow.IsGameActive)
-        {
-            return;
-        }
-
-        if (!IsUiOverlayBlocking())
-        {
-            if (GameSession.IsInPrepPhase && !GameSession.IsPrepReady)
-            {
-                // Card pick only — no gameplay HUD yet.
-            }
-            else if (GameSession.IsInPrepPhase && GameSession.IsPrepReady)
-            {
-                DrawHotbar();
-            }
-            else
-            {
-                DrawHotbar();
-
-                if (!IsGameplayBlocked())
-                {
-                    DrawCrosshair();
-                }
-
-                DrawBuildSelector();
-            }
-        }
-
-        PlayerBulletHitFlash.DrawOverlay();
-    }
-
-    void DrawCrosshair()
-    {
-        if (_isReloading)
-        {
-            if (SelectedTool == CardHotbarTool.SniperRifle &&
-                _sniperAimingHeld &&
-                _sniperScopeSwapPhase != 1 &&
-                IsMagnifiedSniperScope(_sniperScopeIndex))
-            {
-                DrawRedDot();
-                DrawSniperScopeLabel();
-            }
-
-            return;
-        }
-
-        if (SelectedTool == CardHotbarTool.SniperRifle)
-        {
-            bool showHipCrosshair = !_sniperAimingHeld || _sniperScopeSwapPhase == 1;
-            if (showHipCrosshair)
-            {
-                DrawStandardCrosshair(sniperHipFireCrosshairGap, sniperHipFireCrosshairLength);
-            }
-            else if (_sniperAimingHeld)
-            {
-                if (_sniperScopeIndex == 0)
-                {
-                    DrawStandardCrosshair(weaponCrosshairGap, weaponCrosshairLength);
-                }
-                else if (_sniperScopeOverlayBlend > 0.05f)
-                {
-                    DrawRedDot();
-                    DrawSniperScopeLabel();
-                }
-            }
-
-            return;
-        }
-
-        if (SelectedTool == CardHotbarTool.AssaultRifle)
-        {
-            DrawStandardCrosshair(weaponCrosshairGap, weaponCrosshairLength);
-            return;
-        }
-
-        DrawStandardCrosshair(crosshairGap, crosshairLength);
-    }
-
-    static float SniperScopeRadiusFraction =>
-        SniperScopePostEffect.Instance != null ? SniperScopePostEffect.Instance.scopeRadius : (1f / 3f);
-
-    void DrawSniperScopeLabel()
-    {
-        if (_sniperScopeSwapPhase != 0 || !IsMagnifiedSniperScope(_sniperScopeIndex))
-        {
-            return;
-        }
-
-        float centerX = Screen.width * 0.5f;
-        float centerY = Screen.height * 0.5f;
-        float scopeRadiusPx = Screen.height * SniperScopeRadiusFraction;
-        const float panelWidth = 72f;
-        const float panelHeight = 24f;
-        float panelX = centerX - (panelWidth * 0.5f);
-        float panelY = centerY - scopeRadiusPx - panelHeight - 10f;
-
-        Color previousColor = GUI.color;
-        GUI.color = scopeLabelPanelColor;
-        GUI.DrawTexture(new Rect(panelX, panelY, panelWidth, panelHeight), Texture2D.whiteTexture);
-        GUI.color = previousColor;
-
-        var labelStyle = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = 13,
-            fontStyle = FontStyle.Bold,
-            normal = { textColor = scopeLabelColor }
-        };
-        GUI.Label(new Rect(panelX, panelY, panelWidth, panelHeight), SniperScopeLabelText(_sniperScopeIndex), labelStyle);
-    }
-
-    static string SniperScopeLabelText(int scopeIndex)
-    {
-        switch (scopeIndex)
-        {
-            case 1:
-                return "4x";
-            case 2:
-                return "10x";
-            default:
-                return "IRON";
-        }
-    }
-
-    void DrawStandardCrosshair(float gap, float length)
-    {
-        Color previousColor = GUI.color;
-        GUI.color = crosshairColor;
-
-        float centerX = Screen.width * 0.5f;
-        float centerY = Screen.height * 0.5f;
-        float halfThickness = crosshairThickness * 0.5f;
-
-        GUI.DrawTexture(
-            new Rect(centerX - gap - length, centerY - halfThickness, length, crosshairThickness),
-            Texture2D.whiteTexture);
-        GUI.DrawTexture(
-            new Rect(centerX + gap, centerY - halfThickness, length, crosshairThickness),
-            Texture2D.whiteTexture);
-        GUI.DrawTexture(
-            new Rect(centerX - halfThickness, centerY - gap - length, crosshairThickness, length),
-            Texture2D.whiteTexture);
-        GUI.DrawTexture(
-            new Rect(centerX - halfThickness, centerY + gap, crosshairThickness, length),
-            Texture2D.whiteTexture);
-
-        GUI.color = previousColor;
-    }
-
-    void DrawRedDot()
-    {
-        Color previousColor = GUI.color;
-        GUI.color = redDotColor;
-
-        float centerX = Screen.width * 0.5f;
-        float centerY = Screen.height * 0.5f;
-        float half = redDotSize * 0.5f;
-        GUI.DrawTexture(new Rect(centerX - half, centerY - half, redDotSize, redDotSize), Texture2D.whiteTexture);
-
-        GUI.color = previousColor;
-    }
-
-    void DrawHotbar()
-    {
-        const float slotSize = 36f;
-        const float slotGap = 6f;
-        const float groupGap = 14f;
-        const float margin = 16f;
-
-        float x = margin;
-        float y = Screen.height - slotSize - margin;
-
-        var keyStyle = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.UpperLeft,
-            fontSize = 8,
-            fontStyle = FontStyle.Bold,
-            normal = { textColor = new Color(0.2f, 0.2f, 0.2f, 0.9f) }
-        };
-
-        Color previousColor = GUI.color;
-        var kit = _activeKit ?? CardKitDefinition.DefaultInfantryPlaceholder();
-        int equippableCount = HotbarSlotCount;
-        float reloadOverlayFill = ReloadOverlayFill();
-        float hotbarWidth = slotSize + groupGap +
-            (equippableCount * slotSize) + ((equippableCount - 1) * slotGap) +
-            (equippableCount > 2 ? groupGap : 0f);
-
-        DrawAmmoPanel(new Rect(x, y - 22f, hotbarWidth, 18f));
-
-        DrawAbilityHotbarSlot(new Rect(x, y, slotSize, slotSize), keyStyle, reloadOverlayFill);
-        x += slotSize + groupGap;
-
-        for (int i = 0; i < equippableCount; i++)
-        {
-            if (i == 2)
-            {
-                x += groupGap;
-            }
-
-            var tool = kit.GetToolAt(i);
-            bool selected = i == _selectedHotbarIndex;
-            DrawEquippableHotbarSlot(
-                new Rect(x, y, slotSize, slotSize),
-                CardKitDefinition.HotbarKeyLabel(i),
-                tool,
-                selected,
-                keyStyle,
-                reloadOverlayFill);
-
-            x += slotSize + slotGap;
-        }
-
-        GUI.color = previousColor;
-    }
-
-    void DrawAmmoPanel(Rect rect)
-    {
-        if (!IsFirearmTool(SelectedTool))
-        {
-            return;
-        }
-
-        var pool = GetAmmoPoolForSelectedTool();
-        Color previousColor = GUI.color;
-
-        GUI.color = Color.white;
-        GUI.DrawTexture(rect, Texture2D.whiteTexture);
-        GUI.color = Color.black;
-        GUI.DrawTexture(new Rect(rect.x, rect.y, rect.width, 1f), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(rect.x, rect.yMax - 1f, rect.width, 1f), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(rect.x, rect.y, 1f, rect.height), Texture2D.whiteTexture);
-        GUI.DrawTexture(new Rect(rect.xMax - 1f, rect.y, 1f, rect.height), Texture2D.whiteTexture);
-
-        var ammoStyle = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = 10,
-            fontStyle = FontStyle.Bold,
-            normal = { textColor = Color.black }
-        };
-        GUI.color = Color.black;
-        GUI.Label(rect, $"{pool.reserve} / {pool.mag}", ammoStyle);
-
-        GUI.color = previousColor;
-    }
-
-    void DrawAbilityHotbarSlot(Rect rect, GUIStyle keyStyle, float reloadOverlayFill)
-    {
-        bool ready = IsAbilityReady();
-        Color previousColor = GUI.color;
-
-        GUI.color = ready
-            ? new Color(0.96f, 0.96f, 0.96f, 0.92f)
-            : new Color(0.34f, 0.34f, 0.36f, 0.88f);
-        GUI.Box(rect, string.Empty);
-
-        float overlayFill = Mathf.Max(AbilityCooldownOverlayFill(), reloadOverlayFill);
-        if (overlayFill > 0.001f)
-        {
-            float overlayHeight = rect.height * overlayFill;
-            GUI.color = new Color(0.04f, 0.04f, 0.04f, ready ? 0.35f : 0.62f);
-            GUI.DrawTexture(
-                new Rect(rect.x, rect.y + (rect.height - overlayHeight), rect.width, overlayHeight),
-                Texture2D.whiteTexture);
-        }
-
-        GUI.color = ready ? Color.white : new Color(0.82f, 0.82f, 0.82f, 0.85f);
-        GUI.Label(new Rect(rect.x + 4f, rect.y + 2f, 18f, 12f), "E", keyStyle);
-        DrawAbilityHotbarIcon(rect, !ready);
-
-        GUI.color = previousColor;
-    }
-
-    void DrawAbilityHotbarIcon(Rect rect, bool dimmed)
-    {
-        switch (ActiveCardSpecialty())
-        {
-            case "sniper":
-                HotbarIconDrawer.DrawSniperScopeAbilityIcon(rect, (_sniperScopeIndex + 1) % 3, dimmed);
-                break;
-            case "infantry":
-                HotbarIconDrawer.DrawInfantryAbilityIcon(rect, dimmed);
-                break;
-        }
-    }
-
-    void DrawEquippableHotbarSlot(
-        Rect rect,
-        string keyLabel,
-        CardHotbarTool tool,
-        bool selected,
-        GUIStyle keyStyle,
-        float reloadOverlayFill)
-    {
-        Color previousColor = GUI.color;
-        GUI.color = selected
-            ? new Color(0.16f, 0.68f, 0.24f, 0.9f)
-            : new Color(0.96f, 0.96f, 0.96f, 0.72f);
-
-        GUI.Box(rect, string.Empty);
-
-        if (reloadOverlayFill > 0.001f)
-        {
-            float overlayHeight = rect.height * reloadOverlayFill;
-            GUI.color = new Color(0.04f, 0.04f, 0.04f, 0.62f);
-            GUI.DrawTexture(
-                new Rect(rect.x, rect.y + (rect.height - overlayHeight), rect.width, overlayHeight),
-                Texture2D.whiteTexture);
-        }
-
-        GUI.color = Color.white;
-        GUI.Label(new Rect(rect.x + 4f, rect.y + 2f, 18f, 12f), keyLabel, keyStyle);
-        HotbarIconDrawer.DrawToolIcon(rect, tool, dimmed: false);
-
-        GUI.color = previousColor;
-    }
-
-    void DrawBuildSelector()
-    {
-        if (!_selectorOpen)
-        {
-            return;
-        }
-
-        EnsureRadialTexture();
-        float size = selectorRadius * 2f;
-        var rect = new Rect(Screen.width * 0.5f - selectorRadius, Screen.height * 0.5f - selectorRadius, size, size);
-        GUI.DrawTexture(rect, _radialTexture);
-
-        var labelStyle = new GUIStyle(GUI.skin.label)
-        {
-            alignment = TextAnchor.MiddleCenter,
-            fontSize = 13,
-            fontStyle = FontStyle.Bold,
-            normal = { textColor = Color.black }
-        };
-
-        for (int i = 0; i < BuildPieceOptions.Length; i++)
-        {
-            float angle = i * (360f / BuildPieceOptions.Length) * Mathf.Deg2Rad;
-            Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * (selectorRadius * 0.72f);
-            var labelRect = new Rect(rect.center.x + offset.x - 46f, rect.center.y - offset.y - 12f, 92f, 24f);
-            GUI.Label(labelRect, DisplayName(BuildPieceOptions[i]).ToUpperInvariant(), labelStyle);
-        }
-    }
 
     void EnsureRadialTexture()
     {

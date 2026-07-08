@@ -178,6 +178,7 @@ public class CardTileView : MonoBehaviour
         }
 
         var layerImage = layerGo.AddComponent<Image>();
+        layerImage.sprite = MenuUiFactory.WhiteSprite;
         layerImage.color = color;
         layerImage.raycastTarget = false;
         return layerGo;
