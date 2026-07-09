@@ -16,8 +16,13 @@ public static class ShootingRangeSession
     static readonly List<ShootingRangeDummy> _dummies = new List<ShootingRangeDummy>();
 
     static float _dummyMaxHealth = 100f;
+    static bool _movingDummies;
+    static float _dummyMoveMinX = -22f;
+    static float _dummyMoveMaxX = 22f;
     static VoxelLightingWorld _voxelWorld;
     static ThirdPersonController _player;
+
+    public static IReadOnlyList<ShootingRangeDummy> Dummies => _dummies;
 
     public static float GridOriginWorldZ => -BehindZoneDepthMeters;
 
@@ -40,12 +45,36 @@ public static class ShootingRangeSession
         set => _dummyMaxHealth = Mathf.Clamp(value, 10f, 1000f);
     }
 
+    public static bool MovingDummies
+    {
+        get => _movingDummies;
+        set => _movingDummies = value;
+    }
+
+    public const float DummyMoveSpeed = 2.2f;
+
+    public static float DummyMoveMinX => _dummyMoveMinX;
+
+    public static float DummyMoveMaxX => _dummyMoveMaxX;
+
+    public static void SetMovementBounds(float minX, float maxX)
+    {
+        _dummyMoveMinX = Mathf.Min(minX, maxX);
+        _dummyMoveMaxX = Mathf.Max(minX, maxX);
+    }
+
     public static void Initialize(VoxelLightingWorld voxelWorld, ThirdPersonController player)
     {
         _voxelWorld = voxelWorld;
         _player = player;
         _dummyMaxHealth = 100f;
+        _movingDummies = false;
         _dummies.Clear();
+    }
+
+    public static void SetPlayer(ThirdPersonController player)
+    {
+        _player = player;
     }
 
     public static void Clear()
@@ -69,6 +98,14 @@ public static class ShootingRangeSession
         for (int i = 0; i < _dummies.Count; i++)
         {
             _dummies[i]?.RefillHealth();
+        }
+    }
+
+    public static void ResetDummyPositions()
+    {
+        for (int i = 0; i < _dummies.Count; i++)
+        {
+            _dummies[i]?.ResetToStandPosition();
         }
     }
 

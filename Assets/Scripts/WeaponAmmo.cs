@@ -54,6 +54,26 @@ public struct WeaponAmmoPool
         reserve--;
         return 1;
     }
+
+    public void SyncReserveFromShared(int sharedReserve)
+    {
+        reserve = sharedReserve;
+    }
+
+    public int FillMagFromSharedReserve(ref int sharedReserve)
+    {
+        int needed = magSize - mag;
+        if (needed <= 0 || sharedReserve <= 0)
+        {
+            return 0;
+        }
+
+        int transferred = needed < sharedReserve ? needed : sharedReserve;
+        mag += transferred;
+        sharedReserve -= transferred;
+        reserve = sharedReserve;
+        return transferred;
+    }
 }
 
 public static class WeaponAmmoDefaults
@@ -66,12 +86,32 @@ public static class WeaponAmmoDefaults
     public const int AssaultRifleMaxTotal = 230;
     public const int AssaultRifleStartReserve = 200;
 
+    public const int SmgMagSize = 25;
+    public const int SmgMaxTotal = 175;
+    public const int SmgStartReserve = 150;
+
+    public const int MachinePistolMagSize = 18;
+    public const int MachinePistolMaxTotal = 165;
+    public const int MachinePistolStartReserve = 150;
+
+    public const int LmgMagSize = 55;
+    public const int LmgMaxTotal = 255;
+    public const int LmgStartReserve = 200;
+
     public const int SniperMagSize = 5;
     public const int SniperMaxTotal = 45;
     public const int SniperStartReserve = 40;
 
+    public const int HuntingRifleMagSize = 1;
+    public const int HuntingRifleMaxTotal = 49;
+    public const int HuntingRifleStartReserve = 48;
+
     public const float PistolReloadSeconds = 1.2f;
+    public const float SmgReloadSeconds = 1.275f;
+    public const float MachinePistolReloadSeconds = PistolReloadSeconds;
     public const float AssaultRifleReloadSeconds = 1.5f;
+    public const float LmgReloadSeconds = 4.5f;
     public const float SniperReloadStartSeconds = 1.5f;
     public const float SniperRoundReloadSeconds = 0.8f;
+    public const float HuntingRifleReloadSeconds = 2.1f;
 }

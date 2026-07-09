@@ -1,12 +1,18 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 public enum CardHotbarTool
 {
     AssaultRifle,
     SniperRifle,
+    HuntingRifle,
     Pistol,
     Blueprint,
-    Hammer
+    Hammer,
+    Smg,
+    MachinePistol,
+    LightMachineGun,
+    ScopedAssaultRifle
 }
 
 /// <summary>
@@ -49,6 +55,135 @@ public class CardKitDefinition
         };
     }
 
+    public static CardKitDefinition Tier2Ranger()
+    {
+        return new CardKitDefinition
+        {
+            hotbarTools = new[]
+            {
+                CardHotbarTool.ScopedAssaultRifle,
+                CardHotbarTool.Pistol,
+                CardHotbarTool.Blueprint,
+                CardHotbarTool.Hammer
+            }
+        };
+    }
+
+    public static CardKitDefinition Tier3Skirmisher()
+    {
+        return new CardKitDefinition
+        {
+            hotbarTools = new[]
+            {
+                CardHotbarTool.AssaultRifle,
+                CardHotbarTool.MachinePistol,
+                CardHotbarTool.Blueprint,
+                CardHotbarTool.Hammer
+            }
+        };
+    }
+
+    public static CardKitDefinition Tier2Hunter()
+    {
+        return new CardKitDefinition
+        {
+            hotbarTools = new[]
+            {
+                CardHotbarTool.HuntingRifle,
+                CardHotbarTool.Pistol,
+                CardHotbarTool.Blueprint,
+                CardHotbarTool.Hammer
+            }
+        };
+    }
+
+    public static CardKitDefinition FromWeaponNames(string primaryWeapon, string secondaryWeapon)
+    {
+        var tools = new List<CardHotbarTool> { ResolvePrimaryTool(primaryWeapon) };
+
+        CardHotbarTool? secondary = ResolveSecondaryTool(secondaryWeapon);
+        if (secondary.HasValue)
+        {
+            tools.Add(secondary.Value);
+        }
+
+        tools.Add(CardHotbarTool.Blueprint);
+        tools.Add(CardHotbarTool.Hammer);
+        return new CardKitDefinition { hotbarTools = tools.ToArray() };
+    }
+
+    static CardHotbarTool ResolvePrimaryTool(string primaryWeapon)
+    {
+        if (string.IsNullOrEmpty(primaryWeapon))
+        {
+            return CardHotbarTool.AssaultRifle;
+        }
+
+        string weapon = primaryWeapon.ToLowerInvariant();
+        if (weapon.Contains("scoped") && weapon.Contains("rifle"))
+        {
+            return CardHotbarTool.ScopedAssaultRifle;
+        }
+
+        if (weapon.Contains("machine pistol"))
+        {
+            return CardHotbarTool.MachinePistol;
+        }
+
+        if (weapon.Contains("smg"))
+        {
+            return CardHotbarTool.Smg;
+        }
+
+        if (weapon.Contains("lmg") || weapon.Contains("machine gun"))
+        {
+            return CardHotbarTool.LightMachineGun;
+        }
+
+        if (weapon.Contains("hunting rifle"))
+        {
+            return CardHotbarTool.HuntingRifle;
+        }
+
+        if (weapon.Contains("sniper") || weapon.Contains("anti-material"))
+        {
+            return CardHotbarTool.SniperRifle;
+        }
+
+        return CardHotbarTool.AssaultRifle;
+    }
+
+    static CardHotbarTool? ResolveSecondaryTool(string secondaryWeapon)
+    {
+        if (string.IsNullOrEmpty(secondaryWeapon))
+        {
+            return null;
+        }
+
+        string weapon = secondaryWeapon.ToLowerInvariant();
+        if (weapon == "none")
+        {
+            return null;
+        }
+
+        if (weapon.Contains("machine pistol"))
+        {
+            return CardHotbarTool.MachinePistol;
+        }
+
+        if (weapon.Contains("smg"))
+        {
+            return CardHotbarTool.Smg;
+        }
+
+        if (weapon.Contains("pistol") || weapon.Contains("sidearm"))
+        {
+            return CardHotbarTool.Pistol;
+        }
+
+        return null;
+    }
+
     public int SlotCount => hotbarTools == null || hotbarTools.Length == 0 ? 4 : hotbarTools.Length;
 
     public CardHotbarTool GetToolAt(int index)
@@ -67,10 +202,20 @@ public class CardKitDefinition
         {
             case CardHotbarTool.AssaultRifle:
                 return "AR";
+            case CardHotbarTool.ScopedAssaultRifle:
+                return "Scoped AR";
             case CardHotbarTool.SniperRifle:
                 return "Sniper";
+            case CardHotbarTool.HuntingRifle:
+                return "Hunting Rifle";
             case CardHotbarTool.Pistol:
                 return "Pistol";
+            case CardHotbarTool.Smg:
+                return "SMG";
+            case CardHotbarTool.MachinePistol:
+                return "M.Pistol";
+            case CardHotbarTool.LightMachineGun:
+                return "LMG";
             case CardHotbarTool.Hammer:
                 return "Hammer";
             case CardHotbarTool.Blueprint:
@@ -100,7 +245,12 @@ public class CardKitDefinition
     public static bool IsFirearm(CardHotbarTool tool)
     {
         return tool == CardHotbarTool.AssaultRifle ||
+            tool == CardHotbarTool.ScopedAssaultRifle ||
             tool == CardHotbarTool.SniperRifle ||
-            tool == CardHotbarTool.Pistol;
+            tool == CardHotbarTool.HuntingRifle ||
+            tool == CardHotbarTool.Pistol ||
+            tool == CardHotbarTool.Smg ||
+            tool == CardHotbarTool.MachinePistol ||
+            tool == CardHotbarTool.LightMachineGun;
     }
 }

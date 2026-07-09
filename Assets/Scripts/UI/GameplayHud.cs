@@ -15,6 +15,20 @@ public class GameplayHud : MonoBehaviour
     const float CrosshairScale = 2.5f;
     const float AmmoGapAboveHotbar = 4f;
     const float AmmoBarHeight = 18f;
+    const float HealthBarHeight = 14f;
+    const float HealthBarBaseWidth = 180f;
+    const float HealthBarTopMargin = 18f;
+    static readonly Color HealthBarRed = new Color(0.86f, 0.12f, 0.1f, 1f);
+    static readonly Color HealthBarYellow = new Color(0.96f, 0.88f, 0.12f, 1f);
+    static readonly Color HealthBarGreen = new Color(0.14f, 0.74f, 0.24f, 1f);
+    const float HealthBarYellowAt = 100f;
+    const float HealthBarGreenAt = 200f;
+    const float ShieldFlashPeriodFull = 8f;
+    const float ShieldFlashPeriodEmpty = 0.1f;
+    const float ShieldFastFlashFraction = 0.2f;
+    const float ShieldSolidAlpha = 0.95f;
+    const float ShieldFaintAlpha = 0.12f;
+    static readonly Color ShieldBlue = new Color(0.28f, 0.62f, 1f, 1f);
 
     static GameplayHud _instance;
 
@@ -31,6 +45,11 @@ public class GameplayHud : MonoBehaviour
     RectTransform _hotbarRoot;
     GameObject _ammoPanelRoot;
     Text _ammoText;
+    RectTransform _healthBarRoot;
+    Image _healthBarFill;
+    Image _healthBarShieldFill;
+    float _shieldFlashPhase;
+    bool _shieldWasActive;
     HotbarSlotView _abilitySlot;
     readonly List<HotbarSlotView> _equippableSlots = new List<HotbarSlotView>();
 
@@ -69,6 +88,7 @@ public class GameplayHud : MonoBehaviour
         _root = contentGo.AddComponent<RectTransform>();
         MenuUiFactory.StretchFull(_root);
         BuildCrosshair();
+        BuildHealthBar();
         BuildHotbar();
         BuildBuildSelector();
         _crosshairRoot.localScale = Vector3.one * CrosshairScale;
@@ -137,6 +157,7 @@ public class GameplayHud : MonoBehaviour
 
         _root.gameObject.SetActive(true);
         RefreshHotbar(player);
+        RefreshHealthBar(player);
 
         bool showCrosshair = fullHud && !player.IsHudGameplayBlocked;
         RefreshCrosshair(player, showCrosshair);
@@ -186,6 +207,126 @@ public class GameplayHud : MonoBehaviour
         image.color = new Color(0.08f, 0.08f, 0.08f, 0.85f);
         image.raycastTarget = false;
         return image;
+    }
+
+    void BuildHealthBar()
+    {
+        _healthBarRoot = CreateAnchoredChild(
+            _root,
+            "Health Bar",
+            new Vector2(0.5f, 1f),
+            new Vector2(0f, -HealthBarTopMargin),
+            new Vector2(HealthBarBaseWidth, HealthBarHeight));
+        _healthBarRoot.pivot = new Vector2(0.5f, 1f);
+
+        var backgroundGo = new GameObject("Background");
+        backgroundGo.transform.SetParent(_healthBarRoot, false);
+        var backgroundRect = backgroundGo.AddComponent<RectTransform>();
+        MenuUiFactory.StretchFull(backgroundRect);
+        var backgroundImage = backgroundGo.AddComponent<Image>();
+        backgroundImage.sprite = MenuUiFactory.WhiteSprite;
+        backgroundImage.color = new Color(0.08f, 0.08f, 0.08f, 0.92f);
+        backgroundImage.raycastTarget = false;
+
+        var fillGo = new GameObject("Fill");
+        fillGo.transform.SetParent(_healthBarRoot, false);
+        var fillRect = fillGo.AddComponent<RectTransform>();
+        fillRect.anchorMin = new Vector2(0f, 0f);
+        fillRect.anchorMax = new Vector2(1f, 1f);
+        fillRect.offsetMin = new Vector2(2f, 2f);
+        fillRect.offsetMax = new Vector2(-2f, -2f);
+        fillRect.pivot = new Vector2(0f, 0.5f);
+        _healthBarFill = fillGo.AddComponent<Image>();
+        _healthBarFill.sprite = MenuUiFactory.WhiteSprite;
+        _healthBarFill.raycastTarget = false;
+
+        var shieldGo = new GameObject("Shield Fill");
+        shieldGo.transform.SetParent(_healthBarRoot, false);
+        var shieldRect = shieldGo.AddComponent<RectTransform>();
+        shieldRect.anchorMin = new Vector2(0f, 0f);
+        shieldRect.anchorMax = new Vector2(1f, 1f);
+        shieldRect.offsetMin = new Vector2(2f, 2f);
+        shieldRect.offsetMax = new Vector2(-2f, -2f);
+        shieldRect.pivot = new Vector2(0f, 0.5f);
+        _healthBarShieldFill = shieldGo.AddComponent<Image>();
+        _healthBarShieldFill.sprite = MenuUiFactory.WhiteSprite;
+        _healthBarShieldFill.raycastTarget = false;
+        _healthBarShieldFill.gameObject.SetActive(false);
+
+        AddBorderImages(_healthBarRoot);
+    }
+
+    void RefreshHealthBar(ThirdPersonController player)
+    {
+        if (_healthBarRoot == null || _healthBarFill == null)
+        {
+            return;
+        }
+
+        var health = player.GetComponent<PlayerHealth>();
+        if (health == null)
+        {
+            _healthBarRoot.gameObject.SetActive(false);
+            return;
+        }
+
+        _healthBarRoot.gameObject.SetActive(true);
+
+        float maxHealth = Mathf.Max(1f, health.MaxHealth);
+        float width = HealthBarBaseWidth * (maxHealth / PlayerHealth.BaselineMaxHealth);
+        _healthBarRoot.sizeDelta = new Vector2(width, HealthBarHeight);
+
+        float fraction = health.HealthFraction;
+        var fillRect = _healthBarFill.rectTransform;
+        fillRect.anchorMax = new Vector2(fraction, 1f);
+        fillRect.offsetMax = new Vector2(-2f, -2f);
+        _healthBarFill.color = HealthBarColorForMaxHealth(maxHealth);
+
+        if (health.HasShield)
+        {
+            if (!_shieldWasActive)
+            {
+                _shieldFlashPhase = 0f;
+            }
+
+            _shieldWasActive = true;
+
+            float shieldMax = Mathf.Max(0.01f, player.HeavyShieldMaxForHud);
+            float shieldFraction = Mathf.Clamp01(health.ShieldHealth / shieldMax);
+            var shieldRect = _healthBarShieldFill.rectTransform;
+            shieldRect.anchorMax = Vector2.one;
+            shieldRect.offsetMax = new Vector2(-2f, -2f);
+
+            float flashPeriod = shieldFraction <= ShieldFastFlashFraction
+                ? ShieldFlashPeriodEmpty
+                : Mathf.Lerp(
+                    ShieldFlashPeriodEmpty,
+                    ShieldFlashPeriodFull,
+                    (shieldFraction - ShieldFastFlashFraction) / (1f - ShieldFastFlashFraction));
+            _shieldFlashPhase += (Time.deltaTime * Mathf.PI * 2f) / Mathf.Max(0.01f, flashPeriod);
+            float pulse = (Mathf.Sin(_shieldFlashPhase) + 1f) * 0.5f;
+            float alpha = Mathf.Lerp(ShieldFaintAlpha, ShieldSolidAlpha, pulse);
+            _healthBarShieldFill.color = new Color(ShieldBlue.r, ShieldBlue.g, ShieldBlue.b, alpha);
+            _healthBarShieldFill.gameObject.SetActive(true);
+        }
+        else
+        {
+            _shieldWasActive = false;
+            _shieldFlashPhase = 0f;
+            _healthBarShieldFill.gameObject.SetActive(false);
+        }
+    }
+
+    static Color HealthBarColorForMaxHealth(float maxHealth)
+    {
+        if (maxHealth <= HealthBarYellowAt)
+        {
+            float t = Mathf.Clamp01(maxHealth / HealthBarYellowAt);
+            return Color.Lerp(HealthBarRed, HealthBarYellow, t);
+        }
+
+        float greenBlend = Mathf.Clamp01((maxHealth - HealthBarYellowAt) / (HealthBarGreenAt - HealthBarYellowAt));
+        return Color.Lerp(HealthBarYellow, HealthBarGreen, greenBlend);
     }
 
     void BuildHotbar()
@@ -403,10 +544,16 @@ public class GameplayHud : MonoBehaviour
 
     static void RefreshAbilityIcon(ThirdPersonController player, HotbarSlotView slot, bool dimmed)
     {
-        string specialty = player.ActiveCardSpecialtyForHud;
-        switch (specialty)
+        string cardId = player.ActiveCardIdForHud;
+        switch (cardId)
         {
-            case "sniper":
+            case "sniper_2":
+                slot.ScopeLabel.gameObject.SetActive(false);
+                slot.Icon.gameObject.SetActive(true);
+                slot.Icon.texture = HotbarIconDrawer.GetHunterMarkAbilityIconTexture(dimmed);
+                break;
+            case "sniper_1":
+            case "sniper_3":
                 int scopeIndex = (player.SniperScopeIndex + 1) % 3;
                 if (scopeIndex == 1 || scopeIndex == 2)
                 {
@@ -425,10 +572,25 @@ public class GameplayHud : MonoBehaviour
                 }
 
                 break;
-            case "infantry":
+            case "infantry_1":
                 slot.ScopeLabel.gameObject.SetActive(false);
                 slot.Icon.gameObject.SetActive(true);
                 slot.Icon.texture = HotbarIconDrawer.GetInfantryAbilityIconTexture(dimmed);
+                break;
+            case "infantry_2":
+                slot.ScopeLabel.gameObject.SetActive(false);
+                slot.Icon.gameObject.SetActive(true);
+                slot.Icon.texture = HotbarIconDrawer.GetHoldBreathAbilityIconTexture(dimmed);
+                break;
+            case "infantry_3":
+                slot.ScopeLabel.gameObject.SetActive(false);
+                slot.Icon.gameObject.SetActive(true);
+                slot.Icon.texture = HotbarIconDrawer.GetDashAbilityIconTexture(dimmed);
+                break;
+            case "heavy_1":
+                slot.ScopeLabel.gameObject.SetActive(false);
+                slot.Icon.gameObject.SetActive(true);
+                slot.Icon.texture = HotbarIconDrawer.GetShieldAbilityIconTexture(dimmed);
                 break;
             default:
                 slot.Icon.gameObject.SetActive(false);
@@ -509,7 +671,13 @@ public class GameplayHud : MonoBehaviour
             float scopeRadiusPx = 1080f * scopeRadiusFraction;
             var panelRect = _scopeLabelRoot.GetComponent<RectTransform>();
             panelRect.anchoredPosition = new Vector2(0f, scopeRadiusPx + 34f);
-            _scopeLabelText.text = scopeIndex == 1 ? "4x" : scopeIndex == 2 ? "10x" : "IRON";
+            _scopeLabelText.text = scopeIndex switch
+            {
+                1 => "4X",
+                2 => "10X",
+                3 => "1.8X",
+                _ => "IRON"
+            };
         }
     }
 

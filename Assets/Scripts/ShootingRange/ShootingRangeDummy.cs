@@ -19,10 +19,21 @@ public class ShootingRangeDummy : MonoBehaviour
     Coroutine _respawnRoutine;
     Vector3 _standPosition;
     Quaternion _standRotation;
+    float _moveDirection = 1f;
 
     public float CurrentHealth => _currentHealth;
     public float MaxHealth => ShootingRangeSession.DummyMaxHealth;
     public bool IsDown => _isDown;
+
+    public Vector3 MarkWorldPosition => transform.position + new Vector3(0f, 1.52f, 0f);
+
+    public Vector3 HeadMarkCenter => transform.position + new Vector3(0f, 1.52f, 0f);
+
+    public float HeadMarkHalfWidth => 0.18f;
+
+    public float HeadMarkHalfHeight => 0.14f;
+
+    public float MarkLineBottomOffset => 0.05f;
 
     public static ShootingRangeDummy Create(Transform parent, Vector3 worldPosition, int distanceMeters,
         Quaternion rotation)
@@ -54,7 +65,40 @@ public class ShootingRangeDummy : MonoBehaviour
             new Vector3(0f, 1.52f, 0f), new Vector3(0.36f, 0.28f, 0.36f), ShootingRangeHitZoneType.Head);
 
         CacheFlashRenderers();
+        _moveDirection = distanceMeters % 2 == 0 ? 1f : -1f;
         RefillHealth();
+    }
+
+    void Update()
+    {
+        if (!ShootingRangeSession.MovingDummies || _isDown)
+        {
+            return;
+        }
+
+        Vector3 position = transform.position;
+        position.x += _moveDirection * ShootingRangeSession.DummyMoveSpeed * Time.deltaTime;
+
+        float minX = ShootingRangeSession.DummyMoveMinX;
+        float maxX = ShootingRangeSession.DummyMoveMaxX;
+        if (position.x <= minX)
+        {
+            position.x = minX;
+            _moveDirection = 1f;
+        }
+        else if (position.x >= maxX)
+        {
+            position.x = maxX;
+            _moveDirection = -1f;
+        }
+
+        transform.position = position;
+    }
+
+    public void ResetToStandPosition()
+    {
+        transform.position = _standPosition;
+        transform.rotation = _standRotation;
     }
 
     void CacheFlashRenderers()

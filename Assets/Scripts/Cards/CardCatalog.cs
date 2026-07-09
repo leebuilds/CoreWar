@@ -35,7 +35,7 @@ public static class CardCatalog
     /// </summary>
     public static string[] DefaultOwnedCardIds()
     {
-        return new[] { "infantry_1", "sniper_1" };
+        return new[] { "infantry_1", "sniper_1", "sniper_2", "infantry_2", "infantry_3", "heavy_1" };
     }
 
     public static CardDefinition Get(string cardId)
@@ -88,12 +88,27 @@ public static class CardCatalog
             return CardKitDefinition.Tier1Infantry();
         }
 
+        if (entry.SpecialtyKey == "infantry" && entry.Tier == 2)
+        {
+            return CardKitDefinition.Tier2Ranger();
+        }
+
+        if (entry.SpecialtyKey == "infantry" && entry.Tier == 3)
+        {
+            return CardKitDefinition.Tier3Skirmisher();
+        }
+
         if (entry.SpecialtyKey == "sniper" && entry.Tier == 1)
         {
             return CardKitDefinition.Tier1Sniper();
         }
 
-        return CardKitDefinition.DefaultInfantryPlaceholder();
+        if (entry.SpecialtyKey == "sniper" && entry.Tier == 2)
+        {
+            return CardKitDefinition.Tier2Hunter();
+        }
+
+        return CardKitDefinition.FromWeaponNames(entry.PrimaryWeapon, entry.SecondaryWeapon);
     }
 
     static CardDefinition CreateCard(CardEntry entry)
@@ -160,19 +175,19 @@ public static class CardCatalog
             "Gun · Hammer · Blueprint"),
 
         Entry("infantry", "Infantry", 2, "Ranger", CardRarity.Rare,
-            "Ranger extends Infantry into a precision rifleman. Their assault rifle performs exceptionally well at long and medium range while remaining usable in close quarters. They excel at supporting teammates from behind the front line without sacrificing versatility.",
+            "Ranger extends Infantry into a precision rifleman. Their scoped assault rifle enters 1.8× ADS on right click, with 50% more recoil than a standard AR. Hold breath cuts scoped AR recoil in half.",
             8.2f, 110, 5,
-            "Long-Range Assault Rifle", "Compact Pistol",
-            "Assault rifle excels at long and medium range.",
+            "Scoped Assault Rifle", "Service Pistol",
+            "Hold breath up to 5 s (−50% scoped AR recoil); 5 s cooldown.",
             "Standard sabotage tool.",
             "Standard build costs.",
             "Gun · Hammer · Blueprint"),
 
         Entry("infantry", "Infantry", 3, "Skirmisher", CardRarity.Epic,
-            "Skirmishers are extremely mobile infantry specialists. Their weapon is optimized for short-to-medium range engagements, and their increased movement speed lets them rapidly reposition during fights. They reward players who constantly move instead of holding angles.",
+            "Skirmishers are extremely mobile infantry specialists. They carry an assault rifle and machine pistol for flexible range, and a rapid forward dash lets them burst across open ground to reposition or close distance.",
             9.2f, 105, 5,
-            "Lightweight Assault Rifle", "Combat Knife",
-            "Increased movement speed for constant repositioning.",
+            "Standard Assault Rifle", "Machine Pistol",
+            "Dash forward 8 m every 15 s (screen blurs for 4 s while dashing).",
             "Standard sabotage tool.",
             "Standard build costs.",
             "Gun · Hammer · Blueprint"),
@@ -187,10 +202,10 @@ public static class CardCatalog
             "Gun · Hammer · Blueprint"),
 
         Entry("sniper", "Sniper", 2, "Hunter", CardRarity.Rare,
-            "Hunter sacrifices some raw sniping power in exchange for battlefield awareness. Damaging an enemy briefly reveals them through walls, allowing coordinated follow-up shots. Hunters also gain access to stronger defensive traps, making them difficult for assassins to approach unnoticed.",
+            "Hunter trades raw sniper damage for battlefield awareness. Their single-shot hunting rifle uses iron-sight 5× ADS, and their mark ability reveals enemies ahead through walls.",
             7.8f, 95, 7,
-            "Hunting Rifle", "Pistol",
-            "Damaging an enemy briefly reveals them through walls.",
+            "Hunting Rifle", "Service Pistol",
+            "Mark enemies within 300 m ahead for 4 s; 40 s cooldown.",
             "Standard sabotage tool.",
             "Stronger defensive traps than other snipers.",
             "Gun · Hammer · Blueprint"),
@@ -313,10 +328,10 @@ public static class CardCatalog
             "Gun · Hammer · Blueprint"),
 
         Entry("heavy", "Heavy", 1, "Heavy", CardRarity.Rare,
-            "The classic tank. Heavy carries enormous ammunition reserves and possesses tremendous health at the cost of slow movement.",
-            6.5f, 160, 4,
-            "LMG", "None",
-            "Massive health and ammo reserves; slow movement.",
+            "The classic tank. Heavy carries an LMG and service pistol with enormous ammunition reserves, 140 HP, and a rechargeable shield that absorbs fire until it breaks.",
+            6.5f, 140, 4,
+            "LMG", "Service Pistol",
+            "120 HP shield (decays 12 HP/s); 30 s recharge.",
             "Standard sabotage tool.",
             "Standard build costs.",
             "Gun · Hammer · Blueprint"),

@@ -11,6 +11,10 @@ public static class HotbarIconDrawer
     static readonly Dictionary<int, Texture2D> ToolIconCache = new Dictionary<int, Texture2D>();
     static readonly Dictionary<int, Texture2D> InfantryAbilityCache = new Dictionary<int, Texture2D>();
     static readonly Dictionary<int, Texture2D> IronSightCache = new Dictionary<int, Texture2D>();
+    static readonly Dictionary<int, Texture2D> DashAbilityCache = new Dictionary<int, Texture2D>();
+    static readonly Dictionary<int, Texture2D> ShieldAbilityCache = new Dictionary<int, Texture2D>();
+    static readonly Dictionary<int, Texture2D> HoldBreathAbilityCache = new Dictionary<int, Texture2D>();
+    static readonly Dictionary<int, Texture2D> HunterMarkAbilityCache = new Dictionary<int, Texture2D>();
     static readonly Color GunMetal = new Color(0.1f, 0.1f, 0.11f, 1f);
     static readonly Color HammerWood = new Color(0.34f, 0.24f, 0.15f, 1f);
     static readonly Color HammerMetal = new Color(0.58f, 0.58f, 0.6f, 1f);
@@ -38,8 +42,23 @@ public static class HotbarIconDrawer
             case CardHotbarTool.AssaultRifle:
                 RasterAssaultRifleIcon(texture, alpha);
                 break;
+            case CardHotbarTool.ScopedAssaultRifle:
+                RasterScopedAssaultRifleIcon(texture, alpha);
+                break;
             case CardHotbarTool.SniperRifle:
                 RasterSniperRifleIcon(texture, alpha);
+                break;
+            case CardHotbarTool.HuntingRifle:
+                RasterHuntingRifleIcon(texture, alpha);
+                break;
+            case CardHotbarTool.Smg:
+                RasterSmgIcon(texture, alpha);
+                break;
+            case CardHotbarTool.MachinePistol:
+                RasterMachinePistolIcon(texture, alpha);
+                break;
+            case CardHotbarTool.LightMachineGun:
+                RasterLmgIcon(texture, alpha);
                 break;
             case CardHotbarTool.Hammer:
                 RasterHammerIcon(texture, alpha);
@@ -66,6 +85,66 @@ public static class HotbarIconDrawer
         RasterBootWithWingsIcon(texture, dimmed ? 0.55f : 1f);
         texture.Apply();
         InfantryAbilityCache[key] = texture;
+        return texture;
+    }
+
+    public static Texture2D GetDashAbilityIconTexture(bool dimmed = false)
+    {
+        int key = dimmed ? 1 : 0;
+        if (DashAbilityCache.TryGetValue(key, out Texture2D cached))
+        {
+            return cached;
+        }
+
+        var texture = CreateIconTexture();
+        RasterDashIcon(texture, dimmed ? 0.55f : 1f);
+        texture.Apply();
+        DashAbilityCache[key] = texture;
+        return texture;
+    }
+
+    public static Texture2D GetShieldAbilityIconTexture(bool dimmed = false)
+    {
+        int key = dimmed ? 1 : 0;
+        if (ShieldAbilityCache.TryGetValue(key, out Texture2D cached))
+        {
+            return cached;
+        }
+
+        var texture = CreateIconTexture();
+        RasterShieldIcon(texture, dimmed ? 0.55f : 1f);
+        texture.Apply();
+        ShieldAbilityCache[key] = texture;
+        return texture;
+    }
+
+    public static Texture2D GetHoldBreathAbilityIconTexture(bool dimmed = false)
+    {
+        int key = dimmed ? 1 : 0;
+        if (HoldBreathAbilityCache.TryGetValue(key, out Texture2D cached))
+        {
+            return cached;
+        }
+
+        var texture = CreateIconTexture();
+        RasterHoldBreathIcon(texture, dimmed ? 0.55f : 1f);
+        texture.Apply();
+        HoldBreathAbilityCache[key] = texture;
+        return texture;
+    }
+
+    public static Texture2D GetHunterMarkAbilityIconTexture(bool dimmed = false)
+    {
+        int key = dimmed ? 1 : 0;
+        if (HunterMarkAbilityCache.TryGetValue(key, out Texture2D cached))
+        {
+            return cached;
+        }
+
+        var texture = CreateIconTexture();
+        RasterHunterMarkIcon(texture, dimmed ? 0.55f : 1f);
+        texture.Apply();
+        HunterMarkAbilityCache[key] = texture;
         return texture;
     }
 
@@ -121,6 +200,16 @@ public static class HotbarIconDrawer
         RasterBox(texture, 0.48f, 0.54f, 0.1f, 0.22f, body);
     }
 
+    static void RasterScopedAssaultRifleIcon(Texture2D texture, float alpha)
+    {
+        Color32 body = ToColor32(WithAlpha(GunMetal, alpha));
+        RasterBox(texture, 0.08f, 0.4f, 0.72f, 0.16f, body);
+        RasterBox(texture, 0.64f, 0.48f, 0.28f, 0.1f, body);
+        RasterBox(texture, 0.02f, 0.42f, 0.14f, 0.12f, body);
+        RasterBox(texture, 0.48f, 0.54f, 0.1f, 0.22f, body);
+        RasterBox(texture, 0.34f, 0.52f, 0.16f, 0.1f, body);
+    }
+
     static void RasterSniperRifleIcon(Texture2D texture, float alpha)
     {
         Color32 body = ToColor32(WithAlpha(GunMetal, alpha));
@@ -129,6 +218,40 @@ public static class HotbarIconDrawer
         RasterBox(texture, 0.02f, 0.42f, 0.16f, 0.14f, body);
         RasterBox(texture, 0.34f, 0.3f, 0.22f, 0.1f, body);
         RasterBox(texture, 0.36f, 0.56f, 0.08f, 0.18f, body);
+    }
+
+    static void RasterHuntingRifleIcon(Texture2D texture, float alpha)
+    {
+        Color32 body = ToColor32(WithAlpha(GunMetal, alpha));
+        RasterBox(texture, 0.06f, 0.44f, 0.76f, 0.12f, body);
+        RasterBox(texture, 0.58f, 0.4f, 0.3f, 0.08f, body);
+        RasterBox(texture, 0.02f, 0.42f, 0.14f, 0.12f, body);
+        RasterBox(texture, 0.34f, 0.52f, 0.08f, 0.06f, body);
+    }
+
+    static void RasterSmgIcon(Texture2D texture, float alpha)
+    {
+        Color32 body = ToColor32(WithAlpha(GunMetal, alpha));
+        RasterBox(texture, 0.22f, 0.42f, 0.34f, 0.14f, body);
+        RasterBox(texture, 0.46f, 0.44f, 0.18f, 0.1f, body);
+        RasterBox(texture, 0.28f, 0.56f, 0.08f, 0.2f, body);
+    }
+
+    static void RasterMachinePistolIcon(Texture2D texture, float alpha)
+    {
+        Color32 body = ToColor32(WithAlpha(GunMetal, alpha));
+        RasterBox(texture, 0.28f, 0.44f, 0.24f, 0.12f, body);
+        RasterBox(texture, 0.44f, 0.46f, 0.14f, 0.08f, body);
+        RasterBox(texture, 0.32f, 0.56f, 0.06f, 0.16f, body);
+    }
+
+    static void RasterLmgIcon(Texture2D texture, float alpha)
+    {
+        Color32 body = ToColor32(WithAlpha(GunMetal, alpha));
+        RasterBox(texture, 0.06f, 0.42f, 0.76f, 0.14f, body);
+        RasterBox(texture, 0.62f, 0.46f, 0.26f, 0.1f, body);
+        RasterBox(texture, 0.02f, 0.42f, 0.12f, 0.12f, body);
+        RasterBox(texture, 0.42f, 0.54f, 0.1f, 0.2f, body);
     }
 
     static void RasterHammerIcon(Texture2D texture, float alpha)
@@ -154,6 +277,36 @@ public static class HotbarIconDrawer
         RasterBox(texture, 0.3f, 0.66f, 0.37f, 0.12f, boot);
         RasterBox(texture, 0.66f, 0.46f, 0.18f, 0.14f, wing);
         RasterBox(texture, 0.64f, 0.6f, 0.12f, 0.08f, wing);
+    }
+
+    static void RasterDashIcon(Texture2D texture, float alpha)
+    {
+        Color32 ink = ToColor32(WithAlpha(IronSightInk, alpha));
+        RasterBox(texture, 0.18f, 0.46f, 0.52f, 0.1f, ink);
+        RasterTriangleUp(texture, 0.72f, 0.5f, 0.16f, ink);
+    }
+
+    static void RasterShieldIcon(Texture2D texture, float alpha)
+    {
+        Color32 ink = ToColor32(WithAlpha(IronSightInk, alpha));
+        RasterBox(texture, 0.34f, 0.24f, 0.32f, 0.08f, ink);
+        RasterBox(texture, 0.28f, 0.32f, 0.44f, 0.34f, ink);
+        RasterBox(texture, 0.36f, 0.62f, 0.28f, 0.12f, ink);
+    }
+
+    static void RasterHoldBreathIcon(Texture2D texture, float alpha)
+    {
+        Color32 ink = ToColor32(WithAlpha(IronSightInk, alpha));
+        RasterBox(texture, 0.34f, 0.34f, 0.32f, 0.34f, ink);
+        RasterBox(texture, 0.4f, 0.68f, 0.2f, 0.08f, ink);
+        RasterBox(texture, 0.58f, 0.68f, 0.2f, 0.08f, ink);
+    }
+
+    static void RasterHunterMarkIcon(Texture2D texture, float alpha)
+    {
+        Color32 ink = ToColor32(WithAlpha(new Color(0.92f, 0.12f, 0.1f, 1f), alpha));
+        RasterBox(texture, 0.28f, 0.34f, 0.44f, 0.44f, ink);
+        RasterBox(texture, 0.4f, 0.24f, 0.2f, 0.08f, ink);
     }
 
     static void RasterIronSightIcon(Texture2D texture, float alpha)

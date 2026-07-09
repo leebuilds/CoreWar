@@ -4,7 +4,11 @@ public enum ProjectileWeaponType
 {
     AssaultRifle,
     Pistol,
-    SniperRifle
+    SniperRifle,
+    HuntingRifle,
+    Smg,
+    MachinePistol,
+    LightMachineGun
 }
 
 /// <summary>
@@ -45,7 +49,15 @@ public static class ProjectileDamage
         switch (weaponType)
         {
             case ProjectileWeaponType.SniperRifle:
-                return 60f;
+                return 80f;
+            case ProjectileWeaponType.HuntingRifle:
+                return 65f;
+            case ProjectileWeaponType.LightMachineGun:
+                return 20f;
+            case ProjectileWeaponType.Smg:
+                return 16f;
+            case ProjectileWeaponType.MachinePistol:
+                return 13f;
             case ProjectileWeaponType.Pistol:
                 return 13f;
             case ProjectileWeaponType.AssaultRifle:
@@ -59,7 +71,15 @@ public static class ProjectileDamage
         switch (weaponType)
         {
             case ProjectileWeaponType.SniperRifle:
-                return 130f;
+                return 100f;
+            case ProjectileWeaponType.HuntingRifle:
+                return 160f;
+            case ProjectileWeaponType.LightMachineGun:
+                return 24f;
+            case ProjectileWeaponType.Smg:
+                return 28f;
+            case ProjectileWeaponType.MachinePistol:
+                return 26f;
             case ProjectileWeaponType.Pistol:
                 return 26f;
             case ProjectileWeaponType.AssaultRifle:
@@ -78,10 +98,18 @@ public static class ProjectileDamage
         {
             case ProjectileWeaponType.Pistol:
                 return 0.75f;
+            case ProjectileWeaponType.Smg:
+                return 0.935f;
+            case ProjectileWeaponType.MachinePistol:
+                return 0.5f;
             case ProjectileWeaponType.AssaultRifle:
                 return 0.95f;
+            case ProjectileWeaponType.LightMachineGun:
+                return 0.945f;
             case ProjectileWeaponType.SniperRifle:
                 return 0.98f;
+            case ProjectileWeaponType.HuntingRifle:
+                return 0.96f;
             default:
                 return 0.95f;
         }

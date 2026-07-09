@@ -9,7 +9,7 @@ using UnityEngine;
 public static class ProfileSession
 {
     public const double SessionTimeoutHours = 1.0;
-    public const int CurrentProfileDataVersion = 1;
+    public const int CurrentProfileDataVersion = 5;
 
     static IProfileRepository _repository;
     static PlayerProfile _activeProfile;
@@ -36,6 +36,12 @@ public static class ProfileSession
         if (_initialized)
         {
             ValidateSessionOrLogout();
+            if (_activeProfile != null && _activeProfile.profileDataVersion < CurrentProfileDataVersion)
+            {
+                ApplyProfileMigrations(_activeProfile);
+                _repository.SaveProfile(_activeProfile);
+            }
+
             return;
         }
 
@@ -197,14 +203,68 @@ public static class ProfileSession
 
     public static void ApplyProfileMigrations(PlayerProfile profile)
     {
-        if (profile == null || profile.profileDataVersion >= CurrentProfileDataVersion)
+        if (profile == null)
         {
             return;
         }
 
-        profile.ownedCardIds = CardCatalog.DefaultOwnedCardIds();
+        if (profile.profileDataVersion < 1)
+        {
+            profile.ownedCardIds = CardCatalog.DefaultOwnedCardIds();
+            profile.profileDataVersion = 1;
+        }
+
+        if (profile.profileDataVersion < 2)
+        {
+            MergeOwnedCards(profile, CardCatalog.DefaultOwnedCardIds());
+            profile.profileDataVersion = 2;
+        }
+
+        if (profile.profileDataVersion < 3)
+        {
+            MergeOwnedCards(profile, CardCatalog.DefaultOwnedCardIds());
+            profile.profileDataVersion = 3;
+        }
+
+        if (profile.profileDataVersion < 4)
+        {
+            MergeOwnedCards(profile, CardCatalog.DefaultOwnedCardIds());
+            profile.profileDataVersion = 4;
+        }
+
+        if (profile.profileDataVersion < 5)
+        {
+            MergeOwnedCards(profile, CardCatalog.DefaultOwnedCardIds());
+            profile.profileDataVersion = 5;
+        }
+
         SanitizeLoadout(profile);
-        profile.profileDataVersion = CurrentProfileDataVersion;
+    }
+
+    static void MergeOwnedCards(PlayerProfile profile, string[] cardIds)
+    {
+        if (cardIds == null || cardIds.Length == 0)
+        {
+            return;
+        }
+
+        var merged = new System.Collections.Generic.List<string>();
+        if (profile.ownedCardIds != null)
+        {
+            merged.AddRange(profile.ownedCardIds);
+        }
+
+        foreach (var cardId in cardIds)
+        {
+            if (string.IsNullOrEmpty(cardId) || merged.Contains(cardId))
+            {
+                continue;
+            }
+
+            merged.Add(cardId);
+        }
+
+        profile.ownedCardIds = merged.ToArray();
     }
 
     static void SanitizeLoadout(PlayerProfile profile)

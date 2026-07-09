@@ -41,6 +41,14 @@ public class SniperScopePostEffect : MonoBehaviour
     float _blend;
     int _scopeIndex;
 
+    float _fullScreenBlurBlend;
+    Material _fullScreenBlurMaterial;
+
+    public void SetFullScreenBlur(float blend)
+    {
+        _fullScreenBlurBlend = Mathf.Clamp01(blend);
+    }
+
     void Awake()
     {
         Instance = this;
@@ -54,6 +62,7 @@ public class SniperScopePostEffect : MonoBehaviour
         }
 
         DestroyMaterial();
+        DestroyFullScreenBlurMaterial();
     }
 
     public void SetActive(bool active, float blend, int scopeIndex)
@@ -65,6 +74,19 @@ public class SniperScopePostEffect : MonoBehaviour
 
     void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
+        RenderTexture workingSource = source;
+
+        if (_fullScreenBlurBlend > 0.001f)
+        {
+            EnsureFullScreenBlurMaterial();
+            if (_fullScreenBlurMaterial != null)
+            {
+                _fullScreenBlurMaterial.SetFloat("_BlurSize", 0.014f * _fullScreenBlurBlend);
+                Graphics.Blit(workingSource, destination, _fullScreenBlurMaterial);
+                return;
+            }
+        }
+
         if (!_active || _blend <= 0.001f || _scopeIndex < 0)
         {
             Graphics.Blit(source, destination);
@@ -105,6 +127,45 @@ public class SniperScopePostEffect : MonoBehaviour
     void OnDisable()
     {
         DestroyMaterial();
+        DestroyFullScreenBlurMaterial();
+    }
+
+    void EnsureFullScreenBlurMaterial()
+    {
+        if (_fullScreenBlurMaterial != null)
+        {
+            return;
+        }
+
+        var shader = Shader.Find("Hidden/CoreWar/FullScreenBlur");
+        if (shader == null)
+        {
+            return;
+        }
+
+        _fullScreenBlurMaterial = new Material(shader)
+        {
+            hideFlags = HideFlags.HideAndDontSave
+        };
+    }
+
+    void DestroyFullScreenBlurMaterial()
+    {
+        if (_fullScreenBlurMaterial == null)
+        {
+            return;
+        }
+
+        if (Application.isPlaying)
+        {
+            Destroy(_fullScreenBlurMaterial);
+        }
+        else
+        {
+            DestroyImmediate(_fullScreenBlurMaterial);
+        }
+
+        _fullScreenBlurMaterial = null;
     }
 
     void DestroyMaterial()

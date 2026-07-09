@@ -62,12 +62,21 @@ public class VoxelFieldBuilder : MonoBehaviour
                 floorColliderMaterial,
                 slipperyColliderMaterial);
 
+            ShootingRangeSession.Initialize(
+                voxelWorld,
+                null);
+
             ShootingRangeBuilder.BuildTargets(
                 transform,
                 gridOrigin,
                 voxelSize,
                 gridWidth,
                 slipperyColliderMaterial);
+
+            float wallInset = voxelSize * 0.5f + 0.35f;
+            ShootingRangeSession.SetMovementBounds(
+                gridOrigin.x + wallInset,
+                gridOrigin.x + ((gridWidth - 1) * voxelSize) - wallInset);
         }
 
         CreateLight(isRange);
@@ -88,7 +97,7 @@ public class VoxelFieldBuilder : MonoBehaviour
         if (isRange && player != null)
         {
             var controller = player.GetComponent<ThirdPersonController>();
-            ShootingRangeSession.Initialize(voxelWorld, controller);
+            ShootingRangeSession.SetPlayer(controller);
         }
     }
 
@@ -184,14 +193,14 @@ public class VoxelFieldBuilder : MonoBehaviour
         effect.paperTint = new Color(0.985f, 0.985f, 0.985f, 1f);
         camObject.AddComponent<SniperScopePostEffect>();
 
+        player.AddComponent<PlayerHealth>();
+
         var controller = player.AddComponent<ThirdPersonController>();
         controller.viewCamera = cam;
         controller.cameraYawPivot = yawPivot.transform;
         controller.cameraPitchPivot = pitchPivot.transform;
         controller.characterVisual = visualRoot.transform;
         controller.voxelWorld = voxelWorld;
-
-        player.AddComponent<PlayerHealth>();
 
         return player;
     }

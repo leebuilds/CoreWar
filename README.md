@@ -106,7 +106,8 @@ and restored every launch.
   hit (brighter on headshot); dummies respawn ~3 s after being dropped
 - Bullets are visible dark spheres while in flight; destroyed on map hit (no bounce)
 - Terrain uses merged panels (floor, walls, backstop, fence) for performance instead of per-voxel cubes
-- Pause menu (**Esc**): **Choose Character**, **Dummy Stats**, **Reset Map**, Settings, Exit Match — submenus (Settings, Dummy Stats, exit confirm) replace the main pause screen until you go back
+- Pause menu (**Esc**): **Choose Character**, **Dummy Stats** (HP slider + **Moving dummies** ON/OFF), **Reset Map**, Settings, Exit Match — submenus replace the main pause screen until you go back
+- **Moving dummies** (toggle in Dummy Stats): patrol side-to-side at **2.2 m/s**, reverse at lane walls; OFF snaps dummies to spawn positions
 - Choose Character opens the owned-card picker; **back** returns to pause (does not close pause)
 - No stats are saved from range sessions
 
@@ -120,7 +121,7 @@ and restored every launch.
 - Space to jump
 - Mouse wheel cycles equippable hotbar slots; `1`, `2`, `F`, and `H` select slots directly
 - **E** — class ability (not equippable via scroll)
-- **Esc** — pause menu (game does not freeze; layered submenus for Settings / Dummy Stats / exit confirm; back restores main pause); **Exit Match** asks for confirmation; respawn is locked during prep
+- **Esc** — pause menu (reloads, cooldowns, and ability timers keep running; player input blocked until pause closes; layered submenus for Settings / Dummy Stats / exit confirm; back restores main pause); **Exit Match** asks for confirmation; respawn is locked during prep
 - **Exit Match** — fully ends the match and returns to the main menu
 - Respawn picker **back** returns to pause when opened from pause (same for shooting range **Choose Character**)
 - Top-right **match clock** counts up from match start (`M:SS`); hidden while pause or respawn overlays are open
@@ -151,7 +152,7 @@ reserve, right = magazine).
 | Key | Slot | Action |
 |-----|------|--------|
 | `E` | Ability | Class ability (cooldown overlay; not equippable via scroll) |
-| `1` | Primary | AR (Infantry) or Sniper rifle (Sniper) |
+| `1` | Primary | Class primary (AR, Sniper, Hunting Rifle, Scoped AR, LMG, …) |
 | `2` | Secondary | Pistol |
 | `F` | Build | Enables build mode while selected |
 | `H` | Hammer | Left click swings and destroys one owned build piece |
@@ -164,12 +165,32 @@ reserve, right = magazine).
 | Infantry | AR (full auto ~400 RPM) | Pistol (semi-auto) | Build · Hammer |
 | Sniper | Sniper rifle (semi-auto, ADS) | Pistol | Build · Hammer |
 
-**E abilities (tier 1)**
+**Tier 1 kits**
+
+| Card | Primary (`1`) | Secondary (`2`) | Tools |
+|------|---------------|-----------------|-------|
+| Infantry | AR (full auto ~400 RPM) | Pistol (semi-auto) | Build · Hammer |
+| Sniper | Sniper rifle (semi-auto, ADS) | Pistol | Build · Hammer |
+
+**Tier 2 / 3 kits (implemented)**
+
+| Card | Primary (`1`) | Secondary (`2`) | Tools |
+|------|---------------|-----------------|-------|
+| Hunter (`sniper_2`) | Hunting rifle (semi-auto, iron-sight ADS) | Pistol | Build · Hammer |
+| Ranger (`infantry_2`) | Scoped AR (full auto, ADS) | Pistol | Build · Hammer |
+| Skirmisher (`infantry_3`) | AR (full auto) | Machine pistol (semi-auto) | Build · Hammer |
+| Heavy (`heavy_1`) | LMG (full auto) | Pistol | Build · Hammer |
+
+**E abilities**
 
 | Card | Ability | Cooldown |
 |------|---------|----------|
 | Sniper | Cycle scope (Iron → 4× → 10×); **E works whenever ready, even if sniper is not equipped**; while ADS with sniper held uses swap animation | None |
 | Infantry | Speed boost (10 s) | 30 s |
+| Hunter | Mark — reveals enemies within **300 m** ahead for **4 s** (red bullseye icon on head, through walls) | 40 s |
+| Ranger | Hold breath — steady aim while holding E (**4 s** max) | 14 s |
+| Skirmisher | Dash — **8 m** over **0.2 s** with full-screen blur | 8 s |
+| Heavy | Shield — **120** shield HP, decays **12/s**; blue flash on health bar | 30 s after break |
 
 **Ammo (per weapon, separate pools)**
 
@@ -178,30 +199,37 @@ reserve, right = magazine).
 | Pistol | 150 / 12 | 1.2 s full mag |
 | AR | 200 / 30 | 1.5 s full mag |
 | Sniper | 40 / 5 | 1.5 s start + 0.8 s per round (interruptible after first round) |
+| Hunting rifle | 48 / 1 | 2.1 s per round, manual only, locked once started |
+| Machine pistol | 150 / 18 | 1.2 s full mag |
+| LMG | 200 / 55 | 4.5 s full mag |
 
-Reload blocks shooting, hotbar swap, and E ability (sniper fully locked through
-start + first round). Gun dips during reload; sniper per-round reload adds a quick
-bob. Ammo resets on match start, respawn, and character reset.
+Reload blocks shooting, hotbar swap, and E ability (sniper and hunting rifle
+fully locked through reload). Gun dips during reload; sniper per-round reload adds
+a quick bob. Ammo resets on match start, respawn, and character reset.
 
-**AR / Pistol / Sniper:** fire visible bullets along the crosshair (or sniper
-spread reticle) with muzzle flash, per-weapon gunshot audio, and recoil kick
-(pistol −15%, AR −10%, sniper +5% vs prior tuning). The AR holds left click for
-automatic fire; pistol and sniper are semi-auto per click. Each firearm has a draw
-animation (pistol 0.6 s, AR 1.1 s, sniper 2.0 s) before you can shoot, reload, or
-ADS. Sniper **right click** enters ADS; iron sights use a smaller crosshair with
-peripheral blur (no dark vignette); magnified scopes use a red dot, hide the gun
-model, and apply blur + dark vignette. Bullets use real-world gravity, per-weapon
-air drag, spawn from a clamped point near the player when up against walls, and
-**cannot damage the shooter** (reflector-style ricochets may opt in later).
+**Weapon movement slows:** heavier weapons reduce move speed while held, ADS, or
+firing (e.g. LMG **70%** held / **30%** firing; hunting rifle **85%** held /
+**45%** ADS or firing).
+
+**AR / Pistol / Sniper / Hunting rifle / Scoped AR / Machine pistol / LMG:** fire
+visible bullets along the crosshair (or sniper spread reticle) with muzzle flash,
+per-weapon gunshot audio, and recoil kick. The AR, scoped AR, and LMG hold left
+click for automatic fire; pistol, machine pistol, sniper, and hunting rifle are
+semi-auto per click. Each firearm has a draw animation before you can shoot,
+reload, or ADS. Sniper and hunting rifle **right click** enters ADS (sniper
+**5×** scopes; hunting rifle **6.5×** iron sights with peripheral blur). Ranger
+scoped AR **right click** — **1.8×** zoom. Bullets use real-world gravity,
+per-weapon air drag, spawn from a clamped point near the player when up against
+walls, and **cannot damage the shooter**.
 
 **Hammer:** destroys the first player-built object hit within **1.5 voxels** of
 any part of the player's body (measured from the capsule surface).
 
 **Build:** full build-mode toolset (see below).
 
-New accounts unlock only **Infantry (tier 1)** and **Sniper (tier 1)**; other
-cards show LOCK in Decks until earned. Higher-tier and other specialty kits are
-planned.
+New accounts unlock **Infantry**, **Sniper**, **Hunter**, **Ranger**, **Skirmisher**,
+and **Heavy** by default; other cards show LOCK in Decks until earned. Higher-tier
+and other specialty kits are planned.
 
 ### Build mode (blueprint slot)
 
@@ -235,12 +263,16 @@ and accuracy penalties per hit.
 |--------|--------------|----------|--------------|
 | Pistol | 325 m/s | 13 | 30 |
 | AR | 850 m/s | 17 | 22 |
-| Sniper | 950 m/s | 60 | 130 |
+| Sniper | 950 m/s | 80 | 100 |
+| Hunting rifle | 950 m/s | 65 | 160 |
+| Machine pistol | 400 m/s | 20 | 40 |
+| LMG | 800 m/s | 30 | 60 |
 
 **Damage formula:** `maxDamage × Lerp(0.5, 1.0, impactSpeed / muzzleSpeed)` —
 50% of max at 0 m/s, 100% at muzzle velocity.
 
-**Air drag** (exponential per 100 m): pistol ~**25%** loss, AR ~**5%**, sniper ~2%.
+**Air drag** (exponential per 100 m): pistol ~**25%** loss, AR ~**5%**, sniper
+and hunting rifle ~**4%**, machine pistol ~**50%**, LMG ~**5.5%**.
 
 **Players:** hits below **30 m/s** apply no damage and destroy the bullet; at
 **≥ 30 m/s** velocity-scaled damage applies and the bullet is destroyed (sniper
@@ -267,7 +299,7 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/UI/MatchClassSelectPanel.cs` — in-arena spawn picker, READY, 10s prep countdown
 - `Assets/Scripts/UI/MatchPrepController.cs` — boots prep overlay after matchmaking loads the game scene
 - `Assets/Scripts/UI/GameUICanvas.cs` — shared in-game canvas bootstrap, layers, interaction layers, screen hosts
-- `Assets/Scripts/UI/GameplayHud.cs` — crosshair, scaled hotbar, ammo panel, build selector
+- `Assets/Scripts/UI/GameplayHud.cs` — crosshair, scaled hotbar, ammo panel, build selector, health bar, shield flash, ability icons
 - `Assets/Scripts/UI/MatchClockHud.cs` — in-match elapsed time HUD (top-right)
 - `Assets/Scripts/UI/MenuWindowFrame.cs` — shared window chrome (military title bar, header, footer)
 - `Assets/Scripts/UI/MenuUiFactory.cs` — buttons, inputs, sliders, light/dark styling tokens, `WhiteSprite`, `EnsureEventSystem`
@@ -277,7 +309,7 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/UI/GamePauseMenu.cs` — in-match pause overlay with layered submenus (range: Choose Character, Dummy Stats; all modes: Settings, Exit Match)
 - `Assets/Scripts/UI/RespawnClassPicker.cs` — respawn class selection
 - `Assets/Scripts/UI/ShootingRangeCharacterPicker.cs` — owned-card collection overlay for range character swaps
-- `Assets/Scripts/UI/ShootingRangeDummyStatsPanel.cs` — logarithmic dummy HP slider
+- `Assets/Scripts/UI/ShootingRangeDummyStatsPanel.cs` — logarithmic dummy HP slider + moving dummies toggle
 - `Assets/Scripts/UI/PlayerBulletHitFlash.cs` — full-screen red/black blindness on player bullet hits
 - `Assets/Scripts/UI/PlayerDamageDebugPanel.cs` — pause-menu test damage slider (debug blindness tuning)
 - `Assets/Scripts/UI/DecksCollectionView.cs` — shared owned-card scroll builder
@@ -292,15 +324,19 @@ The menu UI and the voxel field are generated from code at runtime:
 
 - `Assets/Scripts/GameSession.cs` — team, loadout, game mode, match clock, and active card into the game scene
 - `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid of white voxels (32×32 standard; 48×680 shooting range), grippy floor + slippery wall physics materials, lighting
-- `Assets/Scripts/ShootingRange/` — merged terrain + firing-line fence, spread dummies, hit zones, session state (bullets, reset)
+- `Assets/Scripts/ShootingRange/` — merged terrain + firing-line fence, spread dummies (optional patrol movement), hit zones, session state (bullets, reset)
 - `Assets/Scripts/VoxelMaterialUtility.cs` — solid-color materials for range props and hit flashes
-- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, ammo/reload, AR/pistol/sniper/build/hammer, sniper ADS/scopes, E abilities, pause
+- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, ammo/reload, all class weapons/build/hammer, sniper/hunting rifle/scoped AR ADS, E abilities, movement slows, pause
+- `Assets/Scripts/HunterMarkSystem.cs` — Hunter mark target scan and apply/clear
+- `Assets/Scripts/HunterMarkOverlay.cs` — screen-space Hunter mark icons on `GameUICanvas`
+- `Assets/Scripts/HunterMarkOutlineDrawer.cs` — procedural bullseye + teardrop mark sprite
+- `Assets/Scripts/FullScreenBlur.shader` — Ranger hold breath / Skirmisher dash blur
 - `Assets/Scripts/WeaponAmmo.cs` — per-weapon reserve + magazine pools and reload timing defaults
 - `Assets/Scripts/UI/HotbarIconDrawer.cs` — procedural hotbar slot icons
 - `Assets/Scripts/ProjectileBullet.cs` — raycast bullet flight, air drag, build penetration, sniper player penetration, owner ignore (no self-damage)
 - `Assets/Scripts/ProjectileDamage.cs` — per-weapon velocity damage, air drag constants, player hit threshold
 - `Assets/Scripts/SniperScopePostEffect.cs` + `Assets/Scripts/SniperScopePost.shader` — sniper ADS blur overlay (iron sights: blur only; magnified: blur + vignette)
-- `Assets/Scripts/PlayerHealth.cs` — local player HP and blindness triggers (no death flow yet)
+- `Assets/Scripts/PlayerHealth.cs` — local player HP, shield, blindness triggers (no death flow yet)
 - `Assets/Scripts/CapsuleRobotVisual.cs` + `Assets/Scripts/JerseyInkUtility.cs` — capsule robot with jersey
 - `Assets/Scripts/VoxelLightingWorld.cs` — voxel occupancy, build rules, hammer removal
 - `Assets/Scripts/PenInkShadowEffect.cs` + `Assets/Scripts/PenInkShadowPost.shader` — pen-and-ink shadows
@@ -311,7 +347,8 @@ Local profile, session, and settings JSON are written to
 
 ## Documentation
 
-- [Full game design document](docs/Third_Person_Shooter_Game_Design_v2.md)
+- [Full game design document](docs/First_Person_Shooter_Game_Design_v2.md)
+- [Hunter, Ranger, Skirmisher, Heavy, and shooting range polish session recap](docs/chats/2026-07-09-hunter-ranger-skirmisher-heavy-session.md)
 - [Unified game UI, HUD polish, and combat tuning session recap](docs/chats/2026-07-08-unified-game-ui-hud-and-combat-tuning-session.md)
 - [Ammo, reload, ballistics rewrite, and hotbar icons session recap](docs/chats/2026-07-07-ammo-reload-ballistics-and-hotbar-icons-session.md)
 - [Sniper unlocks, ballistics, and abilities session recap](docs/chats/2026-07-07-sniper-unlocks-ballistics-and-abilities-session.md)
