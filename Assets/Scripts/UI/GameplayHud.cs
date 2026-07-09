@@ -29,6 +29,7 @@ public class GameplayHud : MonoBehaviour
     const float ShieldSolidAlpha = 0.95f;
     const float ShieldFaintAlpha = 0.12f;
     static readonly Color ShieldBlue = new Color(0.28f, 0.62f, 1f, 1f);
+    static readonly Color CyborgBoostPink = new Color(0.96f, 0.38f, 0.72f, 1f);
 
     static GameplayHud _instance;
 
@@ -50,6 +51,8 @@ public class GameplayHud : MonoBehaviour
     Image _healthBarShieldFill;
     float _shieldFlashPhase;
     bool _shieldWasActive;
+    float _cyborgBoostFlashPhase;
+    bool _cyborgBoostWasActive;
     HotbarSlotView _abilitySlot;
     readonly List<HotbarSlotView> _equippableSlots = new List<HotbarSlotView>();
 
@@ -290,6 +293,8 @@ public class GameplayHud : MonoBehaviour
             }
 
             _shieldWasActive = true;
+            _cyborgBoostWasActive = false;
+            _cyborgBoostFlashPhase = 0f;
 
             float shieldMax = Mathf.Max(0.01f, player.HeavyShieldMaxForHud);
             float shieldFraction = Mathf.Clamp01(health.ShieldHealth / shieldMax);
@@ -309,10 +314,33 @@ public class GameplayHud : MonoBehaviour
             _healthBarShieldFill.color = new Color(ShieldBlue.r, ShieldBlue.g, ShieldBlue.b, alpha);
             _healthBarShieldFill.gameObject.SetActive(true);
         }
+        else if (health.HasMaxHealthBoost)
+        {
+            if (!_cyborgBoostWasActive)
+            {
+                _cyborgBoostFlashPhase = 0f;
+            }
+
+            _cyborgBoostWasActive = true;
+            _shieldWasActive = false;
+            _shieldFlashPhase = 0f;
+
+            var boostRect = _healthBarShieldFill.rectTransform;
+            boostRect.anchorMax = Vector2.one;
+            boostRect.offsetMax = new Vector2(-2f, -2f);
+
+            _cyborgBoostFlashPhase += (Time.deltaTime * Mathf.PI * 2f) / ShieldFlashPeriodFull;
+            float pulse = (Mathf.Sin(_cyborgBoostFlashPhase) + 1f) * 0.5f;
+            float alpha = Mathf.Lerp(ShieldFaintAlpha, ShieldSolidAlpha, pulse);
+            _healthBarShieldFill.color = new Color(CyborgBoostPink.r, CyborgBoostPink.g, CyborgBoostPink.b, alpha);
+            _healthBarShieldFill.gameObject.SetActive(true);
+        }
         else
         {
             _shieldWasActive = false;
             _shieldFlashPhase = 0f;
+            _cyborgBoostWasActive = false;
+            _cyborgBoostFlashPhase = 0f;
             _healthBarShieldFill.gameObject.SetActive(false);
         }
     }
@@ -493,9 +521,24 @@ public class GameplayHud : MonoBehaviour
         var hotbarRect = _hotbarRoot;
         hotbarRect.sizeDelta = new Vector2(hotbarWidth, SlotSize);
 
-        bool showAmmo = player.IsFirearmSelected;
-        _ammoPanelRoot.SetActive(showAmmo);
-        if (showAmmo)
+        bool showAmmo = player.IsFirearmSelected && !player.UsesOverheatHud;
+        bool showOverheat = player.UsesOverheatHud;
+        _ammoPanelRoot.SetActive(showAmmo || showOverheat);
+        if (showOverheat)
+        {
+            var ammoRect = _ammoPanelRoot.GetComponent<RectTransform>();
+            ammoRect.sizeDelta = new Vector2(hotbarWidth, AmmoBarHeight);
+            if (player.IsLaserOverheated)
+            {
+                _ammoText.text = "OVERHEAT";
+            }
+            else
+            {
+                int heatPercent = Mathf.RoundToInt(player.LaserHeatFraction * 100f);
+                _ammoText.text = $"HEAT {heatPercent}%";
+            }
+        }
+        else if (showAmmo)
         {
             var ammoRect = _ammoPanelRoot.GetComponent<RectTransform>();
             ammoRect.sizeDelta = new Vector2(hotbarWidth, AmmoBarHeight);
@@ -527,13 +570,14 @@ public class GameplayHud : MonoBehaviour
 
             var tool = kit.GetToolAt(i);
             bool selected = i == player.SelectedHotbarIndex;
+            float weaponOverlayFill = Mathf.Max(reloadOverlayFill, player.HotbarWeaponOverlayFill(tool));
             ApplyHotbarSlot(
                 _equippableSlots[i],
                 CardKitDefinition.HotbarKeyLabel(i),
                 selected
                     ? new Color(0.16f, 0.68f, 0.24f, 0.9f)
                     : new Color(0.96f, 0.96f, 0.96f, 0.72f),
-                reloadOverlayFill,
+                weaponOverlayFill,
                 0.62f,
                 true);
             _equippableSlots[i].Icon.texture = HotbarIconDrawer.GetToolIconTexture(tool);
@@ -553,7 +597,6 @@ public class GameplayHud : MonoBehaviour
                 slot.Icon.texture = HotbarIconDrawer.GetHunterMarkAbilityIconTexture(dimmed);
                 break;
             case "sniper_1":
-            case "sniper_3":
                 int scopeIndex = (player.SniperScopeIndex + 1) % 3;
                 if (scopeIndex == 1 || scopeIndex == 2)
                 {
@@ -571,6 +614,11 @@ public class GameplayHud : MonoBehaviour
                     slot.Icon.texture = HotbarIconDrawer.GetIronSightIconTexture(dimmed);
                 }
 
+                break;
+            case "sniper_3":
+                slot.ScopeLabel.gameObject.SetActive(false);
+                slot.Icon.gameObject.SetActive(true);
+                slot.Icon.texture = HotbarIconDrawer.GetAntiMaterialBraceAbilityIconTexture(dimmed);
                 break;
             case "infantry_1":
                 slot.ScopeLabel.gameObject.SetActive(false);
@@ -591,6 +639,11 @@ public class GameplayHud : MonoBehaviour
                 slot.ScopeLabel.gameObject.SetActive(false);
                 slot.Icon.gameObject.SetActive(true);
                 slot.Icon.texture = HotbarIconDrawer.GetShieldAbilityIconTexture(dimmed);
+                break;
+            case "heavy_2":
+                slot.ScopeLabel.gameObject.SetActive(false);
+                slot.Icon.gameObject.SetActive(true);
+                slot.Icon.texture = HotbarIconDrawer.GetCyborgRegenAbilityIconTexture(dimmed);
                 break;
             default:
                 slot.Icon.gameObject.SetActive(false);
@@ -676,6 +729,7 @@ public class GameplayHud : MonoBehaviour
                 1 => "4X",
                 2 => "10X",
                 3 => "1.8X",
+                4 => "12X",
                 _ => "IRON"
             };
         }

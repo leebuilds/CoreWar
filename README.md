@@ -165,32 +165,29 @@ reserve, right = magazine).
 | Infantry | AR (full auto ~400 RPM) | Pistol (semi-auto) | Build · Hammer |
 | Sniper | Sniper rifle (semi-auto, ADS) | Pistol | Build · Hammer |
 
-**Tier 1 kits**
-
-| Card | Primary (`1`) | Secondary (`2`) | Tools |
-|------|---------------|-----------------|-------|
-| Infantry | AR (full auto ~400 RPM) | Pistol (semi-auto) | Build · Hammer |
-| Sniper | Sniper rifle (semi-auto, ADS) | Pistol | Build · Hammer |
-
 **Tier 2 / 3 kits (implemented)**
 
 | Card | Primary (`1`) | Secondary (`2`) | Tools |
 |------|---------------|-----------------|-------|
 | Hunter (`sniper_2`) | Hunting rifle (semi-auto, iron-sight ADS) | Pistol | Build · Hammer |
+| Anti-Material (`sniper_3`) | Anti-material rifle (charged ADS-only explosive round) | Pistol | Build · Hammer |
 | Ranger (`infantry_2`) | Scoped AR (full auto, ADS) | Pistol | Build · Hammer |
 | Skirmisher (`infantry_3`) | AR (full auto) | Machine pistol (semi-auto) | Build · Hammer |
 | Heavy (`heavy_1`) | LMG (full auto) | Pistol | Build · Hammer |
+| Cyborg (`heavy_2`) | Laser LMG (overheating beam) | Laser sword | Build · Hammer |
 
 **E abilities**
 
 | Card | Ability | Cooldown |
 |------|---------|----------|
 | Sniper | Cycle scope (Iron → 4× → 10×); **E works whenever ready, even if sniper is not equipped**; while ADS with sniper held uses swap animation | None |
-| Infantry | Speed boost (10 s) | 30 s |
+| Infantry | Speed boost — **+15%** move speed, **−20%** reload & pullout, **−15%** recoil for **10 s** | 30 s |
 | Hunter | Mark — reveals enemies within **300 m** ahead for **4 s** (red bullseye icon on head, through walls) | 40 s |
-| Ranger | Hold breath — steady aim while holding E (**4 s** max) | 14 s |
+| Anti-Material | **Brace** — toggle stabilizer pivot: orbit anchor with A/D, reduced recoil/sway, faster ADS, **6 s** reload while braced | 45 s |
+| Ranger | Hold breath — steady aim while holding E (**4 s** max); **−50%** scoped AR recoil while ADS, slower sway | 14 s |
 | Skirmisher | Dash — **8 m** over **0.2 s** with full-screen blur | 8 s |
 | Heavy | Shield — **120** shield HP, decays **12/s**; blue flash on health bar | 30 s after break |
+| Cyborg | Regen boost — **20% HP/s** for **6 s** | 35 s |
 
 **Ammo (per weapon, separate pools)**
 
@@ -200,6 +197,7 @@ reserve, right = magazine).
 | AR | 200 / 30 | 1.5 s full mag |
 | Sniper | 40 / 5 | 1.5 s start + 0.8 s per round (interruptible after first round) |
 | Hunting rifle | 48 / 1 | 2.1 s per round, manual only, locked once started |
+| Anti-material rifle | 40 / 1 | **8 s** unbraced · **6 s** braced (single round) |
 | Machine pistol | 150 / 18 | 1.2 s full mag |
 | LMG | 200 / 55 | 4.5 s full mag |
 
@@ -211,14 +209,22 @@ a quick bob. Ammo resets on match start, respawn, and character reset.
 firing (e.g. LMG **70%** held / **30%** firing; hunting rifle **85%** held /
 **45%** ADS or firing).
 
-**AR / Pistol / Sniper / Hunting rifle / Scoped AR / Machine pistol / LMG:** fire
-visible bullets along the crosshair (or sniper spread reticle) with muzzle flash,
+**AR / Pistol / Sniper / Hunting rifle / Anti-material / Scoped AR / Machine pistol / LMG / Cyborg laser:** fire
+visible bullets (or laser beam) along the **crosshair / red dot** with muzzle flash,
 per-weapon gunshot audio, and recoil kick. The AR, scoped AR, and LMG hold left
-click for automatic fire; pistol, machine pistol, sniper, and hunting rifle are
-semi-auto per click. Each firearm has a draw animation before you can shoot,
+click for automatic fire; pistol, machine pistol, sniper, hunting rifle, and anti-material are
+semi-auto per click (anti-material requires **1 s charge** while fully ADS). Each firearm has a draw animation before you can shoot,
 reload, or ADS. Sniper and hunting rifle **right click** enters ADS (sniper
-**5×** scopes; hunting rifle **6.5×** iron sights with peripheral blur). Ranger
-scoped AR **right click** — **1.8×** zoom. Bullets use real-world gravity,
+**5×** scopes; hunting rifle **6.5×** iron sights with peripheral blur). Anti-material
+**right click** — **12×** zoom, **no hipfire**. Ranger
+scoped AR **right click** — **1.8×** zoom.
+
+**ADS scope sway:** precision weapons drift smoothly while scoped (semi-random phases of
+stillness, wide arcs, and occasional fast spurts). Per-weapon amplitude and speed differ;
+Ranger hold breath slows sway further. Bullets always fire where the reticle points, including
+during sway.
+
+Bullets use real-world gravity,
 per-weapon air drag, spawn from a clamped point near the player when up against
 walls, and **cannot damage the shooter**.
 
@@ -227,8 +233,8 @@ any part of the player's body (measured from the capsule surface).
 
 **Build:** full build-mode toolset (see below).
 
-New accounts unlock **Infantry**, **Sniper**, **Hunter**, **Ranger**, **Skirmisher**,
-and **Heavy** by default; other cards show LOCK in Decks until earned. Higher-tier
+New accounts unlock **Infantry**, **Sniper**, **Hunter**, **Anti-Material**, **Ranger**,
+**Skirmisher**, **Heavy**, and **Cyborg** by default; other cards show LOCK in Decks until earned. Higher-tier
 and other specialty kits are planned.
 
 ### Build mode (blueprint slot)
@@ -265,14 +271,19 @@ and accuracy penalties per hit.
 | AR | 850 m/s | 17 | 22 |
 | Sniper | 950 m/s | 80 | 100 |
 | Hunting rifle | 950 m/s | 65 | 160 |
+| Anti-material rifle | 1300 m/s | 90 | 102 |
 | Machine pistol | 400 m/s | 20 | 40 |
 | LMG | 800 m/s | 30 | 60 |
+| Cyborg laser | Hitscan beam | 10 | 15 |
+
+**Anti-material explosion:** **10 m** radius, **10–100** exponential damage; **4.5 m** build
+destruction; **2 s** stick fuse; fiery blindness overlay on detonation.
 
 **Damage formula:** `maxDamage × Lerp(0.5, 1.0, impactSpeed / muzzleSpeed)` —
 50% of max at 0 m/s, 100% at muzzle velocity.
 
 **Air drag** (exponential per 100 m): pistol ~**25%** loss, AR ~**5%**, sniper
-and hunting rifle ~**4%**, machine pistol ~**50%**, LMG ~**5.5%**.
+and hunting rifle ~**4%**, anti-material ~**3%**, machine pistol ~**50%**, LMG ~**5.5%**.
 
 **Players:** hits below **30 m/s** apply no damage and destroy the bullet; at
 **≥ 30 m/s** velocity-scaled damage applies and the bullet is destroyed (sniper
@@ -326,7 +337,9 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid of white voxels (32×32 standard; 48×680 shooting range), grippy floor + slippery wall physics materials, lighting
 - `Assets/Scripts/ShootingRange/` — merged terrain + firing-line fence, spread dummies (optional patrol movement), hit zones, session state (bullets, reset)
 - `Assets/Scripts/VoxelMaterialUtility.cs` — solid-color materials for range props and hit flashes
-- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, ammo/reload, all class weapons/build/hammer, sniper/hunting rifle/scoped AR ADS, E abilities, movement slows, pause
+- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, ammo/reload, all class weapons/build/hammer, sniper/hunting rifle/anti-material/scoped AR ADS, scope sway, E abilities, movement slows, pause
+- `Assets/Scripts/AntiMaterialProjectile.cs` — sticky explosive anti-material round
+- `Assets/Scripts/AntiMaterialExplosionEffect.cs` — detonation fireball VFX
 - `Assets/Scripts/HunterMarkSystem.cs` — Hunter mark target scan and apply/clear
 - `Assets/Scripts/HunterMarkOverlay.cs` — screen-space Hunter mark icons on `GameUICanvas`
 - `Assets/Scripts/HunterMarkOutlineDrawer.cs` — procedural bullseye + teardrop mark sprite
@@ -348,6 +361,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/First_Person_Shooter_Game_Design_v2.md)
+- [Anti-Material sniper, scope sway, Cyborg, and Infantry ability session recap](docs/chats/2026-07-09-anti-material-sway-and-infantry-session.md)
 - [Hunter, Ranger, Skirmisher, Heavy, and shooting range polish session recap](docs/chats/2026-07-09-hunter-ranger-skirmisher-heavy-session.md)
 - [Unified game UI, HUD polish, and combat tuning session recap](docs/chats/2026-07-08-unified-game-ui-hud-and-combat-tuning-session.md)
 - [Ammo, reload, ballistics rewrite, and hotbar icons session recap](docs/chats/2026-07-07-ammo-reload-ballistics-and-hotbar-icons-session.md)

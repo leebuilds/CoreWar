@@ -8,7 +8,9 @@ public enum ProjectileWeaponType
     HuntingRifle,
     Smg,
     MachinePistol,
-    LightMachineGun
+    LightMachineGun,
+    CyborgLaser,
+    AntiMaterialRifle
 }
 
 /// <summary>
@@ -54,6 +56,10 @@ public static class ProjectileDamage
                 return 65f;
             case ProjectileWeaponType.LightMachineGun:
                 return 20f;
+            case ProjectileWeaponType.CyborgLaser:
+                return 10f;
+            case ProjectileWeaponType.AntiMaterialRifle:
+                return 90f;
             case ProjectileWeaponType.Smg:
                 return 16f;
             case ProjectileWeaponType.MachinePistol:
@@ -76,6 +82,10 @@ public static class ProjectileDamage
                 return 160f;
             case ProjectileWeaponType.LightMachineGun:
                 return 24f;
+            case ProjectileWeaponType.CyborgLaser:
+                return 15f;
+            case ProjectileWeaponType.AntiMaterialRifle:
+                return 102f;
             case ProjectileWeaponType.Smg:
                 return 28f;
             case ProjectileWeaponType.MachinePistol:
@@ -106,6 +116,10 @@ public static class ProjectileDamage
                 return 0.95f;
             case ProjectileWeaponType.LightMachineGun:
                 return 0.945f;
+            case ProjectileWeaponType.CyborgLaser:
+                return 1f;
+            case ProjectileWeaponType.AntiMaterialRifle:
+                return 0.97f;
             case ProjectileWeaponType.SniperRifle:
                 return 0.98f;
             case ProjectileWeaponType.HuntingRifle:

@@ -182,6 +182,27 @@ public class ShootingRangeDummy : MonoBehaviour
         return true;
     }
 
+    public bool ApplyDirectDamage(float damage, bool headshot)
+    {
+        if (_isDown || damage <= 0f)
+        {
+            return false;
+        }
+
+        _currentHealth = Mathf.Max(0f, _currentHealth - damage);
+        MenuUiSounds.PlayRangeDing(headshot);
+        FlashHit(headshot);
+
+        if (_currentHealth <= 0f)
+        {
+            _isDown = true;
+            SetVisualActive(false);
+            _respawnRoutine = StartCoroutine(RespawnAfterDelay());
+        }
+
+        return true;
+    }
+
     IEnumerator RespawnAfterDelay()
     {
         yield return new WaitForSeconds(RespawnDelaySeconds);

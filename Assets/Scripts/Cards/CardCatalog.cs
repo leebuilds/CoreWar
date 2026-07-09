@@ -35,7 +35,7 @@ public static class CardCatalog
     /// </summary>
     public static string[] DefaultOwnedCardIds()
     {
-        return new[] { "infantry_1", "sniper_1", "sniper_2", "infantry_2", "infantry_3", "heavy_1" };
+        return new[] { "infantry_1", "sniper_1", "sniper_2", "sniper_3", "infantry_2", "infantry_3", "heavy_1", "heavy_2" };
     }
 
     public static CardDefinition Get(string cardId)
@@ -108,6 +108,16 @@ public static class CardCatalog
             return CardKitDefinition.Tier2Hunter();
         }
 
+        if (entry.SpecialtyKey == "heavy" && entry.Tier == 2)
+        {
+            return CardKitDefinition.Tier2Cyborg();
+        }
+
+        if (entry.SpecialtyKey == "sniper" && entry.Tier == 3)
+        {
+            return CardKitDefinition.Tier3AntiMaterial();
+        }
+
         return CardKitDefinition.FromWeaponNames(entry.PrimaryWeapon, entry.SecondaryWeapon);
     }
 
@@ -169,7 +179,7 @@ public static class CardCatalog
             "The baseline soldier. Designed to be simple, reliable, and effective at medium range. Infantry has no flashy mechanics, making it ideal for learning the game's fundamentals. Its strength comes from flexibility rather than specialization.",
             8f, 100, 5,
             "Standard Assault Rifle", "Service Pistol",
-            "Balanced frontline kit with no special modifiers.",
+            "10 s boost: +15% speed, −20% reload & pullout, −15% recoil.",
             "Standard sabotage tool.",
             "Standard build costs.",
             "Gun · Hammer · Blueprint"),
@@ -213,8 +223,8 @@ public static class CardCatalog
         Entry("sniper", "Sniper", 3, "Anti-Material", CardRarity.Legendary,
             "This is no longer a traditional sniper. Its enormous rifle pierces multiple objects and structures before exploding when it finally stops. It performs poorly against individual players because of its slow reload and cumbersome handling, but it is devastating during drill assaults and can force defenders out of cover.",
             6.8f, 100, 4,
-            "Anti-Material Rifle", "None",
-            "Rounds pierce structures and explode on final impact.",
+            "Anti-Material Rifle", "Service Pistol",
+            "Sticky explosive rounds; 12× ADS only; 5 s reload. Brace (E): stabilizer pivot.",
             "Devastating against drills and fortifications.",
             "Standard build costs.",
             "Gun · Hammer · Blueprint"),
@@ -339,8 +349,8 @@ public static class CardCatalog
         Entry("heavy", "Heavy", 2, "Cyborg", CardRarity.Epic,
             "Cyborg replaces ammunition with an overheating laser weapon. While less durable than Heavy, they regenerate health rapidly after avoiding damage, allowing them to repeatedly return to combat.",
             7f, 130, 4,
-            "Laser LMG", "None",
-            "Overheating laser LMG; rapid health regen after avoiding damage.",
+            "Laser LMG", "Laser Sword",
+            "Overheating arm laser; +15% max HP and 20% HP/s regen for 6 s; 35 s cooldown.",
             "Standard sabotage tool.",
             "Standard build costs.",
             "Gun · Hammer · Blueprint"),

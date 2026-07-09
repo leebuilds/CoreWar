@@ -93,6 +93,7 @@ public static class MenuUiSounds
             ProjectileWeaponType.MachinePistol => Random.Range(0.96f, 1.06f),
             ProjectileWeaponType.SniperRifle => Random.Range(0.68f, 0.76f),
             ProjectileWeaponType.HuntingRifle => Random.Range(0.7f, 0.78f),
+            ProjectileWeaponType.CyborgLaser => Random.Range(1.18f, 1.28f),
             _ => Random.Range(0.98f, 1.08f)
         };
 
@@ -102,7 +103,82 @@ public static class MenuUiSounds
             _gunshotClip = CreateGunshotClip();
         }
 
-        _source.PlayOneShot(_gunshotClip, weaponType == ProjectileWeaponType.SniperRifle ? 0.62f : 0.48f);
+        _source.PlayOneShot(_gunshotClip, weaponType switch
+        {
+            ProjectileWeaponType.SniperRifle => 0.62f,
+            ProjectileWeaponType.AntiMaterialRifle => 0.72f,
+            ProjectileWeaponType.CyborgLaser => 0.34f,
+            _ => 0.48f
+        });
+    }
+
+    static AudioClip _antiMaterialChargeClip;
+    static bool _antiMaterialChargePlaying;
+
+    public static void StartAntiMaterialCharge()
+    {
+        EnsureInitialized();
+        if (!MenuSettings.UiSoundsEnabled)
+        {
+            return;
+        }
+
+        if (_antiMaterialChargeClip == null)
+        {
+            _antiMaterialChargeClip = CreateAntiMaterialChargeClip();
+        }
+
+        _source.loop = true;
+        _source.clip = _antiMaterialChargeClip;
+        _source.pitch = 0.65f;
+        _source.volume = MenuSettings.UiSoundsEnabled ? MenuSettings.MasterVolume * 0.42f : 0f;
+        _source.Play();
+        _antiMaterialChargePlaying = true;
+    }
+
+    public static void UpdateAntiMaterialCharge(float progress)
+    {
+        if (!_antiMaterialChargePlaying || _source == null)
+        {
+            return;
+        }
+
+        _source.pitch = Mathf.Lerp(0.65f, 1.45f, Mathf.Clamp01(progress));
+    }
+
+    public static void StopAntiMaterialCharge()
+    {
+        if (_source == null || !_antiMaterialChargePlaying)
+        {
+            return;
+        }
+
+        _source.Stop();
+        _source.loop = false;
+        _antiMaterialChargePlaying = false;
+    }
+
+    static AudioClip CreateAntiMaterialChargeClip()
+    {
+        const int sampleRate = 44100;
+        const float duration = 1.2f;
+        int sampleCount = Mathf.RoundToInt(sampleRate * duration);
+        var samples = new float[sampleCount];
+
+        for (int i = 0; i < sampleCount; i++)
+        {
+            float t = i / (float)sampleRate;
+            float progress = t / duration;
+            float envelope = Mathf.Clamp01(progress) * (1f - (progress * 0.15f));
+            float tone = Mathf.Sin(2f * Mathf.PI * Mathf.Lerp(90f, 240f, progress) * t);
+            float rumble = Mathf.Sin(2f * Mathf.PI * 42f * t) * 0.35f;
+            float noise = Random.Range(-1f, 1f) * 0.18f;
+            samples[i] = (tone * 0.55f + rumble + noise) * envelope * 0.5f;
+        }
+
+        var clip = AudioClip.Create("AntiMaterialCharge", sampleCount, 1, sampleRate, false);
+        clip.SetData(samples, 0);
+        return clip;
     }
 
     public static void PlayRangeDing(bool headshot)

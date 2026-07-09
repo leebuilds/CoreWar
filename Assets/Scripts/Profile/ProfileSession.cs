@@ -9,7 +9,7 @@ using UnityEngine;
 public static class ProfileSession
 {
     public const double SessionTimeoutHours = 1.0;
-    public const int CurrentProfileDataVersion = 5;
+    public const int CurrentProfileDataVersion = 7;
 
     static IProfileRepository _repository;
     static PlayerProfile _activeProfile;
@@ -236,6 +236,18 @@ public static class ProfileSession
         {
             MergeOwnedCards(profile, CardCatalog.DefaultOwnedCardIds());
             profile.profileDataVersion = 5;
+        }
+
+        if (profile.profileDataVersion < 6)
+        {
+            MergeOwnedCards(profile, new[] { "heavy_2" });
+            profile.profileDataVersion = 6;
+        }
+
+        if (profile.profileDataVersion < 7)
+        {
+            MergeOwnedCards(profile, new[] { "sniper_3" });
+            profile.profileDataVersion = 7;
         }
 
         SanitizeLoadout(profile);

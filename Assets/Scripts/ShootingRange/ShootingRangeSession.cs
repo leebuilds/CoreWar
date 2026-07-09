@@ -112,6 +112,8 @@ public static class ShootingRangeSession
     public static void ClearProjectileEntities()
     {
         ProjectileBullet.DestroyAll();
+        AntiMaterialProjectile.DestroyAll();
+        AntiMaterialExplosionEffect.DestroyAll();
     }
 
     public static void ResetMap()

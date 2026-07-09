@@ -26,6 +26,8 @@ public class ProjectileBullet : MonoBehaviour
     float _muzzleSpeed;
     ProjectileWeaponType _weaponType;
     float _spawnTime;
+    float _traveledDistance;
+    float _maxTravelDistance = -1f;
     readonly HashSet<GameObject> _penetratedCharacters = new HashSet<GameObject>();
     Renderer _renderer;
     Transform _bulletVisual;
@@ -42,6 +44,8 @@ public class ProjectileBullet : MonoBehaviour
         _ownerRoot = ownerRoot;
         _canHitOwner = canHitOwner;
         _spawnTime = Time.time;
+        _traveledDistance = 0f;
+        _maxTravelDistance = weaponType == ProjectileWeaponType.CyborgLaser ? 120f : -1f;
         EnsureVisual();
 
         LiveBullets.Add(this);
@@ -80,9 +84,25 @@ public class ProjectileBullet : MonoBehaviour
         }
 
         Vector3 start = transform.position;
-        _velocity += Physics.gravity * Time.deltaTime;
         float travelDistance = _velocity.magnitude * Time.deltaTime;
-        ProjectileDamage.ApplyAirDrag(ref _velocity, _weaponType, travelDistance);
+        if (_weaponType == ProjectileWeaponType.CyborgLaser)
+        {
+            if (travelDistance > 0f)
+            {
+                _traveledDistance += travelDistance;
+                if (_maxTravelDistance > 0f && _traveledDistance >= _maxTravelDistance)
+                {
+                    Destroy(gameObject);
+                    return;
+                }
+            }
+        }
+        else
+        {
+            _velocity += Physics.gravity * Time.deltaTime;
+            ProjectileDamage.ApplyAirDrag(ref _velocity, _weaponType, travelDistance);
+        }
+
         Vector3 end = start + (_velocity * Time.deltaTime);
         ResolveHits(start, end);
         UpdateBulletVisualScale();
@@ -290,8 +310,58 @@ public class ProjectileBullet : MonoBehaviour
         _bulletVisual = bullet.transform;
         _bulletVisual.localScale = Vector3.one * (Radius * 2f);
         _renderer = bullet.GetComponent<MeshRenderer>();
-        _renderer.sharedMaterial = BulletMaterial();
+        _renderer.sharedMaterial = BulletMaterial(_weaponType);
         Destroy(bullet.GetComponent<Collider>());
+    }
+
+    static Material BulletMaterial(ProjectileWeaponType weaponType)
+    {
+        if (weaponType == ProjectileWeaponType.CyborgLaser)
+        {
+            return LaserBulletMaterial();
+        }
+
+        if (_bulletMaterial != null)
+        {
+            return _bulletMaterial;
+        }
+
+        var shader = Shader.Find("Unlit/Color");
+        if (shader == null)
+        {
+            shader = Shader.Find("Standard");
+        }
+
+        _bulletMaterial = new Material(shader)
+        {
+            name = "Projectile Bullet Material"
+        };
+        _bulletMaterial.color = new Color(0.12f, 0.12f, 0.13f, 1f);
+
+        return _bulletMaterial;
+    }
+
+    static Material _laserBulletMaterial;
+
+    static Material LaserBulletMaterial()
+    {
+        if (_laserBulletMaterial != null)
+        {
+            return _laserBulletMaterial;
+        }
+
+        var shader = Shader.Find("Unlit/Color");
+        if (shader == null)
+        {
+            shader = Shader.Find("Standard");
+        }
+
+        _laserBulletMaterial = new Material(shader)
+        {
+            name = "Projectile Laser Material"
+        };
+        _laserBulletMaterial.color = new Color(0.95f, 0.12f, 0.1f, 1f);
+        return _laserBulletMaterial;
     }
 
     void UpdateBulletVisualScale()
@@ -311,27 +381,5 @@ public class ProjectileBullet : MonoBehaviour
         float diameter = Radius * 2f;
         float scale = diameter * Mathf.Max(1f, distance / MinApparentSizeDistanceMeters);
         _bulletVisual.localScale = Vector3.one * scale;
-    }
-
-    static Material BulletMaterial()
-    {
-        if (_bulletMaterial != null)
-        {
-            return _bulletMaterial;
-        }
-
-        var shader = Shader.Find("Unlit/Color");
-        if (shader == null)
-        {
-            shader = Shader.Find("Standard");
-        }
-
-        _bulletMaterial = new Material(shader)
-        {
-            name = "Projectile Bullet Material"
-        };
-        _bulletMaterial.color = new Color(0.12f, 0.12f, 0.13f, 1f);
-
-        return _bulletMaterial;
     }
 }

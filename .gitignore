@@ -27,6 +27,7 @@
 *.VC.db
 .vs/
 .idea/
+.vscode/
 .vsconfig
 
 # Crash reports
@@ -38,3 +39,7 @@ ProfileData/
 *.profile.json
 settings.json
 session.json
+
+# Unused local Unity UI Toolkit scaffolding (project uses uGUI)
+Assets/UI Toolkit/
+Assets/UI Toolkit.meta

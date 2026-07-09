@@ -12,7 +12,10 @@ public enum CardHotbarTool
     Smg,
     MachinePistol,
     LightMachineGun,
-    ScopedAssaultRifle
+    ScopedAssaultRifle,
+    CyborgLaser,
+    LaserSword,
+    AntiMaterialRifle
 }
 
 /// <summary>
@@ -97,6 +100,34 @@ public class CardKitDefinition
         };
     }
 
+    public static CardKitDefinition Tier2Cyborg()
+    {
+        return new CardKitDefinition
+        {
+            hotbarTools = new[]
+            {
+                CardHotbarTool.CyborgLaser,
+                CardHotbarTool.LaserSword,
+                CardHotbarTool.Blueprint,
+                CardHotbarTool.Hammer
+            }
+        };
+    }
+
+    public static CardKitDefinition Tier3AntiMaterial()
+    {
+        return new CardKitDefinition
+        {
+            hotbarTools = new[]
+            {
+                CardHotbarTool.AntiMaterialRifle,
+                CardHotbarTool.Pistol,
+                CardHotbarTool.Blueprint,
+                CardHotbarTool.Hammer
+            }
+        };
+    }
+
     public static CardKitDefinition FromWeaponNames(string primaryWeapon, string secondaryWeapon)
     {
         var tools = new List<CardHotbarTool> { ResolvePrimaryTool(primaryWeapon) };
@@ -135,9 +166,24 @@ public class CardKitDefinition
             return CardHotbarTool.Smg;
         }
 
+        if (weapon.Contains("laser lmg") || weapon.Contains("cyborg laser") || weapon.Contains("laser cannon"))
+        {
+            return CardHotbarTool.CyborgLaser;
+        }
+
+        if (weapon.Contains("laser sword") || weapon.Contains("katana"))
+        {
+            return CardHotbarTool.LaserSword;
+        }
+
         if (weapon.Contains("lmg") || weapon.Contains("machine gun"))
         {
             return CardHotbarTool.LightMachineGun;
+        }
+
+        if (weapon.Contains("anti-material"))
+        {
+            return CardHotbarTool.AntiMaterialRifle;
         }
 
         if (weapon.Contains("hunting rifle"))
@@ -145,7 +191,7 @@ public class CardKitDefinition
             return CardHotbarTool.HuntingRifle;
         }
 
-        if (weapon.Contains("sniper") || weapon.Contains("anti-material"))
+        if (weapon.Contains("sniper"))
         {
             return CardHotbarTool.SniperRifle;
         }
@@ -174,6 +220,11 @@ public class CardKitDefinition
         if (weapon.Contains("smg"))
         {
             return CardHotbarTool.Smg;
+        }
+
+        if (weapon.Contains("laser sword"))
+        {
+            return CardHotbarTool.LaserSword;
         }
 
         if (weapon.Contains("pistol") || weapon.Contains("sidearm"))
@@ -216,6 +267,12 @@ public class CardKitDefinition
                 return "M.Pistol";
             case CardHotbarTool.LightMachineGun:
                 return "LMG";
+            case CardHotbarTool.CyborgLaser:
+                return "Laser";
+            case CardHotbarTool.AntiMaterialRifle:
+                return "A-M Rifle";
+            case CardHotbarTool.LaserSword:
+                return "Sword";
             case CardHotbarTool.Hammer:
                 return "Hammer";
             case CardHotbarTool.Blueprint:
@@ -251,6 +308,13 @@ public class CardKitDefinition
             tool == CardHotbarTool.Pistol ||
             tool == CardHotbarTool.Smg ||
             tool == CardHotbarTool.MachinePistol ||
-            tool == CardHotbarTool.LightMachineGun;
+            tool == CardHotbarTool.LightMachineGun ||
+            tool == CardHotbarTool.CyborgLaser ||
+            tool == CardHotbarTool.AntiMaterialRifle;
+    }
+
+    public static bool UsesOverheatMeter(CardHotbarTool tool)
+    {
+        return tool == CardHotbarTool.CyborgLaser;
     }
 }

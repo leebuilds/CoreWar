@@ -114,4 +114,9 @@ public static class WeaponAmmoDefaults
     public const float SniperReloadStartSeconds = 1.5f;
     public const float SniperRoundReloadSeconds = 0.8f;
     public const float HuntingRifleReloadSeconds = 2.1f;
+
+    public const int AntiMaterialMagSize = 1;
+    public const int AntiMaterialMaxTotal = 45;
+    public const int AntiMaterialStartReserve = 40;
+    public const float AntiMaterialReloadSeconds = 8f;
 }
