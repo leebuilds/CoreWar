@@ -12,6 +12,7 @@ public enum CardHotbarTool
     Smg,
     MachinePistol,
     LightMachineGun,
+    MachineGun,
     ScopedAssaultRifle,
     CyborgLaser,
     LaserSword,
@@ -144,6 +145,20 @@ public class CardKitDefinition
         };
     }
 
+    public static CardKitDefinition Tier1Gunner()
+    {
+        return new CardKitDefinition
+        {
+            hotbarTools = new[]
+            {
+                CardHotbarTool.MachineGun,
+                CardHotbarTool.Pistol,
+                CardHotbarTool.Blueprint,
+                CardHotbarTool.Hammer
+            }
+        };
+    }
+
     public static CardKitDefinition FromWeaponNames(string primaryWeapon, string secondaryWeapon)
     {
         var tools = new List<CardHotbarTool> { ResolvePrimaryTool(primaryWeapon) };
@@ -187,14 +202,24 @@ public class CardKitDefinition
             return CardHotbarTool.CyborgLaser;
         }
 
+        if (weapon.Contains("suppression machine gun") || weapon == "machine gun")
+        {
+            return CardHotbarTool.MachineGun;
+        }
+
         if (weapon.Contains("laser sword") || weapon.Contains("katana"))
         {
             return CardHotbarTool.LaserSword;
         }
 
-        if (weapon.Contains("lmg") || weapon.Contains("machine gun"))
+        if (weapon.Contains("lmg"))
         {
             return CardHotbarTool.LightMachineGun;
+        }
+
+        if (weapon.Contains("machine gun"))
+        {
+            return CardHotbarTool.MachineGun;
         }
 
         if (weapon.Contains("anti-material"))
@@ -288,6 +313,8 @@ public class CardKitDefinition
                 return "M.Pistol";
             case CardHotbarTool.LightMachineGun:
                 return "LMG";
+            case CardHotbarTool.MachineGun:
+                return "MG";
             case CardHotbarTool.CyborgLaser:
                 return "Laser";
             case CardHotbarTool.AntiMaterialRifle:
@@ -334,6 +361,7 @@ public class CardKitDefinition
             tool == CardHotbarTool.Smg ||
             tool == CardHotbarTool.MachinePistol ||
             tool == CardHotbarTool.LightMachineGun ||
+            tool == CardHotbarTool.MachineGun ||
             tool == CardHotbarTool.CyborgLaser ||
             tool == CardHotbarTool.AntiMaterialRifle;
     }

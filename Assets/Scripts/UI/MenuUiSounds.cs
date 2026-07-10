@@ -89,6 +89,7 @@ public static class MenuUiSounds
         {
             ProjectileWeaponType.AssaultRifle => Random.Range(0.82f, 0.9f),
             ProjectileWeaponType.LightMachineGun => Random.Range(0.76f, 0.84f),
+            ProjectileWeaponType.MachineGun => Random.Range(0.8f, 0.88f),
             ProjectileWeaponType.Smg => Random.Range(0.96f, 1.06f),
             ProjectileWeaponType.MachinePistol => Random.Range(0.96f, 1.06f),
             ProjectileWeaponType.SniperRifle => Random.Range(0.68f, 0.76f),

@@ -8,7 +8,7 @@ public abstract class ThrownGrenadeProjectile : MonoBehaviour
 {
     const float KillY = -12f;
     const float MaxLifetimeSeconds = 30f;
-    const float ThrowSpeedMetersPerSecond = 30f;
+    const float ThrowSpeedMetersPerSecond = 25f;
     const float GravityAcceleration = 9.81f;
     const float StopSpeedThreshold = 0.35f;
     protected const float Radius = 0.09f;

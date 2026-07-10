@@ -39,6 +39,7 @@ public class GameplayHud : MonoBehaviour
     Image _crosshairRight;
     Image _crosshairTop;
     Image _crosshairBottom;
+    Image _crosshairCircle;
     Image _redDot;
     GameObject _scopeLabelRoot;
     Text _scopeLabelText;
@@ -64,6 +65,10 @@ public class GameplayHud : MonoBehaviour
     GameObject _grenadeSelectorRoot;
     RawImage _grenadeRadialImage;
     readonly List<Text> _grenadeLabels = new List<Text>();
+
+    static Texture2D _crosshairRingTexture;
+    static Sprite _crosshairRingSprite;
+    static float _crosshairRingThickness;
 
     sealed class HotbarSlotView
     {
@@ -182,6 +187,11 @@ public class GameplayHud : MonoBehaviour
         _crosshairRight = CreateCrosshairBar("Right");
         _crosshairTop = CreateCrosshairBar("Top");
         _crosshairBottom = CreateCrosshairBar("Bottom");
+
+        _crosshairCircle = CreateCrosshairBar("Circle");
+        _crosshairCircle.type = Image.Type.Simple;
+        _crosshairCircle.preserveAspect = true;
+        _crosshairCircle.gameObject.SetActive(false);
 
         _redDot = CreateCrosshairBar("Red Dot");
         _redDot.color = new Color(0.92f, 0.12f, 0.1f, 0.95f);
@@ -673,13 +683,26 @@ public class GameplayHud : MonoBehaviour
             "Q",
             player.IsGrenadeHotbarSelected
                 ? new Color(0.16f, 0.68f, 0.24f, 0.9f)
-                : new Color(0.96f, 0.96f, 0.96f, 0.72f),
+                : player.HasAnyGrenadesRemaining
+                    ? new Color(0.96f, 0.96f, 0.96f, 0.72f)
+                    : new Color(0.72f, 0.72f, 0.72f, 0.45f),
             0f,
             0.62f,
-            true);
-        _grenadeSlot.Icon.texture = HotbarIconDrawer.GetGrenadeIconTexture(player.SelectedGrenadeType);
+            player.HasAnyGrenadesRemaining);
+        _grenadeSlot.Icon.texture = HotbarIconDrawer.GetGrenadeIconTexture(
+            player.SelectedGrenadeType,
+            !player.HasAnyGrenadesRemaining);
         _grenadeSlot.Icon.gameObject.SetActive(true);
-        _grenadeSlot.ScopeLabel.gameObject.SetActive(false);
+        int selectedGrenadeCount = player.SelectedGrenadeType == GrenadeType.Flashbang
+            ? player.FlashbangGrenadesRemaining
+            : player.FragGrenadesRemaining;
+        bool showGrenadeCount = player.HasAnyGrenadesRemaining && selectedGrenadeCount > 0;
+        _grenadeSlot.ScopeLabel.gameObject.SetActive(showGrenadeCount);
+        if (showGrenadeCount)
+        {
+            _grenadeSlot.ScopeLabel.text = selectedGrenadeCount.ToString();
+            _grenadeSlot.ScopeLabel.color = new Color(0.92f, 0.12f, 0.1f, 0.98f);
+        }
     }
 
     static void RefreshAbilityIcon(ThirdPersonController player, HotbarSlotView slot, bool dimmed)
@@ -746,6 +769,11 @@ public class GameplayHud : MonoBehaviour
                 slot.Icon.gameObject.SetActive(true);
                 slot.Icon.texture = HotbarIconDrawer.GetExplosiveVestAbilityIconTexture(dimmed);
                 break;
+            case "gunner_1":
+                slot.ScopeLabel.gameObject.SetActive(false);
+                slot.Icon.gameObject.SetActive(true);
+                slot.Icon.texture = HotbarIconDrawer.GetGunnerSuppressionAbilityIconTexture(dimmed);
+                break;
             default:
                 slot.Icon.gameObject.SetActive(false);
                 slot.ScopeLabel.gameObject.SetActive(false);
@@ -800,16 +828,33 @@ public class GameplayHud : MonoBehaviour
             out bool showRedDot,
             out bool showScopeLabel,
             out int scopeIndex,
-            out float scopeRadiusFraction);
+            out float scopeRadiusFraction,
+            out bool showCircle,
+            out float circleRadius,
+            out float circleThickness);
 
         _redDot.gameObject.SetActive(showRedDot);
         _scopeLabelRoot.SetActive(showScopeLabel);
 
-        bool showBars = showStandard && !showRedDot;
+        bool showBars = showStandard && !showRedDot && !showCircle;
         _crosshairLeft.gameObject.SetActive(showBars);
         _crosshairRight.gameObject.SetActive(showBars);
         _crosshairTop.gameObject.SetActive(showBars);
         _crosshairBottom.gameObject.SetActive(showBars);
+        _crosshairCircle.gameObject.SetActive(showCircle && !showRedDot);
+
+        if (showCircle && !showRedDot)
+        {
+            float diameter = Mathf.Max(8f, circleRadius * 2f);
+            _crosshairCircle.sprite = GetCrosshairRingSprite(circleThickness);
+            _crosshairCircle.color = color;
+            var circleRect = _crosshairCircle.rectTransform;
+            circleRect.anchorMin = new Vector2(0.5f, 0.5f);
+            circleRect.anchorMax = new Vector2(0.5f, 0.5f);
+            circleRect.pivot = new Vector2(0.5f, 0.5f);
+            circleRect.anchoredPosition = Vector2.zero;
+            circleRect.sizeDelta = new Vector2(diameter, diameter);
+        }
 
         if (showBars)
         {
@@ -845,6 +890,54 @@ public class GameplayHud : MonoBehaviour
         rect.anchoredPosition = anchoredPosition;
         rect.sizeDelta = size;
         image.color = color;
+    }
+
+    static Sprite GetCrosshairRingSprite(float thicknessPixels)
+    {
+        float thickness = Mathf.Clamp(thicknessPixels, 1f, 8f);
+        if (_crosshairRingSprite != null && Mathf.Approximately(_crosshairRingThickness, thickness))
+        {
+            return _crosshairRingSprite;
+        }
+
+        const int size = 128;
+        if (_crosshairRingTexture == null)
+        {
+            _crosshairRingTexture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+        }
+
+        _crosshairRingThickness = thickness;
+        float center = (size - 1) * 0.5f;
+        float outerRadius = center - 1f;
+        float innerRadius = Mathf.Max(0f, outerRadius - thickness);
+        var clear = new Color(1f, 1f, 1f, 0f);
+        var white = Color.white;
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                float distance = Vector2.Distance(new Vector2(x, y), new Vector2(center, center));
+                bool inRing = distance <= outerRadius && distance >= innerRadius;
+                _crosshairRingTexture.SetPixel(x, y, inRing ? white : clear);
+            }
+        }
+
+        _crosshairRingTexture.Apply();
+        if (_crosshairRingSprite != null)
+        {
+            Destroy(_crosshairRingSprite);
+        }
+
+        _crosshairRingSprite = Sprite.Create(
+            _crosshairRingTexture,
+            new Rect(0f, 0f, size, size),
+            new Vector2(0.5f, 0.5f),
+            100f);
+        return _crosshairRingSprite;
     }
 
     void RefreshBuildSelector(ThirdPersonController player, bool fullHud)

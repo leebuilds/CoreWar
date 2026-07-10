@@ -20,6 +20,8 @@ public class PlayerBulletHitFlash : MonoBehaviour
     const float FireFollowupBlindnessMultiplier = 3f;
     const float MinBlackAfterFireSeconds = 1f;
     const float MaxBlindnessSeconds = 7f;
+    const float GunshotFlickDuration = 0.1f;
+    const float GunshotFlickPeakAlpha = 0.24f;
 
     static readonly Color RedFlash = new Color(0.82f, 0.08f, 0.08f, 1f);
     static readonly Color Blackout = new Color(0f, 0f, 0f, 1f);
@@ -41,6 +43,9 @@ public class PlayerBulletHitFlash : MonoBehaviour
     float _flashbangCompleteWhiteSeconds;
     float _flashbangFadeSeconds;
     float _flashbangPeakAlpha;
+    float _gunshotFlickRemaining;
+    float _gunshotFlickTotal;
+    float _gunshotFlickIntensityScale = 1f;
 
     public bool IsBlind =>
         _fireRemaining > 0f ||
@@ -66,6 +71,8 @@ public class PlayerBulletHitFlash : MonoBehaviour
         _flashbangCompleteWhiteSeconds = 0f;
         _flashbangFadeSeconds = 0f;
         _flashbangPeakAlpha = 0f;
+        _gunshotFlickRemaining = 0f;
+        _gunshotFlickTotal = 0f;
         SetVisible(false);
     }
 
@@ -124,16 +131,54 @@ public class PlayerBulletHitFlash : MonoBehaviour
     void Update()
     {
         bool flashbangActive = TickFlashbangPhase();
+        bool gunshotFlickActive = TickGunshotFlickPhase();
         bool fireActive = TickFirePhase();
         bool blackActive = TickBlackPhase();
 
-        if (!flashbangActive && !fireActive && !blackActive)
+        if (!flashbangActive && !gunshotFlickActive && !fireActive && !blackActive)
         {
             SetVisible(false);
             return;
         }
 
-        RenderComposite(flashbangActive, fireActive, blackActive);
+        RenderComposite(flashbangActive, gunshotFlickActive, fireActive, blackActive);
+    }
+
+    bool TickGunshotFlickPhase()
+    {
+        if (_gunshotFlickRemaining <= 0f)
+        {
+            return false;
+        }
+
+        _gunshotFlickRemaining = Mathf.Max(0f, _gunshotFlickRemaining - Time.deltaTime);
+        if (_gunshotFlickRemaining <= 0f)
+        {
+            _gunshotFlickTotal = 0f;
+            _gunshotFlickIntensityScale = 1f;
+            return false;
+        }
+
+        return true;
+    }
+
+    float CurrentGunshotFlickAlpha()
+    {
+        if (_gunshotFlickRemaining <= 0f || _gunshotFlickTotal <= 0f)
+        {
+            return 0f;
+        }
+
+        float elapsed = _gunshotFlickTotal - _gunshotFlickRemaining;
+        float t = Mathf.Clamp01(elapsed / _gunshotFlickTotal);
+        return Mathf.Sin(t * Mathf.PI) * GunshotFlickPeakAlpha * _gunshotFlickIntensityScale;
+    }
+
+    public void FlickFromGunshot(float intensityScale = 1f)
+    {
+        _gunshotFlickIntensityScale = Mathf.Max(1f, intensityScale);
+        _gunshotFlickTotal = GunshotFlickDuration;
+        _gunshotFlickRemaining = GunshotFlickDuration;
     }
 
     bool TickFlashbangPhase()
@@ -176,7 +221,7 @@ public class PlayerBulletHitFlash : MonoBehaviour
         return Mathf.Clamp01(_flashbangPeakAlpha * (1f - fadeT));
     }
 
-    void RenderComposite(bool flashbangActive, bool fireActive, bool blackActive)
+    void RenderComposite(bool flashbangActive, bool gunshotFlickActive, bool fireActive, bool blackActive)
     {
         if (transform.parent != null)
         {
@@ -185,7 +230,7 @@ public class PlayerBulletHitFlash : MonoBehaviour
 
         float whiteAlpha = flashbangActive ? CurrentFlashbangAlpha() : 0f;
         float blackAlpha = 0f;
-        float redAlpha = 0f;
+        float redAlpha = gunshotFlickActive ? CurrentGunshotFlickAlpha() : 0f;
         float fireAlpha = 0f;
         Color fireColor = FireOrange;
 
@@ -197,6 +242,7 @@ public class PlayerBulletHitFlash : MonoBehaviour
             fireColor = Color.Lerp(FireOrange, FireRed, colorPulse);
             fireAlpha = Mathf.Clamp01(FireOverlayAlpha + flicker);
             blackAlpha = FireBlackAlpha;
+            redAlpha = 0f;
         }
         else if (blackActive)
         {
@@ -205,7 +251,8 @@ public class PlayerBulletHitFlash : MonoBehaviour
                 _remaining,
                 _skipFadeIn,
                 out blackAlpha,
-                out redAlpha);
+                out float blindnessRedAlpha);
+            redAlpha = Mathf.Max(redAlpha, blindnessRedAlpha);
         }
 
         SetVisible(whiteAlpha > 0f || blackAlpha > 0f || redAlpha > 0f || fireAlpha > 0f);

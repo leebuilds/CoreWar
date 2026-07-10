@@ -76,6 +76,18 @@ public class ThirdPersonController : MonoBehaviour
     public float smgRpm = 540f;
     public float lmgBulletSpeed = 935f;
     public float lmgRpm = 320f;
+    public float machineGunBulletSpeed = 2000f;
+    public float machineGunRpm = 1500;
+    public float machineGunDrawSeconds = 2.16f;
+    public float machineGunCrosshairRadiusPixels = 24f;
+    public float machineGunSpreadCenterBiasExponent = 4.5f;
+    public float machineGunSuppressionDurationSeconds = 1.5f;
+    public float gunnerSuppressionBoostDurationSeconds = 7f;
+    public float gunnerSuppressionBoostCooldownSeconds = 30f;
+    public float gunnerSuppressionBoostRpm = 3000f;
+    public float gunnerSuppressionBoostCrosshairRadiusMultiplier = 1.2f;
+    public float gunnerSuppressionBoostSpreadCenterBiasExponent = 0.42f;
+    public float gunnerSuppressionBoostFlickIntensityMultiplier = 2.5f;
     public float sniperBulletSpeed = 950f;
     public float sniperFireCooldownSeconds = 1.15f;
     public float adsIronSightFov = 55f;
@@ -179,7 +191,10 @@ public class ThirdPersonController : MonoBehaviour
     public float fragGrenadeFuseSeconds = 5f;
     public float grenadeDrawSeconds = 0.5f;
     const float GrenadeWheelHoldSeconds = 0.18f;
-    const float GrenadeHandCooldownSeconds = 3f;
+    const float GrenadePostThrowSlotSwitchSeconds = 0.5f;
+    const float GrenadeHandCooldownSeconds = 1.8f;
+    const int FragGrenadesPerLife = 2;
+    const int FlashbangGrenadesPerLife = 1;
 
     Rigidbody _rb;
     CapsuleCollider _capsule;
@@ -198,7 +213,10 @@ public class ThirdPersonController : MonoBehaviour
     GrenadeType _selectedGrenade = GrenadeType.Frag;
     bool _grenadePrimed;
     float _grenadeFuseTimer;
+    float _grenadePostThrowSlotSwitchTimer;
     float _grenadeHandCooldownTimer;
+    int _fragGrenadesRemaining;
+    int _flashbangGrenadesRemaining;
     CardKitDefinition _activeKit;
     int _selectedHotbarIndex;
     RespawnClassPicker _respawnPicker;
@@ -219,6 +237,7 @@ public class ThirdPersonController : MonoBehaviour
     GameObject _smgRoot;
     GameObject _machinePistolRoot;
     GameObject _lmgRoot;
+    GameObject _machineGunRoot;
     GameObject _antiMaterialRifleRoot;
     GameObject _cyborgLaserRoot;
     GameObject _laserSwordRoot;
@@ -236,6 +255,7 @@ public class ThirdPersonController : MonoBehaviour
     GameObject _smgMuzzleFlashRoot;
     GameObject _machinePistolMuzzleFlashRoot;
     GameObject _lmgMuzzleFlashRoot;
+    GameObject _machineGunMuzzleFlashRoot;
     GameObject _antiMaterialMuzzleFlashRoot;
     GameObject _cyborgLaserMuzzleFlashRoot;
     float _weaponFireCooldown;
@@ -319,6 +339,7 @@ public class ThirdPersonController : MonoBehaviour
     WeaponAmmoPool _machinePistolAmmo;
     WeaponAmmoPool _assaultRifleAmmo;
     WeaponAmmoPool _lmgAmmo;
+    WeaponAmmoPool _machineGunAmmo;
     WeaponAmmoPool _sniperAmmo;
     WeaponAmmoPool _huntingRifleAmmo;
     WeaponAmmoPool _antiMaterialAmmo;
@@ -327,6 +348,10 @@ public class ThirdPersonController : MonoBehaviour
     int _rifleFamilyReserve;
     float _pistolFamilyRechargeTimer;
     float _rifleFamilyRechargeTimer;
+    float _machineGunRechargeTimer;
+    float _machineGunSuppressionRemaining;
+    float _machineGunSuppressionSpeedMultiplier = 1f;
+    float _gunnerSuppressionBoostRemaining;
     float _sniperRechargeTimer;
     float _huntingRifleRechargeTimer;
     float _antiMaterialRechargeTimer;
@@ -463,6 +488,8 @@ public class ThirdPersonController : MonoBehaviour
                 return InfantrySpeedBoostReloadDuration(WeaponAmmoDefaults.AssaultRifleReloadSeconds);
             case CardHotbarTool.LightMachineGun:
                 return InfantrySpeedBoostReloadDuration(WeaponAmmoDefaults.LmgReloadSeconds);
+            case CardHotbarTool.MachineGun:
+                return InfantrySpeedBoostReloadDuration(WeaponAmmoDefaults.MachineGunReloadSeconds);
             case CardHotbarTool.HuntingRifle:
                 return InfantrySpeedBoostReloadDuration(WeaponAmmoDefaults.HuntingRifleReloadSeconds);
             case CardHotbarTool.AntiMaterialRifle:
@@ -523,10 +550,14 @@ public class ThirdPersonController : MonoBehaviour
             : Mathf.Clamp01(_cyborgLaserOverheatLockoutTimer / cyborgLaserOverheatCooldownSeconds);
     public bool IsLaserOverheated => _cyborgLaserOverheatLockoutTimer > 0f;
     public WeaponAmmoPool CurrentAmmo => GetAmmoPoolForSelectedTool();
+    public bool GunnerSuppressionBoostActive => _gunnerSuppressionBoostRemaining > 0f;
     public bool IsBuildSelectorOpen => _selectorOpen;
     public bool IsGrenadeSelectorOpen => _grenadeSelectorOpen;
     public bool IsGrenadeHotbarSelected => _grenadeSlotSelected;
     public GrenadeType SelectedGrenadeType => _selectedGrenade;
+    public int FragGrenadesRemaining => _fragGrenadesRemaining;
+    public int FlashbangGrenadesRemaining => _flashbangGrenadesRemaining;
+    public bool HasAnyGrenadesRemaining => _fragGrenadesRemaining > 0 || _flashbangGrenadesRemaining > 0;
     public bool IsRadialSelectorOpen => _selectorOpen || _grenadeSelectorOpen;
     public float BuildSelectorRadius => selectorRadius;
     public float GrenadeSelectorRadius => selectorRadius;
@@ -561,7 +592,18 @@ public class ThirdPersonController : MonoBehaviour
             return string.Empty;
         }
 
-        return GrenadeDisplayName(GrenadeOptions[index]);
+        return GrenadeDisplayNameWithCount(GrenadeOptions[index]);
+    }
+
+    string GrenadeDisplayNameWithCount(GrenadeType grenadeType)
+    {
+        int count = GetGrenadeCount(grenadeType);
+        if (count <= 0)
+        {
+            return string.Empty;
+        }
+
+        return $"{GrenadeDisplayName(grenadeType)} {count}";
     }
 
     public void GetCrosshairPresentation(
@@ -573,7 +615,10 @@ public class ThirdPersonController : MonoBehaviour
         out bool showRedDot,
         out bool showScopeLabel,
         out int scopeIndex,
-        out float scopeRadiusFraction)
+        out float scopeRadiusFraction,
+        out bool showCircle,
+        out float circleRadius,
+        out float circleThickness)
     {
         showStandard = false;
         gap = crosshairGap;
@@ -586,6 +631,9 @@ public class ThirdPersonController : MonoBehaviour
         scopeRadiusFraction = SniperScopePostEffect.Instance != null
             ? SniperScopePostEffect.Instance.scopeRadius
             : (1f / 3f);
+        showCircle = false;
+        circleRadius = 0f;
+        circleThickness = crosshairThickness;
 
         if (_isReloading)
         {
@@ -613,6 +661,11 @@ public class ThirdPersonController : MonoBehaviour
                 showRedDot = true;
                 showScopeLabel = true;
                 scopeIndex = ScopedArScopePresentationIndex;
+            }
+            else if (SelectedTool == CardHotbarTool.MachineGun)
+            {
+                showCircle = true;
+                circleRadius = EffectiveMachineGunCrosshairRadiusPixels;
             }
 
             FinalizeScopeLabel(ref showScopeLabel);
@@ -689,6 +742,14 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
+        if (SelectedTool == CardHotbarTool.MachineGun)
+        {
+            showCircle = true;
+            circleRadius = EffectiveMachineGunCrosshairRadiusPixels;
+            circleThickness = crosshairThickness;
+            return;
+        }
+
         showStandard = true;
     }
 
@@ -705,8 +766,16 @@ public class ThirdPersonController : MonoBehaviour
     float AssaultRifleFireInterval => 60f / Mathf.Max(1f, assaultRifleRpm);
     float SmgFireInterval => 60f / Mathf.Max(1f, smgRpm);
     float LmgFireInterval => 60f / Mathf.Max(1f, lmgRpm);
+    float MachineGunFireInterval => 60f / Mathf.Max(1f, EffectiveMachineGunRpm);
+    float EffectiveMachineGunRpm =>
+        GunnerSuppressionBoostActive ? gunnerSuppressionBoostRpm : machineGunRpm;
+    float EffectiveMachineGunCrosshairRadiusPixels =>
+        GunnerSuppressionBoostActive
+            ? machineGunCrosshairRadiusPixels * gunnerSuppressionBoostCrosshairRadiusMultiplier
+            : machineGunCrosshairRadiusPixels;
     float CyborgLaserFireInterval => 60f / Mathf.Max(1f, cyborgLaserRpm);
     float SmgRecoilScale => AssaultRifleRecoilScale * 1.75f;
+    float MachineGunRecoilScale => SmgRecoilScale * 0.6f;
     float MachinePistolRecoilScale => SmgRecoilScale * 1.5f;
     float LmgRecoilScale => AssaultRifleRecoilScale * 2f;
     float ScopedArRecoilScale =>
@@ -988,6 +1057,7 @@ public class ThirdPersonController : MonoBehaviour
         ResetCyborgLaserHeat();
         ResetC4State(destroyCharge: true);
         CancelGrenadePrime();
+        _grenadePostThrowSlotSwitchTimer = 0f;
         EnsurePlayerHealth()?.RefillHealth();
         RefreshHeldToolVisibility();
     }
@@ -1029,6 +1099,7 @@ public class ThirdPersonController : MonoBehaviour
         _grenadeKeyHoldTimer = 0f;
         _grenadeWheelOpenedFromHold = false;
         CancelGrenadePrime();
+        _grenadePostThrowSlotSwitchTimer = 0f;
         _grenadeHandCooldownTimer = 0f;
         _rectangleDragActive = false;
         _scrollTargetLocked = false;
@@ -1925,7 +1996,7 @@ public class ThirdPersonController : MonoBehaviour
         }
 
         wishDirection = ProjectAgainstWall(wishDirection);
-        var targetHorizontal = wishDirection * (moveSpeed * WeaponHandlingSpeedFactor());
+        var targetHorizontal = wishDirection * (moveSpeed * WeaponHandlingSpeedFactor() * SuppressionSpeedFactor());
 
         var velocity = _rb.linearVelocity;
         var horizontal = new Vector3(velocity.x, 0f, velocity.z);
@@ -1961,6 +2032,8 @@ public class ThirdPersonController : MonoBehaviour
                 return firing || ads ? 0.45f : 0.85f;
             case CardHotbarTool.LightMachineGun:
                 return firing ? 0.45f : 0.7f;
+            case CardHotbarTool.MachineGun:
+                return firing ? 0.45f : 0.7f;
             case CardHotbarTool.CyborgLaser:
                 return firing ? 0.75f : 0.95f;
             case CardHotbarTool.AssaultRifle:
@@ -1971,6 +2044,46 @@ public class ThirdPersonController : MonoBehaviour
                 return firing ? 0.9f : 1f;
             default:
                 return 1f;
+        }
+    }
+
+    float SuppressionSpeedFactor()
+    {
+        return MachineGunSuppressionUtility.SpeedFactor(
+            _machineGunSuppressionRemaining,
+            _machineGunSuppressionSpeedMultiplier);
+    }
+
+    public void ApplyMachineGunSuppression(bool enhancedSuppression)
+    {
+        bool wasSuppressed = _machineGunSuppressionRemaining > 0f;
+        float speedMultiplier = enhancedSuppression
+            ? MachineGunSuppressionUtility.BoostedSpeedMultiplier
+            : MachineGunSuppressionUtility.DefaultSpeedMultiplier;
+        float flickScale = enhancedSuppression
+            ? gunnerSuppressionBoostFlickIntensityMultiplier
+            : 1f;
+
+        MachineGunSuppressionUtility.Apply(
+            ref _machineGunSuppressionRemaining,
+            machineGunSuppressionDurationSeconds);
+        MachineGunSuppressionUtility.ApplySpeedMultiplier(
+            ref _machineGunSuppressionSpeedMultiplier,
+            speedMultiplier,
+            wasSuppressed);
+
+        if (this == Local)
+        {
+            PlayerBulletHitFlash.Instance?.FlickFromGunshot(flickScale);
+        }
+    }
+
+    void UpdateMachineGunSuppression()
+    {
+        MachineGunSuppressionUtility.Tick(ref _machineGunSuppressionRemaining, Time.deltaTime);
+        if (_machineGunSuppressionRemaining <= 0f)
+        {
+            _machineGunSuppressionSpeedMultiplier = 1f;
         }
     }
 
@@ -2057,6 +2170,11 @@ public class ThirdPersonController : MonoBehaviour
             WeaponAmmoDefaults.LmgMagSize,
             WeaponAmmoDefaults.LmgMagSize,
             WeaponAmmoDefaults.LmgMaxTotal);
+        _machineGunAmmo = new WeaponAmmoPool(
+            WeaponAmmoDefaults.MachineGunStartReserve,
+            WeaponAmmoDefaults.MachineGunMagSize,
+            WeaponAmmoDefaults.MachineGunMagSize,
+            WeaponAmmoDefaults.MachineGunMaxTotal);
 
         _sniperAmmo = new WeaponAmmoPool(
             WeaponAmmoDefaults.SniperStartReserve,
@@ -2081,12 +2199,74 @@ public class ThirdPersonController : MonoBehaviour
         SyncPistolFamilyReserve();
         SyncRifleFamilyReserve();
         ResetAmmoRechargeTimers();
+        ResetGrenadeInventory();
+    }
+
+    void ResetGrenadeInventory()
+    {
+        _fragGrenadesRemaining = FragGrenadesPerLife;
+        _flashbangGrenadesRemaining = FlashbangGrenadesPerLife;
+        EnsureSelectedGrenadeAvailable();
+    }
+
+    int GetGrenadeCount(GrenadeType grenadeType)
+    {
+        return grenadeType == GrenadeType.Flashbang
+            ? _flashbangGrenadesRemaining
+            : _fragGrenadesRemaining;
+    }
+
+    void EnsureSelectedGrenadeAvailable()
+    {
+        if (GetGrenadeCount(_selectedGrenade) > 0)
+        {
+            return;
+        }
+
+        if (_fragGrenadesRemaining > 0)
+        {
+            _selectedGrenade = GrenadeType.Frag;
+            return;
+        }
+
+        if (_flashbangGrenadesRemaining > 0)
+        {
+            _selectedGrenade = GrenadeType.Flashbang;
+        }
+    }
+
+    void ConsumeThrownGrenade(GrenadeType grenadeType)
+    {
+        switch (grenadeType)
+        {
+            case GrenadeType.Flashbang:
+                if (_flashbangGrenadesRemaining > 0)
+                {
+                    _flashbangGrenadesRemaining--;
+                }
+
+                break;
+            default:
+                if (_fragGrenadesRemaining > 0)
+                {
+                    _fragGrenadesRemaining--;
+                }
+
+                break;
+        }
+
+        EnsureSelectedGrenadeAvailable();
+        if (!HasAnyGrenadesRemaining && _grenadeSlotSelected)
+        {
+            _grenadePostThrowSlotSwitchTimer = GrenadePostThrowSlotSwitchSeconds;
+        }
     }
 
     void ResetAmmoRechargeTimers()
     {
         _pistolFamilyRechargeTimer = 0f;
         _rifleFamilyRechargeTimer = 0f;
+        _machineGunRechargeTimer = 0f;
         _sniperRechargeTimer = 0f;
         _huntingRifleRechargeTimer = 0f;
         _antiMaterialRechargeTimer = 0f;
@@ -2146,6 +2326,8 @@ public class ThirdPersonController : MonoBehaviour
                 return ref _assaultRifleAmmo;
             case CardHotbarTool.LightMachineGun:
                 return ref _lmgAmmo;
+            case CardHotbarTool.MachineGun:
+                return ref _machineGunAmmo;
             case CardHotbarTool.SniperRifle:
                 return ref _sniperAmmo;
             case CardHotbarTool.HuntingRifle:
@@ -2172,6 +2354,8 @@ public class ThirdPersonController : MonoBehaviour
             case CardHotbarTool.LightMachineGun:
                 SyncRifleFamilyReserve();
                 return _lmgAmmo;
+            case CardHotbarTool.MachineGun:
+                return _machineGunAmmo;
             case CardHotbarTool.SniperRifle:
                 return _sniperAmmo;
             case CardHotbarTool.HuntingRifle:
@@ -2206,7 +2390,7 @@ public class ThirdPersonController : MonoBehaviour
 
     bool IsGrenadeInHand()
     {
-        return _grenadePrimed;
+        return _grenadePrimed || _grenadePostThrowSlotSwitchTimer > 0f;
     }
 
     bool IsGrenadeHandCooldownActive()
@@ -2280,6 +2464,10 @@ public class ThirdPersonController : MonoBehaviour
                 return ReloadDuration(CardHotbarTool.LightMachineGun) <= 0f
                     ? 0f
                     : Mathf.Clamp01(_reloadTimer / ReloadDuration(CardHotbarTool.LightMachineGun));
+            case CardHotbarTool.MachineGun:
+                return ReloadDuration(CardHotbarTool.MachineGun) <= 0f
+                    ? 0f
+                    : Mathf.Clamp01(_reloadTimer / ReloadDuration(CardHotbarTool.MachineGun));
             case CardHotbarTool.HuntingRifle:
                 return ReloadDuration(CardHotbarTool.HuntingRifle) <= 0f
                     ? 0f
@@ -2464,6 +2652,10 @@ public class ThirdPersonController : MonoBehaviour
                 RefillMagFromFamilyReserve(_reloadWeapon);
                 CompleteReload();
                 break;
+            case CardHotbarTool.MachineGun:
+                _machineGunAmmo.FillMagFromReserve();
+                CompleteReload();
+                break;
             case CardHotbarTool.HuntingRifle:
                 _huntingRifleAmmo.LoadSingleRound();
                 CompleteReload();
@@ -2635,7 +2827,8 @@ public class ThirdPersonController : MonoBehaviour
             IsReloadFullyLocked() ||
             IsLaserSwordHotbarLocked() ||
             IsGrenadeInHand() ||
-            IsGrenadeHandCooldownActive())
+            IsGrenadeHandCooldownActive() ||
+            !HasAnyGrenadesRemaining)
         {
             return;
         }
@@ -2702,7 +2895,9 @@ public class ThirdPersonController : MonoBehaviour
         UpdateAntiMaterialCharge();
         UpdateC4State();
         UpdateGrenadeFuseState();
+        UpdateGrenadePostThrowSlotSwitch();
         UpdateGrenadeHandCooldown();
+        UpdateMachineGunSuppression();
         UpdateAmmoRecharge();
         UpdateAbilityTimers(allowAbilityInput);
     }
@@ -2726,6 +2921,24 @@ public class ThirdPersonController : MonoBehaviour
         {
             _grenadeHandCooldownTimer = Mathf.Max(0f, _grenadeHandCooldownTimer - Time.deltaTime);
         }
+    }
+
+    void UpdateGrenadePostThrowSlotSwitch()
+    {
+        if (_grenadePostThrowSlotSwitchTimer <= 0f)
+        {
+            return;
+        }
+
+        _grenadePostThrowSlotSwitchTimer = Mathf.Max(0f, _grenadePostThrowSlotSwitchTimer - Time.deltaTime);
+        if (_grenadePostThrowSlotSwitchTimer > 0f || !_grenadeSlotSelected || HasAnyGrenadesRemaining)
+        {
+            return;
+        }
+
+        _grenadeSlotSelected = false;
+        RefreshHeldToolVisibility();
+        BeginWeaponDraw(SelectedTool);
     }
 
     bool IsC4ActionLocked()
@@ -2792,6 +3005,7 @@ public class ThirdPersonController : MonoBehaviour
     {
         TickAmmoRecharge(ref _pistolFamilyRechargeTimer, RefillPistolFamilyReserve);
         TickAmmoRecharge(ref _rifleFamilyRechargeTimer, RefillRifleFamilyReserve);
+        TickAmmoRecharge(ref _machineGunRechargeTimer, RefillMachineGunReserve);
         TickAmmoRecharge(ref _sniperRechargeTimer, RefillSniperReserve);
         TickAmmoRecharge(ref _huntingRifleRechargeTimer, RefillHuntingRifleReserve);
         TickAmmoRecharge(ref _antiMaterialRechargeTimer, RefillAntiMaterialReserve);
@@ -2822,6 +3036,11 @@ public class ThirdPersonController : MonoBehaviour
     {
         _rifleFamilyReserve = WeaponAmmoDefaults.AssaultRifleStartReserve;
         SyncRifleFamilyReserve();
+    }
+
+    void RefillMachineGunReserve()
+    {
+        _machineGunAmmo.reserve = WeaponAmmoDefaults.MachineGunStartReserve;
     }
 
     void RefillSniperReserve()
@@ -2892,6 +3111,13 @@ public class ThirdPersonController : MonoBehaviour
                 }
 
                 break;
+            case CardHotbarTool.MachineGun:
+                if (IsAmmoPoolDepleted(_machineGunAmmo))
+                {
+                    StartAmmoRechargeTimer(ref _machineGunRechargeTimer, WeaponAmmoDefaults.AmmoRechargeSeconds);
+                }
+
+                break;
             case CardHotbarTool.C4Charge:
                 if (IsAmmoPoolDepleted(_c4Ammo))
                 {
@@ -2929,7 +3155,6 @@ public class ThirdPersonController : MonoBehaviour
         string cardId = ActiveCardId();
         if (cardId == "infantry_2")
         {
-            HandleHoldBreathInput();
             return;
         }
 
@@ -2970,6 +3195,9 @@ public class ThirdPersonController : MonoBehaviour
             case "heavy_2":
                 TryCyborgRegenBoost();
                 break;
+            case "gunner_1":
+                TryGunnerSuppressionBoost();
+                break;
         }
     }
 
@@ -2999,6 +3227,7 @@ public class ThirdPersonController : MonoBehaviour
         UpdateAntiMaterialBraceState(allowAbilityInput);
         UpdateHunterMarkState();
         UpdateCyborgRegenBoostState();
+        UpdateGunnerSuppressionBoostState();
         UpdateExplosiveVestAttachState(allowAbilityInput);
 
         if (_speedBoostRemaining > 0f)
@@ -3016,24 +3245,32 @@ public class ThirdPersonController : MonoBehaviour
         }
     }
 
-    void HandleHoldBreathInput()
+    void UpdateHoldBreathState(bool allowAbilityInput)
     {
-        if (_holdBreathActive || _abilityCooldownRemaining > 0f)
+        if (ActiveCardId() != "infantry_2")
         {
             return;
         }
 
-        if (Input.GetKey(KeyCode.E))
-        {
-            _holdBreathActive = true;
-            _holdBreathRemaining = rangerHoldBreathMaxSeconds;
-        }
-    }
-
-    void UpdateHoldBreathState(bool allowAbilityInput)
-    {
         if (!_holdBreathActive)
         {
+            if (!allowAbilityInput ||
+                _abilityCooldownRemaining > 0f ||
+                IsRadialSelectorOpen ||
+                IsBlindnessBlockingInput() ||
+                IsReloadFullyLocked() ||
+                _dashActive ||
+                IsC4ActionLocked())
+            {
+                return;
+            }
+
+            if (Input.GetKey(KeyCode.E))
+            {
+                _holdBreathActive = true;
+                _holdBreathRemaining = rangerHoldBreathMaxSeconds;
+            }
+
             return;
         }
 
@@ -3476,6 +3713,43 @@ public class ThirdPersonController : MonoBehaviour
         }
     }
 
+    void TryGunnerSuppressionBoost()
+    {
+        if (_gunnerSuppressionBoostRemaining > 0f || _abilityCooldownRemaining > 0f)
+        {
+            return;
+        }
+
+        _gunnerSuppressionBoostRemaining = gunnerSuppressionBoostDurationSeconds;
+        _abilityCooldownRemaining = gunnerSuppressionBoostCooldownSeconds;
+    }
+
+    void UpdateGunnerSuppressionBoostState()
+    {
+        if (_gunnerSuppressionBoostRemaining <= 0f)
+        {
+            return;
+        }
+
+        EndGunnerSuppressionBoostIfMagEmpty();
+        if (_gunnerSuppressionBoostRemaining <= 0f)
+        {
+            return;
+        }
+
+        _gunnerSuppressionBoostRemaining = Mathf.Max(0f, _gunnerSuppressionBoostRemaining - Time.deltaTime);
+    }
+
+    void EndGunnerSuppressionBoostIfMagEmpty()
+    {
+        if (!GunnerSuppressionBoostActive || _machineGunAmmo.mag > 0)
+        {
+            return;
+        }
+
+        _gunnerSuppressionBoostRemaining = 0f;
+    }
+
     void TryHeavyShield()
     {
         if (_shieldAbilityActive || _abilityCooldownRemaining > 0f)
@@ -3549,6 +3823,9 @@ public class ThirdPersonController : MonoBehaviour
         _antiMaterialBraceGroundNormal = Vector3.up;
         _hunterMarkRemaining = 0f;
         _cyborgRegenBoostRemaining = 0f;
+        _machineGunSuppressionRemaining = 0f;
+        _machineGunSuppressionSpeedMultiplier = 1f;
+        _gunnerSuppressionBoostRemaining = 0f;
         CancelExplosiveVestAttach();
         ExplosiveVestState.Ensure(gameObject)?.Clear();
         HunterMarkSystem.ClearAllMarks();
@@ -3582,6 +3859,8 @@ public class ThirdPersonController : MonoBehaviour
                     SelectedTool == CardHotbarTool.AntiMaterialRifle;
             case "demolition_1":
                 return !_explosiveVestAttaching && _abilityCooldownRemaining <= 0f;
+            case "gunner_1":
+                return _abilityCooldownRemaining <= 0f && _gunnerSuppressionBoostRemaining <= 0f;
             default:
                 return false;
         }
@@ -3606,7 +3885,7 @@ public class ThirdPersonController : MonoBehaviour
             case "infantry_2":
                 if (_holdBreathActive)
                 {
-                    return 1f - Mathf.Clamp01(_holdBreathRemaining / rangerHoldBreathMaxSeconds);
+                    return Mathf.Clamp01(_holdBreathRemaining / Mathf.Max(0.01f, rangerHoldBreathMaxSeconds));
                 }
 
                 if (_abilityCooldownRemaining > 0f)
@@ -3695,6 +3974,18 @@ public class ThirdPersonController : MonoBehaviour
                 }
 
                 return 0f;
+            case "gunner_1":
+                if (_gunnerSuppressionBoostRemaining > 0f)
+                {
+                    return 1f - Mathf.Clamp01(_gunnerSuppressionBoostRemaining / gunnerSuppressionBoostDurationSeconds);
+                }
+
+                if (_abilityCooldownRemaining > 0f)
+                {
+                    return Mathf.Clamp01(_abilityCooldownRemaining / gunnerSuppressionBoostCooldownSeconds);
+                }
+
+                return 0f;
             default:
                 return 0f;
         }
@@ -3771,6 +4062,9 @@ public class ThirdPersonController : MonoBehaviour
                 break;
             case CardHotbarTool.LightMachineGun:
                 baseDuration = lmgDrawSeconds;
+                break;
+            case CardHotbarTool.MachineGun:
+                baseDuration = machineGunDrawSeconds;
                 break;
             case CardHotbarTool.SniperRifle:
                 baseDuration = sniperDrawSeconds;
@@ -3909,6 +4203,9 @@ public class ThirdPersonController : MonoBehaviour
             case CardHotbarTool.LightMachineGun:
                 HandleLmgInput();
                 break;
+            case CardHotbarTool.MachineGun:
+                HandleMachineGunInput();
+                break;
             case CardHotbarTool.SniperRifle:
                 HandleSniperRifleInput();
                 break;
@@ -3950,7 +4247,8 @@ public class ThirdPersonController : MonoBehaviour
             IsC4ActionLocked() ||
             _dashActive ||
             IsWeaponDrawInProgress() ||
-            IsGrenadeHandCooldownActive())
+            IsGrenadeHandCooldownActive() ||
+            GetGrenadeCount(_selectedGrenade) <= 0)
         {
             return;
         }
@@ -4209,6 +4507,82 @@ public class ThirdPersonController : MonoBehaviour
         _weaponFireCooldown = LmgFireInterval;
     }
 
+    void HandleMachineGunInput()
+    {
+        if (IsWeaponFireInputBlocked())
+        {
+            return;
+        }
+
+        if (_isReloading)
+        {
+            return;
+        }
+
+        if (!Input.GetMouseButton(0))
+        {
+            return;
+        }
+
+        if (_weaponFireCooldown > 0f)
+        {
+            return;
+        }
+
+        if (!TryFireMachineGun())
+        {
+            return;
+        }
+
+        _weaponFireCooldown = MachineGunFireInterval;
+    }
+
+    bool TryFireMachineGun()
+    {
+        ref WeaponAmmoPool pool = ref GetAmmoPoolRef(CardHotbarTool.MachineGun);
+        if (!pool.CanFire)
+        {
+            return false;
+        }
+
+        FireWeapon(
+            BuildMachineGunAimRay(),
+            machineGunBulletSpeed,
+            MachineGunRecoilScale,
+            ProjectileWeaponType.MachineGun);
+        pool.ConsumeRound();
+        EndGunnerSuppressionBoostIfMagEmpty();
+        MaybeStartAmmoRecharge(CardHotbarTool.MachineGun);
+        MenuUiSounds.PlayWeaponGunshot(ProjectileWeaponType.MachineGun);
+        _weaponFireSlowTimer = WeaponFireSlowWindowSeconds;
+        return true;
+    }
+
+    Ray BuildMachineGunAimRay()
+    {
+        float spreadBias = GunnerSuppressionBoostActive
+            ? gunnerSuppressionBoostSpreadCenterBiasExponent
+            : machineGunSpreadCenterBiasExponent;
+        return BuildCrosshairAimRay(SampleCenterBiasedCircleOffset(
+            EffectiveMachineGunCrosshairRadiusPixels,
+            spreadBias));
+    }
+
+    static Vector2 SampleCenterBiasedCircleOffset(float radiusPixels, float centerBiasExponent)
+    {
+        if (radiusPixels <= 0.01f)
+        {
+            return Vector2.zero;
+        }
+
+        float angle = UnityEngine.Random.Range(0f, Mathf.PI * 2f);
+        float normalizedRadius = Mathf.Pow(
+            UnityEngine.Random.value,
+            Mathf.Max(0.05f, centerBiasExponent));
+        float distance = radiusPixels * normalizedRadius;
+        return new Vector2(Mathf.Cos(angle) * distance, Mathf.Sin(angle) * distance);
+    }
+
     void HandleCyborgLaserInput()
     {
         _cyborgLaserFiringHeld = Input.GetMouseButton(0);
@@ -4345,6 +4719,12 @@ public class ThirdPersonController : MonoBehaviour
 
             controller.GetComponent<PlayerHealth>()?.ApplyDamage(laserSwordDamage, false);
         }
+
+        C4ChargeProjectile.ApplyChargesInRange(
+            origin,
+            range,
+            laserSwordDamage,
+            targetPosition => IsWithinLaserSwordArc(origin, forward, targetPosition, range, halfArc));
     }
 
     static bool IsWithinLaserSwordArc(
@@ -5444,6 +5824,11 @@ public class ThirdPersonController : MonoBehaviour
 
         if (Input.GetKeyDown(KeyCode.Q))
         {
+            if (!HasAnyGrenadesRemaining)
+            {
+                return;
+            }
+
             _grenadeKeyHeld = true;
             _grenadeKeyHoldTimer = 0f;
             _grenadeWheelOpenedFromHold = false;
@@ -5533,6 +5918,11 @@ public class ThirdPersonController : MonoBehaviour
 
     void PrimeSelectedGrenade()
     {
+        if (GetGrenadeCount(_selectedGrenade) <= 0)
+        {
+            return;
+        }
+
         _grenadePrimed = true;
         _grenadeFuseTimer = fragGrenadeFuseSeconds;
         RefreshHeldToolVisibility();
@@ -5547,7 +5937,7 @@ public class ThirdPersonController : MonoBehaviour
 
     void ThrowGrenade()
     {
-        if (viewCamera == null)
+        if (viewCamera == null || GetGrenadeCount(_selectedGrenade) <= 0)
         {
             return;
         }
@@ -5555,9 +5945,11 @@ public class ThirdPersonController : MonoBehaviour
         Ray throwRay = BuildCenterAimRay();
         Vector3 spawnPosition = BulletSpawnPosition(throwRay);
         float remainingFuse = _grenadePrimed ? _grenadeFuseTimer : fragGrenadeFuseSeconds;
+        var thrownType = _selectedGrenade;
         CancelGrenadePrime();
+        ConsumeThrownGrenade(thrownType);
         BeginGrenadeHandCooldown();
-        ThrownGrenadeProjectile.Spawn(_selectedGrenade, spawnPosition, throwRay.direction, remainingFuse);
+        ThrownGrenadeProjectile.Spawn(thrownType, spawnPosition, throwRay.direction, remainingFuse);
     }
 
     void UpdateGrenadeFuseState()
@@ -5576,10 +5968,18 @@ public class ThirdPersonController : MonoBehaviour
 
     void DetonateHeldGrenade()
     {
+        if (GetGrenadeCount(_selectedGrenade) <= 0)
+        {
+            CancelGrenadePrime();
+            return;
+        }
+
         Vector3 center = transform.position + Vector3.up;
+        var detonatedType = _selectedGrenade;
         CancelGrenadePrime();
+        ConsumeThrownGrenade(detonatedType);
         BeginGrenadeHandCooldown();
-        switch (_selectedGrenade)
+        switch (detonatedType)
         {
             case GrenadeType.Flashbang:
                 FlashbangBlindUtility.DetonateFlashbang(center);
@@ -5700,6 +6100,11 @@ public class ThirdPersonController : MonoBehaviour
         }
 
         var nextGrenade = GrenadeOptions[segmentIndex];
+        if (GetGrenadeCount(nextGrenade) <= 0)
+        {
+            return;
+        }
+
         if (nextGrenade != _selectedGrenade)
         {
             _selectedGrenade = nextGrenade;
@@ -6320,6 +6725,23 @@ public class ThirdPersonController : MonoBehaviour
         _lmgMuzzleFlashRoot = CreateHeldCube(_lmgRoot.transform, "LMG Muzzle Flash", new Vector3(0.02f, 0.02f, 0.86f), new Vector3(0.15f, 0.15f, 0.08f), flashMaterial);
         _lmgMuzzleFlashRoot.SetActive(false);
 
+        _machineGunRoot = new GameObject("Held Machine Gun");
+        _machineGunRoot.transform.SetParent(viewCamera.transform, false);
+        _machineGunRoot.transform.localPosition = new Vector3(0.26f, -0.24f, 0.54f);
+        _machineGunRoot.transform.localRotation = Quaternion.Euler(0f, -3f, 0f);
+        CreateHeldCube(_machineGunRoot.transform, "MG Body", new Vector3(0f, 0f, 0f), new Vector3(0.17f, 0.14f, 0.64f), gunMaterial);
+        CreateHeldCube(_machineGunRoot.transform, "MG Barrel", new Vector3(0.02f, 0.02f, 0.5f), new Vector3(0.08f, 0.08f, 0.86f), gunMaterial);
+        CreateHeldCube(_machineGunRoot.transform, "MG Stock", new Vector3(-0.02f, -0.02f, -0.34f), new Vector3(0.11f, 0.12f, 0.24f), gunMaterial);
+        CreateHeldCube(_machineGunRoot.transform, "MG Grip", new Vector3(0f, -0.15f, -0.02f), new Vector3(0.08f, 0.18f, 0.09f), gunMaterial);
+        CreateHeldCube(_machineGunRoot.transform, "MG Drum", new Vector3(0f, -0.12f, 0.06f), new Vector3(0.1f, 0.16f, 0.14f), gunMaterial);
+        _machineGunMuzzleFlashRoot = CreateHeldCube(
+            _machineGunRoot.transform,
+            "MG Muzzle Flash",
+            new Vector3(0.02f, 0.02f, 0.94f),
+            new Vector3(0.16f, 0.16f, 0.08f),
+            flashMaterial);
+        _machineGunMuzzleFlashRoot.SetActive(false);
+
         Material laserMaterial = CreateHeldToolMaterial("Held Laser Material", new Color(0.92f, 0.12f, 0.1f, 1f));
         Material laserFlashMaterial = CreateHeldToolMaterial("Laser Muzzle Flash Material", new Color(1f, 0.28f, 0.22f, 1f));
         Material swordMaterial = CreateHeldToolMaterial("Held Laser Sword Material", new Color(0.95f, 0.14f, 0.12f, 1f));
@@ -6441,6 +6863,11 @@ public class ThirdPersonController : MonoBehaviour
         if (_lmgRoot != null)
         {
             _lmgRoot.SetActive(SelectedTool == CardHotbarTool.LightMachineGun);
+        }
+
+        if (_machineGunRoot != null)
+        {
+            _machineGunRoot.SetActive(SelectedTool == CardHotbarTool.MachineGun);
         }
 
         if (_cyborgLaserRoot != null)
@@ -6642,6 +7069,13 @@ public class ThirdPersonController : MonoBehaviour
         _lmgRoot.transform.localPosition = lmgPosition;
         _lmgRoot.transform.localRotation = lmgRotation;
 
+        Vector3 machineGunPosition = new Vector3(0.26f, -0.24f, 0.54f - (0.06f * kickProgress));
+        Quaternion machineGunRotation = Quaternion.Euler(0f, -3f, 0f);
+        ApplyWeaponDrawOffset(CardHotbarTool.MachineGun, ref machineGunPosition);
+        ApplyReloadDipToGun(CardHotbarTool.MachineGun, ref machineGunPosition, ref machineGunRotation);
+        _machineGunRoot.transform.localPosition = machineGunPosition;
+        _machineGunRoot.transform.localRotation = machineGunRotation;
+
         Vector3 laserPosition = new Vector3(0.36f, -0.28f, 0.58f - (0.07f * kickProgress));
         Quaternion laserRotation = Quaternion.Euler(8f, -8f, -18f);
         ApplyWeaponDrawOffset(CardHotbarTool.CyborgLaser, ref laserPosition);
@@ -6685,6 +7119,7 @@ public class ThirdPersonController : MonoBehaviour
         bool showSmgFlash = _muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.Smg;
         bool showMachinePistolFlash = _muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.MachinePistol;
         bool showLmgFlash = _muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.LightMachineGun;
+        bool showMachineGunFlash = _muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.MachineGun;
         bool showLaserFlash = _muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.CyborgLaser;
         float flashPulse = _muzzleFlashTimer > 0f ? UnityEngine.Random.Range(0.85f, 1.25f) : 1f;
 
@@ -6740,6 +7175,12 @@ public class ThirdPersonController : MonoBehaviour
         {
             _lmgMuzzleFlashRoot.SetActive(showLmgFlash);
             _lmgMuzzleFlashRoot.transform.localScale = new Vector3(0.15f, 0.15f, 0.08f) * flashPulse;
+        }
+
+        if (_machineGunMuzzleFlashRoot != null)
+        {
+            _machineGunMuzzleFlashRoot.SetActive(showMachineGunFlash);
+            _machineGunMuzzleFlashRoot.transform.localScale = new Vector3(0.16f, 0.16f, 0.08f) * flashPulse;
         }
 
         if (_cyborgLaserMuzzleFlashRoot != null)

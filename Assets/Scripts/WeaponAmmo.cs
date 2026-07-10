@@ -98,6 +98,10 @@ public static class WeaponAmmoDefaults
     public const int LmgMaxTotal = 255;
     public const int LmgStartReserve = 200;
 
+    public const int MachineGunMagSize = 280;
+    public const int MachineGunMaxTotal = 1680;
+    public const int MachineGunStartReserve = 1400;
+
     public const int SniperMagSize = 5;
     public const int SniperMaxTotal = 45;
     public const int SniperStartReserve = 40;
@@ -111,6 +115,7 @@ public static class WeaponAmmoDefaults
     public const float MachinePistolReloadSeconds = PistolReloadSeconds;
     public const float AssaultRifleReloadSeconds = 1.5f;
     public const float LmgReloadSeconds = 4.5f;
+    public const float MachineGunReloadSeconds = 10f;
     public const float SniperReloadStartSeconds = 1.5f;
     public const float SniperRoundReloadSeconds = 0.8f;
     public const float HuntingRifleReloadSeconds = 2.1f;

@@ -43,6 +43,12 @@ public class C4ChargeProjectile : MonoBehaviour
 
     public bool IsAttached => _attached;
     public bool CanRemoteDetonate => _attached && _attachedTimer >= AttachArmSeconds && !_detonationQueued;
+    public bool IsDetonating => _isDetonating;
+
+    public GameObject GetBlastLineOfSightRoot()
+    {
+        return _stickTarget != null ? _stickTarget.gameObject : gameObject;
+    }
 
     public void Initialize(
         Vector3 velocity,
@@ -281,6 +287,74 @@ public class C4ChargeProjectile : MonoBehaviour
         ApplyEntityDamage(damage, headshot, hitPoint);
     }
 
+    public static void ApplyBlastDamage(
+        Vector3 center,
+        float radiusMeters,
+        System.Func<float, float> damageAtDistance,
+        bool requireLineOfSight = false,
+        System.Func<Vector3, Vector3, GameObject, bool> lineOfSightCheck = null)
+    {
+        for (int i = LiveCharges.Count - 1; i >= 0; i--)
+        {
+            C4ChargeProjectile charge = LiveCharges[i];
+            if (charge == null || charge.IsDetonating)
+            {
+                continue;
+            }
+
+            Vector3 chargePoint = charge.transform.position;
+            float distance = Vector3.Distance(center, chargePoint);
+            if (distance >= radiusMeters)
+            {
+                continue;
+            }
+
+            float damage = damageAtDistance(distance);
+            if (damage <= 0f)
+            {
+                continue;
+            }
+
+            if (requireLineOfSight &&
+                lineOfSightCheck != null &&
+                !lineOfSightCheck(center, chargePoint, charge.GetBlastLineOfSightRoot()))
+            {
+                continue;
+            }
+
+            charge.ApplyEntityDamage(damage, headshot: false, chargePoint);
+        }
+    }
+
+    public static void ApplyChargesInRange(
+        Vector3 origin,
+        float rangeMeters,
+        float damage,
+        System.Func<Vector3, bool> isValidTarget)
+    {
+        if (damage <= 0f || isValidTarget == null)
+        {
+            return;
+        }
+
+        for (int i = LiveCharges.Count - 1; i >= 0; i--)
+        {
+            C4ChargeProjectile charge = LiveCharges[i];
+            if (charge == null || charge.IsDetonating)
+            {
+                continue;
+            }
+
+            Vector3 chargePoint = charge.transform.position;
+            if (!isValidTarget(chargePoint))
+            {
+                continue;
+            }
+
+            charge.ApplyEntityDamage(damage, headshot: false, chargePoint);
+        }
+    }
+
     void Detonate(Vector3 center)
     {
         if (_isDetonating)
@@ -293,41 +367,7 @@ public class C4ChargeProjectile : MonoBehaviour
         _detonationTimer = 0f;
 
         ExplosionBlastUtility.Detonate(center, C4ExplosionProfile());
-        DetonateEquippedVestsNear(center, DamageRadiusMeters);
         Destroy(gameObject);
-    }
-
-    static void DetonateEquippedVestsNear(Vector3 center, float radiusMeters)
-    {
-        var detonated = new HashSet<ExplosiveVestState>();
-        Collider[] hits = Physics.OverlapSphere(
-            center,
-            radiusMeters,
-            Physics.DefaultRaycastLayers,
-            QueryTriggerInteraction.Ignore);
-
-        for (int i = 0; i < hits.Length; i++)
-        {
-            Collider hit = hits[i];
-            if (hit == null)
-            {
-                continue;
-            }
-
-            ExplosiveVestState vest = hit.GetComponentInParent<ExplosiveVestState>();
-            if (vest == null || !vest.IsEquipped || !detonated.Add(vest))
-            {
-                continue;
-            }
-
-            Vector3 vestCenter = vest.transform.position + Vector3.up;
-            if (Vector3.Distance(center, vestCenter) > radiusMeters)
-            {
-                continue;
-            }
-
-            vest.DetonateFromBlast();
-        }
     }
 
     static ExplosionBlastUtility.Profile C4ExplosionProfile()

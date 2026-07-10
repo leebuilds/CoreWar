@@ -152,8 +152,17 @@ public class ProjectileBullet : MonoBehaviour
                     hit.point,
                     _velocity.magnitude,
                     headshot,
-                    () => hitZone.dummy.ApplyHit(
-                        hitZone.zoneType, _velocity.magnitude, _muzzleSpeed, _weaponType)))
+                    () =>
+                    {
+                        bool hitApplied = hitZone.dummy.ApplyHit(
+                            hitZone.zoneType, _velocity.magnitude, _muzzleSpeed, _weaponType);
+                        if (hitApplied && _weaponType == ProjectileWeaponType.MachineGun)
+                        {
+                            hitZone.dummy.ApplyMachineGunSuppression(OwnerGunnerSuppressionBoostActive());
+                        }
+
+                        return hitApplied;
+                    }))
                 {
                     return;
                 }
@@ -262,7 +271,22 @@ public class ProjectileBullet : MonoBehaviour
         }
 
         health.ApplyDamage(damage, headshot);
+        if (_weaponType == ProjectileWeaponType.MachineGun)
+        {
+            controller.ApplyMachineGunSuppression(OwnerGunnerSuppressionBoostActive());
+        }
+
         return true;
+    }
+
+    bool OwnerGunnerSuppressionBoostActive()
+    {
+        if (_ownerRoot == null)
+        {
+            return false;
+        }
+
+        return _ownerRoot.GetComponent<ThirdPersonController>()?.GunnerSuppressionBoostActive ?? false;
     }
 
     void ApplySniperPenetrationPenalty()

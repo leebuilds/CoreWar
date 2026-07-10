@@ -20,6 +20,8 @@ public class ShootingRangeDummy : MonoBehaviour
     Vector3 _standPosition;
     Quaternion _standRotation;
     float _moveDirection = 1f;
+    float _machineGunSuppressionRemaining;
+    float _machineGunSuppressionSpeedMultiplier = 1f;
 
     public float CurrentHealth => _currentHealth;
     public float MaxHealth => ShootingRangeSession.DummyMaxHealth;
@@ -77,7 +79,16 @@ public class ShootingRangeDummy : MonoBehaviour
         }
 
         Vector3 position = transform.position;
-        position.x += _moveDirection * ShootingRangeSession.DummyMoveSpeed * Time.deltaTime;
+        float moveSpeed = ShootingRangeSession.DummyMoveSpeed *
+            MachineGunSuppressionUtility.SpeedFactor(
+                _machineGunSuppressionRemaining,
+                _machineGunSuppressionSpeedMultiplier);
+        MachineGunSuppressionUtility.Tick(ref _machineGunSuppressionRemaining, Time.deltaTime);
+        if (_machineGunSuppressionRemaining <= 0f)
+        {
+            _machineGunSuppressionSpeedMultiplier = 1f;
+        }
+        position.x += _moveDirection * moveSpeed * Time.deltaTime;
 
         float minX = ShootingRangeSession.DummyMoveMinX;
         float maxX = ShootingRangeSession.DummyMoveMaxX;
@@ -135,6 +146,8 @@ public class ShootingRangeDummy : MonoBehaviour
 
         _currentHealth = ShootingRangeSession.DummyMaxHealth;
         _isDown = false;
+        _machineGunSuppressionRemaining = 0f;
+        _machineGunSuppressionSpeedMultiplier = 1f;
         ExplosiveVestState.Ensure(gameObject)?.Clear();
         transform.position = _standPosition;
         transform.rotation = _standRotation;
@@ -183,6 +196,22 @@ public class ShootingRangeDummy : MonoBehaviour
         }
 
         return true;
+    }
+
+    public void ApplyMachineGunSuppression(bool enhancedSuppression)
+    {
+        bool wasSuppressed = _machineGunSuppressionRemaining > 0f;
+        float speedMultiplier = enhancedSuppression
+            ? MachineGunSuppressionUtility.BoostedSpeedMultiplier
+            : MachineGunSuppressionUtility.DefaultSpeedMultiplier;
+
+        MachineGunSuppressionUtility.Apply(
+            ref _machineGunSuppressionRemaining,
+            MachineGunSuppressionUtility.DefaultDurationSeconds);
+        MachineGunSuppressionUtility.ApplySpeedMultiplier(
+            ref _machineGunSuppressionSpeedMultiplier,
+            speedMultiplier,
+            wasSuppressed);
     }
 
     public bool ApplyDirectDamage(float damage, bool headshot)

@@ -35,7 +35,7 @@ public static class CardCatalog
     /// </summary>
     public static string[] DefaultOwnedCardIds()
     {
-        return new[] { "infantry_1", "sniper_1", "sniper_2", "sniper_3", "infantry_2", "infantry_3", "heavy_1", "heavy_2", "demolition_1" };
+        return new[] { "infantry_1", "sniper_1", "sniper_2", "sniper_3", "infantry_2", "infantry_3", "heavy_1", "heavy_2", "demolition_1", "gunner_1" };
     }
 
     public static CardDefinition Get(string cardId)
@@ -121,6 +121,11 @@ public static class CardCatalog
         if (entry.SpecialtyKey == "demolition" && entry.Tier == 1)
         {
             return CardKitDefinition.Tier1Kamikaze();
+        }
+
+        if (entry.SpecialtyKey == "gunner" && entry.Tier == 1)
+        {
+            return CardKitDefinition.Tier1Gunner();
         }
 
         return CardKitDefinition.FromWeaponNames(entry.PrimaryWeapon, entry.SecondaryWeapon);
@@ -424,9 +429,9 @@ public static class CardCatalog
             "Gun · Hammer · Blueprint · Drone"),
 
         Entry("gunner", "Gunner", 1, "Gunner", CardRarity.Epic,
-            "The Gunner's weapon is inaccurate but appears to have almost limitless ammunition. Continuous fire suppresses enemies by reducing their movement speed and weapon accuracy, making pushes extremely difficult.",
-            7.2f, 115, 4,
-            "Suppression Machine Gun", "None",
+            "The Gunner suppresses enemies with a high-capacity machine gun and service pistol. Their weapon is inaccurate at range but chews through ammunition and forces defenders to break cover.",
+            7.2f, 110, 4,
+            "Machine Gun", "Service Pistol",
             "Sustained fire suppresses enemy movement and accuracy.",
             "Standard sabotage tool.",
             "Standard build costs.",

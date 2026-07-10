@@ -26,6 +26,7 @@ public static class ExplosionBlastUtility
     public static void Detonate(Vector3 center, Profile profile)
     {
         ApplyExplosionDamage(center, profile);
+        ExplosiveVestState.DetonateEquippedInRadius(center, profile.damageRadiusMeters);
         DestroyBuildPiecesNear(center, profile.buildDestroyRadiusMeters);
         AntiMaterialExplosionEffect.Spawn(center);
     }
@@ -93,6 +94,11 @@ public static class ExplosionBlastUtility
                 PlayerBulletHitFlash.Instance?.BlindFromExplosionFire(blindDuration, inFire);
             }
         }
+
+        C4ChargeProjectile.ApplyBlastDamage(
+            center,
+            profile.damageRadiusMeters,
+            distance => DamageAtDistance(distance, profile));
     }
 
     public static float DamageAtDistance(float distanceMeters, Profile profile)

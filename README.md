@@ -172,7 +172,9 @@ Layout: **`E` · `1` `2` · `Q` · `F` `H`**
 | **Right click** | Prime in hand (**5 s** fuse); left click throws with remaining fuse |
 
 - **0.5 s** draw after equipping grenade slot before prime/throw
-- **3 s** cooldown after a grenade leaves your hand before another can be pulled out
+- **1.8 s** cooldown after a grenade leaves your hand before another can be pulled out
+- **Per-life inventory (all classes):** **2** frag, **1** flashbang — resets on respawn; HUD shows count on **Q** slot
+- After throwing your **last** grenade, the grenade slot stays selected for **0.5 s**, then auto-switches to your prior weapon and starts its draw timer
 - While **primed** in hand: hotbar, **Q**, and grenade wheel are blocked
 - Build and grenade wheels are mutually exclusive; either wheel blocks other input and hides the crosshair
 
@@ -180,7 +182,7 @@ Layout: **`E` · `1` `2` · `Q` · `F` `H`**
 
 - Thrown at **30 m/s** with **9.81 m/s²** gravity (rigidbody physics, high ground friction, low roll)
 - **5 s** fuse; **70** damage at **0 m** → **15** at **8 m** (line of sight)
-- Gray smoke **0.5 s**; gun-style black blindness (not fiery explosion blindness)
+- Layered **fireball** VFX **0.5 s** (**5 m** diameter); gun-style black blindness (not fiery explosion blindness)
 
 **Flashbang**
 
@@ -211,6 +213,7 @@ Black gun/explosion blindness always renders above white and **does** block inpu
 | Heavy (`heavy_1`) | LMG (full auto) | Pistol | Build · Hammer |
 | Cyborg (`heavy_2`) | Laser LMG (overheating beam) | Laser sword | Build · Hammer |
 | Kamikaze (`demolition_1`) | SMG (full auto) | C4 charge + remote | Build · Hammer |
+| Gunner (`gunner_1`) | Machine gun (full auto, circle reticle) | Pistol | Build · Hammer |
 
 **E abilities**
 
@@ -225,6 +228,7 @@ Black gun/explosion blindness always renders above white and **does** block inpu
 | Heavy | Shield — **120** shield HP, decays **12/s**; blue flash on health bar | 30 s after break |
 | Cyborg | Regen boost — **20% HP/s** for **6 s** | 35 s |
 | Kamikaze | Explosive vest — hold **E** for **5 s** within **1 m** of a teammate, enemy, or dummy (self if alone); wearer takes **5%** less body-shot damage; on death detonates (**130** at 0 m → **10** at 10 m, **8 m** build break) | 120 s |
+| Gunner | Suppression boost — **7 s** max (**3000** RPM, **+20%** crosshair, wider spread, stronger suppression on hit); ends when mag hits **0** | 30 s |
 
 **Ammo (per weapon, separate pools)**
 
@@ -238,6 +242,7 @@ Black gun/explosion blindness always renders above white and **does** block inpu
 | Machine pistol | 150 / 18 | 1.2 s full mag |
 | LMG | 200 / 55 | 4.5 s full mag |
 | SMG | 150 / 25 | 1.275 s full mag |
+| Machine gun (Gunner) | 1400 / 280 | 10 s full mag |
 | C4 (Kamikaze) | **0 / 1** charge | — (no reload; **50 s** recharge when empty) |
 
 When a weapon runs completely dry (magazine and reserve both **0** for that weapon),
@@ -254,15 +259,20 @@ a quick bob. Ammo resets on match start, respawn, and character reset.
 firing (e.g. LMG **70%** held / **30%** firing; hunting rifle **85%** held /
 **45%** ADS or firing).
 
-**AR / Pistol / Sniper / Hunting rifle / Anti-material / Scoped AR / Machine pistol / LMG / Cyborg laser:** fire
+**AR / Pistol / Sniper / Hunting rifle / Anti-material / Scoped AR / Machine pistol / LMG / Machine gun / Cyborg laser:** fire
 visible bullets (or laser beam) along the **crosshair / red dot** with muzzle flash,
-per-weapon gunshot audio, and recoil kick. The AR, scoped AR, and LMG hold left
+per-weapon gunshot audio, and recoil kick. The AR, scoped AR, LMG, and machine gun hold left
 click for automatic fire; pistol, machine pistol, sniper, hunting rifle, and anti-material are
 semi-auto per click (anti-material requires **1 s charge** while fully ADS). Each firearm has a draw animation before you can shoot,
 reload, or ADS. Sniper and hunting rifle **right click** enters ADS (sniper
 **5×** scopes; hunting rifle **6.5×** iron sights with peripheral blur). Anti-material
 **right click** — **12×** zoom, **no hipfire**. Ranger
 scoped AR **right click** — **1.8×** zoom.
+
+**Machine gun (Gunner):** circle reticle (**24 px** radius); bullets land anywhere in the circle with
+center-biased spread. Hits apply **suppression** — **1.5 s** movement slow (**80%** speed) and
+screen flick; Gunner E boost increases suppression (**65%** speed, **2.5×** flick). Gunner E also
+raises RPM to **3000**, widens the reticle **+20%**, and uses edge-biased spread until the mag is empty.
 
 **ADS scope sway:** precision weapons drift smoothly while scoped (semi-random phases of
 stillness, wide arcs, and occasional fast spurts). Per-weapon amplitude and speed differ;
@@ -282,20 +292,21 @@ acceleration; it sticks flat to surfaces or players. Throwing blocks reload, slo
 switching, and other weapon actions for **1 s** but you can still move and look.
 Keeping the secondary selected after the charge has armed (**2 s** attached) pulls a
 remote in **0.5 s**; pressing it queues a **1 s** detonation. The blast breaks player builds within **8 m** and
-deals player/dummy damage linearly from **130 at 0 m** to **5 at 10 m**. A C4 blast also
-detonates equipped explosive vests within **10 m**. Shot damage treats C4 as an entity:
+deals player/dummy damage linearly from **130 at 0 m** to **5 at 10 m**. **Any explosion**
+(including frag grenades, C4, anti-material, and vest chain blasts) detonates equipped
+explosive vests within the blast damage radius. Shot damage treats C4 as an entity:
 only **body-shot** damage counts, and **30** accumulated damage detonates the charge
-(headshots ignored). Uses the same
-fiery explosion blindness as anti-material rounds (orange fireball, black follow-up, input block).
-C4 detonates when shot, attaches to players/dummies who touch it while it is falling, and
-drops if the attached player or dummy is eliminated before detonation. The thrower cannot
-stick a charge to themselves for **1 s** after throwing.
+(headshots ignored) — bullets, grenades, fiery explosions, and laser sword hits all contribute.
+Uses the same fiery explosion blindness as anti-material rounds (orange fireball, black
+follow-up, input block). C4 detonates when damaged, attaches to players/dummies who touch it
+while it is falling, and drops if the attached player or dummy is eliminated before detonation.
+The thrower cannot stick a charge to themselves for **1 s** after throwing.
 
 **Build:** full build-mode toolset (see below).
 
 New accounts unlock **Infantry**, **Sniper**, **Hunter**, **Anti-Material**, **Ranger**,
-**Skirmisher**, **Heavy**, and **Cyborg** by default; other cards show LOCK in Decks until earned. Higher-tier
-and other specialty kits are planned.
+**Skirmisher**, **Heavy**, **Cyborg**, and **Gunner** by default; other cards show LOCK in Decks
+until earned. Higher-tier and other specialty kits are planned.
 
 ### Build mode (blueprint slot)
 
@@ -334,6 +345,7 @@ and accuracy penalties per hit.
 | Anti-material rifle | 1300 m/s | 90 | 102 |
 | Machine pistol | 400 m/s | 20 | 40 |
 | LMG | 800 m/s | 30 | 60 |
+| Machine gun | 2000 m/s | 7 | 9 |
 | Cyborg laser | Hitscan beam | 10 | 15 |
 
 **Explosions (anti-material, C4, future):** shared fiery blindness — **2×** damage-based
@@ -347,7 +359,8 @@ destruction; **2 s** stick fuse.
 50% of max at 0 m/s, 100% at muzzle velocity.
 
 **Air drag** (exponential per 100 m): pistol ~**25%** loss, AR ~**5%**, sniper
-and hunting rifle ~**4%**, anti-material ~**3%**, machine pistol ~**50%**, LMG ~**5.5%**.
+and hunting rifle ~**4%**, anti-material ~**3%**, machine pistol ~**50%**, LMG ~**5.5%**,
+machine gun ~**24%**.
 
 **Players:** hits below **30 m/s** apply no damage and destroy the bullet; at
 **≥ 30 m/s** velocity-scaled damage applies and the bullet is destroyed (sniper
@@ -407,7 +420,10 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/FragGrenadeProjectile.cs` / `FlashbangGrenadeProjectile.cs` — type-specific detonation
 - `Assets/Scripts/GrenadeBlastUtility.cs` — frag damage, LOS, gun-style blindness
 - `Assets/Scripts/FlashbangBlindUtility.cs` — flashbang cone, range, white-blind duration/alpha
-- `Assets/Scripts/FragGrenadeSmokeEffect.cs` / `FlashbangBurstEffect.cs` — grenade VFX
+- `Assets/Scripts/FragGrenadeSmokeEffect.cs` / `FlashbangBurstEffect.cs` — grenade VFX (frag fireball)
+- `Assets/Scripts/MachineGunSuppressionUtility.cs` — machine gun suppression timer and move slow
+- `Assets/Scripts/ExplosiveVestState.cs` — Kamikaze vest equip, damage reduction, explosion detonation
+- `Assets/Scripts/C4ChargeProjectile.cs` — thrown C4, stick, remote detonation, damage threshold
 - `Assets/Scripts/ExplosionBlastUtility.cs` — shared explosion damage, fiery blindness, build break, VFX
 - `Assets/Scripts/AntiMaterialProjectile.cs` — sticky explosive anti-material round
 - `Assets/Scripts/AntiMaterialExplosionEffect.cs` — detonation fireball VFX
@@ -432,6 +448,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/First_Person_Shooter_Game_Design_v2.md)
+- [Gunner, universal grenades, C4/vest explosions, and Ranger fix session recap](docs/chats/2026-07-10-gunner-grenades-c4-ranger-session.md)
 - [Grenades, flashbangs, and blindness layering session recap](docs/chats/2026-07-09-grenades-flashbang-and-blindness-session.md)
 - [Anti-Material sniper, scope sway, Cyborg, and Infantry ability session recap](docs/chats/2026-07-09-anti-material-sway-and-infantry-session.md)
 - [Hunter, Ranger, Skirmisher, Heavy, and shooting range polish session recap](docs/chats/2026-07-09-hunter-ranger-skirmisher-heavy-session.md)

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
@@ -37,6 +38,39 @@ public class ExplosiveVestState : MonoBehaviour
     public void DetonateFromBlast()
     {
         DetonateEquipped();
+    }
+
+    public static void DetonateEquippedInRadius(Vector3 center, float radiusMeters)
+    {
+        var detonated = new HashSet<ExplosiveVestState>();
+        Collider[] hits = Physics.OverlapSphere(
+            center,
+            radiusMeters,
+            Physics.DefaultRaycastLayers,
+            QueryTriggerInteraction.Ignore);
+
+        for (int i = 0; i < hits.Length; i++)
+        {
+            Collider hit = hits[i];
+            if (hit == null)
+            {
+                continue;
+            }
+
+            ExplosiveVestState vest = hit.GetComponentInParent<ExplosiveVestState>();
+            if (vest == null || !vest.IsEquipped || !detonated.Add(vest))
+            {
+                continue;
+            }
+
+            Vector3 vestCenter = vest.transform.position + Vector3.up;
+            if (Vector3.Distance(center, vestCenter) > radiusMeters)
+            {
+                continue;
+            }
+
+            vest.DetonateFromBlast();
+        }
     }
 
     void DetonateEquipped()

@@ -13,6 +13,7 @@ public static class GrenadeBlastUtility
     public static void DetonateFrag(Vector3 center)
     {
         ApplyFragDamage(center);
+        ExplosiveVestState.DetonateEquippedInRadius(center, FragDamageRadiusMeters);
         FragGrenadeSmokeEffect.Spawn(center);
     }
 
@@ -61,6 +62,13 @@ public static class GrenadeBlastUtility
                 health?.ApplyDamage(damage, false);
             });
         }
+
+        C4ChargeProjectile.ApplyBlastDamage(
+            center,
+            FragDamageRadiusMeters,
+            DamageAtDistance,
+            requireLineOfSight: true,
+            lineOfSightCheck: HasLineOfSight);
     }
 
     static void TryApplyFragDamage(Vector3 center, Vector3 targetPoint, GameObject targetRoot, System.Action<float> apply)

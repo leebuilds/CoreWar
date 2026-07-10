@@ -256,6 +256,12 @@ public static class ProfileSession
             profile.profileDataVersion = 8;
         }
 
+        if (profile.profileDataVersion < 9)
+        {
+            MergeOwnedCards(profile, new[] { "gunner_1" });
+            profile.profileDataVersion = 9;
+        }
+
         SanitizeLoadout(profile);
     }
 
