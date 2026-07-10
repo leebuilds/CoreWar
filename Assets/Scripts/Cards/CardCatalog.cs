@@ -35,7 +35,7 @@ public static class CardCatalog
     /// </summary>
     public static string[] DefaultOwnedCardIds()
     {
-        return new[] { "infantry_1", "sniper_1", "sniper_2", "sniper_3", "infantry_2", "infantry_3", "heavy_1", "heavy_2" };
+        return new[] { "infantry_1", "sniper_1", "sniper_2", "sniper_3", "infantry_2", "infantry_3", "heavy_1", "heavy_2", "demolition_1" };
     }
 
     public static CardDefinition Get(string cardId)
@@ -116,6 +116,11 @@ public static class CardCatalog
         if (entry.SpecialtyKey == "sniper" && entry.Tier == 3)
         {
             return CardKitDefinition.Tier3AntiMaterial();
+        }
+
+        if (entry.SpecialtyKey == "demolition" && entry.Tier == 1)
+        {
+            return CardKitDefinition.Tier1Kamikaze();
         }
 
         return CardKitDefinition.FromWeaponNames(entry.PrimaryWeapon, entry.SecondaryWeapon);
@@ -364,11 +369,11 @@ public static class CardCatalog
             "Standard build costs.",
             "Gun · Hammer · Blueprint"),
 
-        Entry("demolition", "Demolition", 1, "Sapper", CardRarity.Rare,
-            "Sapper combines respectable gunplay with powerful demolition charges. They are particularly effective at breaching enemy defenses without sacrificing combat capability.",
+        Entry("demolition", "Demolition", 1, "Kamikaze", CardRarity.Rare,
+            "Kamikaze combines close-range SMG gunplay with remote C4 charges and explosive vests. They are particularly effective at breaching enemy defenses without sacrificing combat capability.",
             8f, 105, 5,
-            "Assault Rifle", "Pistol",
-            "Powerful demolition charges for breaching defenses.",
+            "SMG", "C4",
+            "Hold E near a teammate, enemy, or dummy for 5 s to strap on an explosive vest (self if alone). Vest wearer takes 5% less body-shot damage; on death it detonates for 130 damage at point-blank.",
             "Improved demolition efficiency.",
             "Standard build costs.",
             "Gun · Hammer · Blueprint · Charges"),

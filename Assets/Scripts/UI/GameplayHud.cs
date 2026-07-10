@@ -54,11 +54,16 @@ public class GameplayHud : MonoBehaviour
     float _cyborgBoostFlashPhase;
     bool _cyborgBoostWasActive;
     HotbarSlotView _abilitySlot;
+    HotbarSlotView _grenadeSlot;
     readonly List<HotbarSlotView> _equippableSlots = new List<HotbarSlotView>();
 
     GameObject _buildSelectorRoot;
     RawImage _buildRadialImage;
     readonly List<Text> _buildLabels = new List<Text>();
+
+    GameObject _grenadeSelectorRoot;
+    RawImage _grenadeRadialImage;
+    readonly List<Text> _grenadeLabels = new List<Text>();
 
     sealed class HotbarSlotView
     {
@@ -94,6 +99,7 @@ public class GameplayHud : MonoBehaviour
         BuildHealthBar();
         BuildHotbar();
         BuildBuildSelector();
+        BuildGrenadeSelector();
         _crosshairRoot.localScale = Vector3.one * CrosshairScale;
         _root.gameObject.SetActive(false);
     }
@@ -162,9 +168,10 @@ public class GameplayHud : MonoBehaviour
         RefreshHotbar(player);
         RefreshHealthBar(player);
 
-        bool showCrosshair = fullHud && !player.IsHudGameplayBlocked;
+        bool showCrosshair = fullHud && !player.IsHudGameplayBlocked && !player.IsRadialSelectorOpen;
         RefreshCrosshair(player, showCrosshair);
         RefreshBuildSelector(player, fullHud);
+        RefreshGrenadeSelector(player, fullHud);
     }
 
     void BuildCrosshair()
@@ -397,9 +404,51 @@ public class GameplayHud : MonoBehaviour
 
         for (int i = 0; i < 4; i++)
         {
-            float x = SlotSize + GroupGap + (i * (SlotSize + SlotGap)) + (i >= 2 ? GroupGap : 0f);
-            _equippableSlots.Add(CreateHotbarSlot(_hotbarRoot, $"Slot {i + 1}", new Vector2(x, 0f)));
+            _equippableSlots.Add(CreateHotbarSlot(_hotbarRoot, $"Slot {i + 1}", new Vector2(EquippableSlotAnchoredX(i), 0f)));
         }
+
+        _grenadeSlot = CreateHotbarSlot(_hotbarRoot, "Grenade", new Vector2(GrenadeSlotAnchoredX(), 0f));
+    }
+
+    static float WeaponGroupStartX()
+    {
+        return SlotSize + GroupGap;
+    }
+
+    static float GrenadeSlotAnchoredX()
+    {
+        return WeaponGroupStartX() + (2f * (SlotSize + SlotGap)) + GroupGap;
+    }
+
+    static float EquippableSlotAnchoredX(int index)
+    {
+        float start = WeaponGroupStartX();
+        if (index <= 1)
+        {
+            return start + (index * (SlotSize + SlotGap));
+        }
+
+        return GrenadeSlotAnchoredX() + GroupGap + SlotSize + GroupGap + ((index - 2) * (SlotSize + SlotGap));
+    }
+
+    static float HotbarWidthForEquippableCount(int equippableCount)
+    {
+        float width = WeaponGroupStartX();
+        width += Mathf.Min(2, equippableCount) * SlotSize;
+        width += Mathf.Max(0, Mathf.Min(2, equippableCount) - 1) * SlotGap;
+        if (equippableCount > 0)
+        {
+            width += GroupGap + SlotSize;
+        }
+
+        if (equippableCount > 2)
+        {
+            width += GroupGap + ((equippableCount - 2) * SlotSize);
+            width += (equippableCount - 3) * SlotGap;
+            width += GroupGap;
+        }
+
+        return width;
     }
 
     HotbarSlotView CreateHotbarSlot(Transform parent, string name, Vector2 anchoredPosition)
@@ -508,20 +557,51 @@ public class GameplayHud : MonoBehaviour
         _buildSelectorRoot.SetActive(false);
     }
 
+    void BuildGrenadeSelector()
+    {
+        _grenadeSelectorRoot = new GameObject("Grenade Selector");
+        _grenadeSelectorRoot.transform.SetParent(_root, false);
+        var rect = _grenadeSelectorRoot.AddComponent<RectTransform>();
+        rect.anchorMin = new Vector2(0.5f, 0.5f);
+        rect.anchorMax = new Vector2(0.5f, 0.5f);
+        rect.pivot = new Vector2(0.5f, 0.5f);
+        rect.anchoredPosition = Vector2.zero;
+        rect.sizeDelta = new Vector2(168f, 168f);
+
+        var radialGo = new GameObject("Radial");
+        radialGo.transform.SetParent(_grenadeSelectorRoot.transform, false);
+        MenuUiFactory.StretchFull(radialGo.AddComponent<RectTransform>());
+        _grenadeRadialImage = radialGo.AddComponent<RawImage>();
+        _grenadeRadialImage.raycastTarget = false;
+
+        for (int i = 0; i < 4; i++)
+        {
+            var label = MenuUiFactory.CreateAnchoredText(
+                _grenadeSelectorRoot.transform,
+                $"Grenade Label {i}",
+                string.Empty,
+                13,
+                FontStyle.Bold,
+                TextAnchor.MiddleCenter,
+                Color.black);
+            _grenadeLabels.Add(label);
+        }
+
+        _grenadeSelectorRoot.SetActive(false);
+    }
+
     void RefreshHotbar(ThirdPersonController player)
     {
         var kit = player.ActiveKit;
         int equippableCount = player.EquippableHotbarCount;
         float reloadOverlayFill = player.HotbarReloadOverlayFill;
         float abilityOverlayFill = player.HotbarAbilityOverlayFill;
-        float hotbarWidth = SlotSize + GroupGap +
-            (equippableCount * SlotSize) + ((equippableCount - 1) * SlotGap) +
-            (equippableCount > 2 ? GroupGap : 0f);
+        float hotbarWidth = HotbarWidthForEquippableCount(equippableCount);
 
         var hotbarRect = _hotbarRoot;
         hotbarRect.sizeDelta = new Vector2(hotbarWidth, SlotSize);
 
-        bool showAmmo = player.IsFirearmSelected && !player.UsesOverheatHud;
+        bool showAmmo = player.ShowsAmmoHud;
         bool showOverheat = player.UsesOverheatHud;
         _ammoPanelRoot.SetActive(showAmmo || showOverheat);
         if (showOverheat)
@@ -569,7 +649,7 @@ public class GameplayHud : MonoBehaviour
             }
 
             var tool = kit.GetToolAt(i);
-            bool selected = i == player.SelectedHotbarIndex;
+            bool selected = !player.IsGrenadeHotbarSelected && i == player.SelectedHotbarIndex;
             float weaponOverlayFill = Mathf.Max(reloadOverlayFill, player.HotbarWeaponOverlayFill(tool));
             ApplyHotbarSlot(
                 _equippableSlots[i],
@@ -580,10 +660,26 @@ public class GameplayHud : MonoBehaviour
                 weaponOverlayFill,
                 0.62f,
                 true);
-            _equippableSlots[i].Icon.texture = HotbarIconDrawer.GetToolIconTexture(tool);
+            _equippableSlots[i].Icon.texture =
+                tool == CardHotbarTool.C4Charge && player.IsC4RemoteSelectedForHud
+                    ? HotbarIconDrawer.GetC4RemoteIconTexture()
+                    : HotbarIconDrawer.GetToolIconTexture(tool);
             _equippableSlots[i].Icon.gameObject.SetActive(true);
             _equippableSlots[i].ScopeLabel.gameObject.SetActive(false);
         }
+
+        ApplyHotbarSlot(
+            _grenadeSlot,
+            "Q",
+            player.IsGrenadeHotbarSelected
+                ? new Color(0.16f, 0.68f, 0.24f, 0.9f)
+                : new Color(0.96f, 0.96f, 0.96f, 0.72f),
+            0f,
+            0.62f,
+            true);
+        _grenadeSlot.Icon.texture = HotbarIconDrawer.GetGrenadeIconTexture(player.SelectedGrenadeType);
+        _grenadeSlot.Icon.gameObject.SetActive(true);
+        _grenadeSlot.ScopeLabel.gameObject.SetActive(false);
     }
 
     static void RefreshAbilityIcon(ThirdPersonController player, HotbarSlotView slot, bool dimmed)
@@ -644,6 +740,11 @@ public class GameplayHud : MonoBehaviour
                 slot.ScopeLabel.gameObject.SetActive(false);
                 slot.Icon.gameObject.SetActive(true);
                 slot.Icon.texture = HotbarIconDrawer.GetCyborgRegenAbilityIconTexture(dimmed);
+                break;
+            case "demolition_1":
+                slot.ScopeLabel.gameObject.SetActive(false);
+                slot.Icon.gameObject.SetActive(true);
+                slot.Icon.texture = HotbarIconDrawer.GetExplosiveVestAbilityIconTexture(dimmed);
                 break;
             default:
                 slot.Icon.gameObject.SetActive(false);
@@ -776,6 +877,41 @@ public class GameplayHud : MonoBehaviour
             labelRect.anchoredPosition = new Vector2(offset.x, -offset.y);
             labelRect.sizeDelta = new Vector2(92f, 24f);
             _buildLabels[i].text = player.GetBuildPieceDisplayName(i).ToUpperInvariant();
+        }
+    }
+
+    void RefreshGrenadeSelector(ThirdPersonController player, bool fullHud)
+    {
+        if (!fullHud || !player.IsGrenadeSelectorOpen)
+        {
+            _grenadeSelectorRoot.SetActive(false);
+            return;
+        }
+
+        _grenadeSelectorRoot.SetActive(true);
+        float radius = player.GrenadeSelectorRadius;
+        var rect = _grenadeSelectorRoot.GetComponent<RectTransform>();
+        rect.sizeDelta = new Vector2(radius * 2f, radius * 2f);
+        _grenadeRadialImage.texture = player.GetGrenadeSelectorTexture();
+
+        int optionCount = player.GrenadeOptionCount;
+        for (int i = 0; i < _grenadeLabels.Count; i++)
+        {
+            bool visible = i < optionCount;
+            string labelText = visible ? player.GetGrenadeDisplayName(i) : string.Empty;
+            visible = visible && !string.IsNullOrEmpty(labelText);
+            _grenadeLabels[i].gameObject.SetActive(visible);
+            if (!visible)
+            {
+                continue;
+            }
+
+            float angle = i * (360f / optionCount) * Mathf.Deg2Rad;
+            Vector2 offset = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * (radius * 0.72f);
+            var labelRect = _grenadeLabels[i].GetComponent<RectTransform>();
+            labelRect.anchoredPosition = new Vector2(offset.x, -offset.y);
+            labelRect.sizeDelta = new Vector2(92f, 24f);
+            _grenadeLabels[i].text = labelText.ToUpperInvariant();
         }
     }
 

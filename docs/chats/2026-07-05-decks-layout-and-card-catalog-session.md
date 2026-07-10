@@ -81,7 +81,7 @@ Each card now defines:
 | Assault | Riot Trooper → Lazerman → Granny with a Shotgun |
 | Assassin | Hitman → Secret Agent → Koroshiya |
 | Heavy | Heavy → Cyborg → Frankenstein |
-| Demolition | Sapper → Bazooka Trooper → Missile Operator |
+| Demolition | Kamikaze → Bazooka Trooper → Missile Operator |
 | Saboteur | Saboteur → Hacker → Drone Pilot |
 | Gunner | Gunner → Water Cannon Officer → Vulcan Operator |
 

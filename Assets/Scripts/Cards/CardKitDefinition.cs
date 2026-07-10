@@ -15,7 +15,9 @@ public enum CardHotbarTool
     ScopedAssaultRifle,
     CyborgLaser,
     LaserSword,
-    AntiMaterialRifle
+    AntiMaterialRifle,
+    C4Charge,
+    Grenade
 }
 
 /// <summary>
@@ -128,6 +130,20 @@ public class CardKitDefinition
         };
     }
 
+    public static CardKitDefinition Tier1Kamikaze()
+    {
+        return new CardKitDefinition
+        {
+            hotbarTools = new[]
+            {
+                CardHotbarTool.Smg,
+                CardHotbarTool.C4Charge,
+                CardHotbarTool.Blueprint,
+                CardHotbarTool.Hammer
+            }
+        };
+    }
+
     public static CardKitDefinition FromWeaponNames(string primaryWeapon, string secondaryWeapon)
     {
         var tools = new List<CardHotbarTool> { ResolvePrimaryTool(primaryWeapon) };
@@ -227,6 +243,11 @@ public class CardKitDefinition
             return CardHotbarTool.LaserSword;
         }
 
+        if (weapon.Contains("c4") || weapon.Contains("charge"))
+        {
+            return CardHotbarTool.C4Charge;
+        }
+
         if (weapon.Contains("pistol") || weapon.Contains("sidearm"))
         {
             return CardHotbarTool.Pistol;
@@ -271,12 +292,16 @@ public class CardKitDefinition
                 return "Laser";
             case CardHotbarTool.AntiMaterialRifle:
                 return "A-M Rifle";
+            case CardHotbarTool.C4Charge:
+                return "C4";
             case CardHotbarTool.LaserSword:
                 return "Sword";
             case CardHotbarTool.Hammer:
                 return "Hammer";
             case CardHotbarTool.Blueprint:
                 return "Build";
+            case CardHotbarTool.Grenade:
+                return "Grenade";
             default:
                 return tool.ToString();
         }

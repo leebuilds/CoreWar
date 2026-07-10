@@ -7,6 +7,14 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody), typeof(CapsuleCollider))]
 public class ThirdPersonController : MonoBehaviour
 {
+    static readonly GrenadeType[] GrenadeOptions =
+    {
+        GrenadeType.Frag,
+        GrenadeType.Flashbang
+    };
+
+    static int GrenadeWheelSegmentCount => GrenadeOptions.Length;
+
     static readonly VoxelLightingWorld.BuildPieceType[] BuildPieceOptions =
     {
         VoxelLightingWorld.BuildPieceType.Wall,
@@ -138,6 +146,16 @@ public class ThirdPersonController : MonoBehaviour
     public float antiMaterialBraceOrbitDegreesPerSecond = 72f;
     public float antiMaterialBraceGunTiltDegrees = 18f;
     public float antiMaterialBraceMaxVerticalAim = 0.35f;
+    public float c4DrawSeconds = 0.8f;
+    public float c4RemoteDrawSeconds = 0.5f;
+    public float c4ThrowSpeed = 10f;
+    public float c4FallAccelerationMetersPerSecond = 8f;
+    public float c4ThrowLockSeconds = 1f;
+    public float c4RemoteDetonationDelaySeconds = 1f;
+    public float explosiveVestAttachSeconds = 5f;
+    public float explosiveVestMaxAttachDistanceMeters = 1f;
+    public float explosiveVestTargetSearchRadiusMeters = 2.5f;
+    public float explosiveVestCooldownSeconds = 120f;
     public float weaponDrawHiddenLocalY = -0.95f;
 
     [Header("Reticle")]
@@ -158,6 +176,10 @@ public class ThirdPersonController : MonoBehaviour
     public float selectorMouseScale = 20f;
     public float selectorActivationDistance = 18f;
     public float selectorRadius = 84f;
+    public float fragGrenadeFuseSeconds = 5f;
+    public float grenadeDrawSeconds = 0.5f;
+    const float GrenadeWheelHoldSeconds = 0.18f;
+    const float GrenadeHandCooldownSeconds = 3f;
 
     Rigidbody _rb;
     CapsuleCollider _capsule;
@@ -167,6 +189,16 @@ public class ThirdPersonController : MonoBehaviour
     bool _grounded;
     bool _selectorOpen;
     Vector2 _selectorDirection;
+    bool _grenadeSelectorOpen;
+    Vector2 _grenadeSelectorDirection;
+    bool _grenadeSlotSelected;
+    bool _grenadeKeyHeld;
+    float _grenadeKeyHoldTimer;
+    bool _grenadeWheelOpenedFromHold;
+    GrenadeType _selectedGrenade = GrenadeType.Frag;
+    bool _grenadePrimed;
+    float _grenadeFuseTimer;
+    float _grenadeHandCooldownTimer;
     CardKitDefinition _activeKit;
     int _selectedHotbarIndex;
     RespawnClassPicker _respawnPicker;
@@ -190,6 +222,10 @@ public class ThirdPersonController : MonoBehaviour
     GameObject _antiMaterialRifleRoot;
     GameObject _cyborgLaserRoot;
     GameObject _laserSwordRoot;
+    GameObject _c4ChargeRoot;
+    GameObject _c4RemoteRoot;
+    GameObject _heldFragGrenadeRoot;
+    MeshRenderer _heldGrenadeBodyRenderer;
     GameObject _hammerRoot;
     GameObject _blueprintRoot;
     GameObject _pistolMuzzleFlashRoot;
@@ -247,6 +283,7 @@ public class ThirdPersonController : MonoBehaviour
     float _dashTimer;
     Vector3 _dashDirection;
     PlayerHealth _playerHealth;
+    GameSession.Team _playerTeam = GameSession.Team.Red;
     float _gunKickTimer;
     float _muzzleFlashTimer;
     float _hammerSwingTimer;
@@ -266,6 +303,10 @@ public class ThirdPersonController : MonoBehaviour
     float _antiMaterialBraceTransformHeightAboveAnchor;
     Vector2 _antiMaterialBraceGunTilt;
     float _antiMaterialBraceBaseYaw;
+    C4ChargeProjectile _activeC4Charge;
+    float _c4ActionLockTimer;
+    float _c4RemoteDrawTimer;
+    bool _c4RemoteReady;
     Vector2 _gunRecoilPeak;
     Vector2 _gunRecoilResidual;
     float _gunRecoilKickTimer;
@@ -281,8 +322,18 @@ public class ThirdPersonController : MonoBehaviour
     WeaponAmmoPool _sniperAmmo;
     WeaponAmmoPool _huntingRifleAmmo;
     WeaponAmmoPool _antiMaterialAmmo;
+    WeaponAmmoPool _c4Ammo;
     int _pistolFamilyReserve;
     int _rifleFamilyReserve;
+    float _pistolFamilyRechargeTimer;
+    float _rifleFamilyRechargeTimer;
+    float _sniperRechargeTimer;
+    float _huntingRifleRechargeTimer;
+    float _antiMaterialRechargeTimer;
+    float _c4RechargeTimer;
+    bool _explosiveVestAttaching;
+    float _explosiveVestAttachTimer;
+    GameObject _explosiveVestAttachTarget;
     bool _isReloading;
     CardHotbarTool _reloadWeapon;
     float _reloadTimer;
@@ -313,6 +364,8 @@ public class ThirdPersonController : MonoBehaviour
     int _buildOrientationIndex;
     Texture2D _radialTexture;
     VoxelLightingWorld.BuildPieceType _radialTexturePiece;
+    Texture2D _grenadeRadialTexture;
+    int _grenadeRadialTextureHighlight = -1;
     PhysicsMaterial _slipperyMaterial;
 
     const int DefaultSniperMagnificationIndex = 1;
@@ -428,8 +481,18 @@ public class ThirdPersonController : MonoBehaviour
 
     bool BuildModeActive => SelectedTool == CardHotbarTool.Blueprint;
 
-    CardHotbarTool SelectedTool =>
-        _activeKit == null ? CardHotbarTool.AssaultRifle : _activeKit.GetToolAt(_selectedHotbarIndex);
+    CardHotbarTool SelectedTool
+    {
+        get
+        {
+            if (_grenadeSlotSelected)
+            {
+                return CardHotbarTool.Grenade;
+            }
+
+            return _activeKit == null ? CardHotbarTool.AssaultRifle : _activeKit.GetToolAt(_selectedHotbarIndex);
+        }
+    }
 
     int HotbarSlotCount => _activeKit == null ? 4 : _activeKit.SlotCount;
 
@@ -445,6 +508,13 @@ public class ThirdPersonController : MonoBehaviour
     public float HotbarWeaponOverlayFill(CardHotbarTool tool) => WeaponOverlayFill(tool);
     public bool IsAbilityReadyForHud => IsAbilityReady();
     public bool IsFirearmSelected => IsFirearmTool(SelectedTool);
+    public bool ShowsAmmoHud =>
+        (IsFirearmTool(SelectedTool) && !UsesOverheatHud) || SelectedTool == CardHotbarTool.C4Charge;
+    public bool UsesSingleChargeAmmoHud => SelectedTool == CardHotbarTool.C4Charge;
+    public bool IsC4RemoteSelectedForHud =>
+        SelectedTool == CardHotbarTool.C4Charge &&
+        _activeC4Charge != null &&
+        (_c4RemoteDrawTimer > 0f || _c4RemoteReady);
     public bool UsesOverheatHud => CardKitDefinition.UsesOverheatMeter(SelectedTool);
     public float LaserHeatFraction => Mathf.Clamp01(_cyborgLaserHeat);
     public float LaserOverheatLockoutFraction =>
@@ -454,8 +524,14 @@ public class ThirdPersonController : MonoBehaviour
     public bool IsLaserOverheated => _cyborgLaserOverheatLockoutTimer > 0f;
     public WeaponAmmoPool CurrentAmmo => GetAmmoPoolForSelectedTool();
     public bool IsBuildSelectorOpen => _selectorOpen;
+    public bool IsGrenadeSelectorOpen => _grenadeSelectorOpen;
+    public bool IsGrenadeHotbarSelected => _grenadeSlotSelected;
+    public GrenadeType SelectedGrenadeType => _selectedGrenade;
+    public bool IsRadialSelectorOpen => _selectorOpen || _grenadeSelectorOpen;
     public float BuildSelectorRadius => selectorRadius;
+    public float GrenadeSelectorRadius => selectorRadius;
     public int BuildPieceOptionCount => BuildPieceOptions.Length;
+    public int GrenadeOptionCount => GrenadeOptions.Length;
     public int SniperScopeIndex => _sniperScopeIndex;
     public string ActiveCardSpecialtyForHud => ActiveCardSpecialty();
     public string ActiveCardIdForHud => GameSession.ActiveCardId ?? string.Empty;
@@ -470,6 +546,22 @@ public class ThirdPersonController : MonoBehaviour
     public string GetBuildPieceDisplayName(int index)
     {
         return DisplayName(BuildPieceOptions[Mathf.Clamp(index, 0, BuildPieceOptions.Length - 1)]);
+    }
+
+    public Texture2D GetGrenadeSelectorTexture()
+    {
+        EnsureGrenadeRadialTexture();
+        return _grenadeRadialTexture;
+    }
+
+    public string GetGrenadeDisplayName(int index)
+    {
+        if (index < 0 || index >= GrenadeOptions.Length)
+        {
+            return string.Empty;
+        }
+
+        return GrenadeDisplayName(GrenadeOptions[index]);
     }
 
     public void GetCrosshairPresentation(
@@ -877,6 +969,7 @@ public class ThirdPersonController : MonoBehaviour
         _pauseMenu = GamePauseMenu.Create(transform, _respawnPicker, _characterPicker, this);
 
         Local = this;
+        _playerTeam = GameSession.SelectedTeam;
         CreateHeldToolVisuals();
         RefreshHeldToolVisibility();
         BeginWeaponDraw(SelectedTool);
@@ -884,13 +977,17 @@ public class ThirdPersonController : MonoBehaviour
 
     void ApplyKitFromSession()
     {
+        ClearPerCharacterGameplayEffects();
         _activeKit = GameSession.ActiveKit ?? CardKitDefinition.DefaultInfantryPlaceholder();
         _selectedHotbarIndex = Mathf.Clamp(_selectedHotbarIndex, 0, Mathf.Max(0, HotbarSlotCount - 1));
+        _grenadeSlotSelected = false;
         ExitSniperAds();
         ExitScopedArAds();
         RefreshCardMoveSpeed();
         ResetAbilityState();
         ResetCyborgLaserHeat();
+        ResetC4State(destroyCharge: true);
+        CancelGrenadePrime();
         EnsurePlayerHealth()?.RefillHealth();
         RefreshHeldToolVisibility();
     }
@@ -917,9 +1014,22 @@ public class ThirdPersonController : MonoBehaviour
         RespawnAtValidMapPosition();
     }
 
+    public void HandlePlayerDeath()
+    {
+        ResetToSpawn();
+    }
+
     void ApplySpawnReset(Vector3 respawnPosition)
     {
+        ClearPerCharacterGameplayEffects();
         _selectorOpen = false;
+        _grenadeSelectorOpen = false;
+        _grenadeSlotSelected = false;
+        _grenadeKeyHeld = false;
+        _grenadeKeyHoldTimer = 0f;
+        _grenadeWheelOpenedFromHold = false;
+        CancelGrenadePrime();
+        _grenadeHandCooldownTimer = 0f;
         _rectangleDragActive = false;
         _scrollTargetLocked = false;
         _hasBuildCandidate = false;
@@ -931,6 +1041,10 @@ public class ThirdPersonController : MonoBehaviour
         _laserSwordSwingTimer = 0f;
         _laserSwordCooldownTimer = 0f;
         CancelAntiMaterialCharge();
+        ResetC4State(destroyCharge: true);
+        CancelGrenadePrime();
+        ThrownGrenadeProjectile.DestroyAll();
+        FlashbangBurstEffect.DestroyAll();
         ResetCyborgLaserHeat();
         _gunRecoilPeak = Vector2.zero;
         _gunRecoilResidual = Vector2.zero;
@@ -1151,6 +1265,7 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
+        UpdateRadialSelectorInput();
         HandleLook();
 
         if (GameSession.IsInPrepPhase && GameSession.IsPrepReady)
@@ -1167,7 +1282,7 @@ public class ThirdPersonController : MonoBehaviour
         UpdateWeaponFireInputGate();
         HandleSelectedToolInput();
 
-        if (Input.GetButtonDown("Jump") && CanJump() && !IsAntiMaterialBraceActive())
+        if (Input.GetButtonDown("Jump") && CanJump() && !IsAntiMaterialBraceActive() && !IsRadialSelectorOpen)
         {
             var velocity = _rb.linearVelocity;
             velocity.y = jumpVelocity;
@@ -1373,7 +1488,7 @@ public class ThirdPersonController : MonoBehaviour
         Vector2 lookDelta = new Vector2(Input.GetAxisRaw("Mouse X"), Input.GetAxisRaw("Mouse Y"));
         _mouseMovedThisFrame = lookDelta.sqrMagnitude > 0.0001f;
 
-        if (_selectorOpen)
+        if (IsRadialSelectorOpen)
         {
             return;
         }
@@ -1958,8 +2073,24 @@ public class ThirdPersonController : MonoBehaviour
             WeaponAmmoDefaults.AntiMaterialMagSize,
             WeaponAmmoDefaults.AntiMaterialMagSize,
             WeaponAmmoDefaults.AntiMaterialMaxTotal);
+        _c4Ammo = new WeaponAmmoPool(
+            0,
+            WeaponAmmoDefaults.C4MagSize,
+            WeaponAmmoDefaults.C4MagSize,
+            WeaponAmmoDefaults.C4MaxTotal);
         SyncPistolFamilyReserve();
         SyncRifleFamilyReserve();
+        ResetAmmoRechargeTimers();
+    }
+
+    void ResetAmmoRechargeTimers()
+    {
+        _pistolFamilyRechargeTimer = 0f;
+        _rifleFamilyRechargeTimer = 0f;
+        _sniperRechargeTimer = 0f;
+        _huntingRifleRechargeTimer = 0f;
+        _antiMaterialRechargeTimer = 0f;
+        _c4RechargeTimer = 0f;
     }
 
     void SyncPistolFamilyReserve()
@@ -2056,6 +2187,8 @@ public class ThirdPersonController : MonoBehaviour
             case CardHotbarTool.Pistol:
                 SyncPistolFamilyReserve();
                 return _pistolAmmo;
+            case CardHotbarTool.C4Charge:
+                return _c4Ammo;
             default:
                 return default;
         }
@@ -2064,6 +2197,26 @@ public class ThirdPersonController : MonoBehaviour
     static bool IsFirearmTool(CardHotbarTool tool)
     {
         return CardKitDefinition.IsFirearm(tool);
+    }
+
+    static bool IsDrawBlockingTool(CardHotbarTool tool)
+    {
+        return IsFirearmTool(tool) || tool == CardHotbarTool.C4Charge || tool == CardHotbarTool.Grenade;
+    }
+
+    bool IsGrenadeInHand()
+    {
+        return _grenadePrimed;
+    }
+
+    bool IsGrenadeHandCooldownActive()
+    {
+        return _grenadeHandCooldownTimer > 0f;
+    }
+
+    void BeginGrenadeHandCooldown()
+    {
+        _grenadeHandCooldownTimer = GrenadeHandCooldownSeconds;
     }
 
     bool IsReloadFullyLocked()
@@ -2158,7 +2311,9 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        if (IsBlindnessBlockingInput() ||
+        if (IsRadialSelectorOpen ||
+            IsBlindnessBlockingInput() ||
+            IsC4ActionLocked() ||
             _isReloading ||
             _weaponFireCooldown > 0f ||
             !IsFirearmTool(SelectedTool) ||
@@ -2351,10 +2506,13 @@ public class ThirdPersonController : MonoBehaviour
 
     void HandleHotbarInput()
     {
-        if (IsBlindnessBlockingInput() ||
+        if (IsRadialSelectorOpen ||
+            IsBlindnessBlockingInput() ||
+            IsC4ActionLocked() ||
             _antiMaterialBraceActive ||
             IsReloadFullyLocked() ||
-            IsLaserSwordHotbarLocked())
+            IsLaserSwordHotbarLocked() ||
+            IsGrenadeInHand())
         {
             return;
         }
@@ -2362,11 +2520,33 @@ public class ThirdPersonController : MonoBehaviour
         float scroll = Input.mouseScrollDelta.y;
         if (scroll > 0.01f)
         {
-            SelectHotbarIndex(NextHotbarIndex(1));
+            if (_grenadeSlotSelected)
+            {
+                SelectHotbarIndex(2);
+            }
+            else if (_selectedHotbarIndex == 1)
+            {
+                SelectGrenadeHotbarSlot();
+            }
+            else
+            {
+                SelectHotbarIndex(NextHotbarIndex(1));
+            }
         }
         else if (scroll < -0.01f)
         {
-            SelectHotbarIndex(NextHotbarIndex(-1));
+            if (_grenadeSlotSelected)
+            {
+                SelectHotbarIndex(1);
+            }
+            else if (_selectedHotbarIndex == 2)
+            {
+                SelectGrenadeHotbarSlot();
+            }
+            else
+            {
+                SelectHotbarIndex(NextHotbarIndex(-1));
+            }
         }
 
         if (Input.GetKeyDown(KeyCode.Alpha1))
@@ -2401,7 +2581,16 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        if (_selectedHotbarIndex == index)
+        if (IsGrenadeInHand())
+        {
+            return;
+        }
+
+        if (_grenadeSlotSelected)
+        {
+            _grenadeSlotSelected = false;
+        }
+        else if (_selectedHotbarIndex == index)
         {
             return;
         }
@@ -2420,6 +2609,12 @@ public class ThirdPersonController : MonoBehaviour
 
         _selectedHotbarIndex = index;
         _weaponFireCooldown = 0f;
+        if (SelectedTool != CardHotbarTool.C4Charge)
+        {
+            _c4RemoteDrawTimer = 0f;
+            _c4RemoteReady = false;
+        }
+
         ExitSniperAds();
         ExitScopedArAds();
         if (wasBuilding || BuildModeActive)
@@ -2429,6 +2624,54 @@ public class ThirdPersonController : MonoBehaviour
 
         RefreshHeldToolVisibility();
         BeginWeaponDraw(SelectedTool);
+    }
+
+    void SelectGrenadeHotbarSlot()
+    {
+        if (IsRadialSelectorOpen ||
+            IsBlindnessBlockingInput() ||
+            IsC4ActionLocked() ||
+            _antiMaterialBraceActive ||
+            IsReloadFullyLocked() ||
+            IsLaserSwordHotbarLocked() ||
+            IsGrenadeInHand() ||
+            IsGrenadeHandCooldownActive())
+        {
+            return;
+        }
+
+        if (_grenadeSlotSelected)
+        {
+            RefreshHeldToolVisibility();
+            return;
+        }
+
+        bool wasBuilding = BuildModeActive;
+        if (_antiMaterialBraceActive)
+        {
+            EndAntiMaterialBrace(applyCooldown: true);
+        }
+
+        if (_isReloading && _reloadWeapon != CardHotbarTool.HuntingRifle &&
+            _reloadWeapon == CardHotbarTool.SniperRifle && !_sniperReloadLocked)
+        {
+            CancelReload();
+        }
+
+        _grenadeSlotSelected = true;
+        _weaponFireCooldown = 0f;
+        _c4RemoteDrawTimer = 0f;
+        _c4RemoteReady = false;
+
+        ExitSniperAds();
+        ExitScopedArAds();
+        if (wasBuilding)
+        {
+            ClearBuildInteractionState();
+        }
+
+        RefreshHeldToolVisibility();
+        BeginWeaponDraw(CardHotbarTool.Grenade);
     }
 
     bool IsLaserSwordHotbarLocked()
@@ -2457,6 +2700,10 @@ public class ThirdPersonController : MonoBehaviour
         UpdateCyborgLaserHeat();
         UpdateLaserSwordTimers();
         UpdateAntiMaterialCharge();
+        UpdateC4State();
+        UpdateGrenadeFuseState();
+        UpdateGrenadeHandCooldown();
+        UpdateAmmoRecharge();
         UpdateAbilityTimers(allowAbilityInput);
     }
 
@@ -2473,9 +2720,208 @@ public class ThirdPersonController : MonoBehaviour
         }
     }
 
+    void UpdateGrenadeHandCooldown()
+    {
+        if (_grenadeHandCooldownTimer > 0f)
+        {
+            _grenadeHandCooldownTimer = Mathf.Max(0f, _grenadeHandCooldownTimer - Time.deltaTime);
+        }
+    }
+
+    bool IsC4ActionLocked()
+    {
+        return _c4ActionLockTimer > 0f;
+    }
+
+    void UpdateC4State()
+    {
+        if (_c4ActionLockTimer > 0f)
+        {
+            _c4ActionLockTimer = Mathf.Max(0f, _c4ActionLockTimer - Time.deltaTime);
+            if (_c4ActionLockTimer > 0f)
+            {
+                return;
+            }
+
+            RefreshHeldToolVisibility();
+        }
+
+        if (_c4RemoteDrawTimer > 0f)
+        {
+            _c4RemoteDrawTimer = Mathf.Max(0f, _c4RemoteDrawTimer - Time.deltaTime);
+            if (_c4RemoteDrawTimer <= 0f)
+            {
+                _c4RemoteReady = true;
+            }
+
+            return;
+        }
+
+        if (SelectedTool == CardHotbarTool.C4Charge &&
+            _activeC4Charge != null &&
+            _activeC4Charge.CanRemoteDetonate &&
+            !_c4RemoteReady &&
+            _c4RemoteDrawTimer <= 0f &&
+            !IsWeaponDrawInProgress())
+        {
+            BeginC4RemoteDraw();
+        }
+    }
+
+    void BeginC4RemoteDraw()
+    {
+        _c4RemoteDrawTimer = Mathf.Max(0f, c4RemoteDrawSeconds);
+        _c4RemoteReady = _c4RemoteDrawTimer <= 0f;
+        RefreshHeldToolVisibility();
+    }
+
+    void ResetC4State(bool destroyCharge)
+    {
+        if (destroyCharge && _activeC4Charge != null)
+        {
+            Destroy(_activeC4Charge.gameObject);
+        }
+
+        _activeC4Charge = null;
+        _c4ActionLockTimer = 0f;
+        _c4RemoteDrawTimer = 0f;
+        _c4RemoteReady = false;
+    }
+
+    void UpdateAmmoRecharge()
+    {
+        TickAmmoRecharge(ref _pistolFamilyRechargeTimer, RefillPistolFamilyReserve);
+        TickAmmoRecharge(ref _rifleFamilyRechargeTimer, RefillRifleFamilyReserve);
+        TickAmmoRecharge(ref _sniperRechargeTimer, RefillSniperReserve);
+        TickAmmoRecharge(ref _huntingRifleRechargeTimer, RefillHuntingRifleReserve);
+        TickAmmoRecharge(ref _antiMaterialRechargeTimer, RefillAntiMaterialReserve);
+        TickAmmoRecharge(ref _c4RechargeTimer, RefillC4Charge);
+    }
+
+    static void TickAmmoRecharge(ref float timer, System.Action refill)
+    {
+        if (timer <= 0f)
+        {
+            return;
+        }
+
+        timer = Mathf.Max(0f, timer - Time.deltaTime);
+        if (timer <= 0f)
+        {
+            refill();
+        }
+    }
+
+    void RefillPistolFamilyReserve()
+    {
+        _pistolFamilyReserve = WeaponAmmoDefaults.PistolStartReserve;
+        SyncPistolFamilyReserve();
+    }
+
+    void RefillRifleFamilyReserve()
+    {
+        _rifleFamilyReserve = WeaponAmmoDefaults.AssaultRifleStartReserve;
+        SyncRifleFamilyReserve();
+    }
+
+    void RefillSniperReserve()
+    {
+        _sniperAmmo.reserve = WeaponAmmoDefaults.SniperStartReserve;
+    }
+
+    void RefillHuntingRifleReserve()
+    {
+        _huntingRifleAmmo.reserve = WeaponAmmoDefaults.HuntingRifleStartReserve;
+    }
+
+    void RefillAntiMaterialReserve()
+    {
+        _antiMaterialAmmo.reserve = WeaponAmmoDefaults.AntiMaterialStartReserve;
+    }
+
+    void RefillC4Charge()
+    {
+        _c4Ammo.mag = WeaponAmmoDefaults.C4MagSize;
+        RefreshHeldToolVisibility();
+    }
+
+    void MaybeStartAmmoRecharge(CardHotbarTool weapon)
+    {
+        if (IsPistolFamilyWeapon(weapon))
+        {
+            SyncPistolFamilyReserve();
+            if (IsAmmoPoolDepleted(GetAmmoPoolRef(weapon)))
+            {
+                StartAmmoRechargeTimer(ref _pistolFamilyRechargeTimer, WeaponAmmoDefaults.AmmoRechargeSeconds);
+            }
+
+            return;
+        }
+
+        if (IsRifleFamilyWeapon(weapon))
+        {
+            SyncRifleFamilyReserve();
+            if (IsAmmoPoolDepleted(GetAmmoPoolRef(weapon)))
+            {
+                StartAmmoRechargeTimer(ref _rifleFamilyRechargeTimer, WeaponAmmoDefaults.AmmoRechargeSeconds);
+            }
+
+            return;
+        }
+
+        switch (weapon)
+        {
+            case CardHotbarTool.SniperRifle:
+                if (IsAmmoPoolDepleted(_sniperAmmo))
+                {
+                    StartAmmoRechargeTimer(ref _sniperRechargeTimer, WeaponAmmoDefaults.AmmoRechargeSeconds);
+                }
+
+                break;
+            case CardHotbarTool.HuntingRifle:
+                if (IsAmmoPoolDepleted(_huntingRifleAmmo))
+                {
+                    StartAmmoRechargeTimer(ref _huntingRifleRechargeTimer, WeaponAmmoDefaults.AmmoRechargeSeconds);
+                }
+
+                break;
+            case CardHotbarTool.AntiMaterialRifle:
+                if (IsAmmoPoolDepleted(_antiMaterialAmmo))
+                {
+                    StartAmmoRechargeTimer(ref _antiMaterialRechargeTimer, WeaponAmmoDefaults.AmmoRechargeSeconds);
+                }
+
+                break;
+            case CardHotbarTool.C4Charge:
+                if (IsAmmoPoolDepleted(_c4Ammo))
+                {
+                    StartAmmoRechargeTimer(ref _c4RechargeTimer, WeaponAmmoDefaults.C4RechargeSeconds);
+                }
+
+                break;
+        }
+    }
+
+    static void StartAmmoRechargeTimer(ref float timer, float durationSeconds)
+    {
+        if (timer <= 0f)
+        {
+            timer = durationSeconds;
+        }
+    }
+
+    static bool IsAmmoPoolDepleted(WeaponAmmoPool pool)
+    {
+        return pool.mag <= 0 && pool.reserve <= 0;
+    }
+
     void HandleAbilityInput()
     {
-        if (IsBlindnessBlockingInput() || IsReloadFullyLocked() || _dashActive)
+        if (IsRadialSelectorOpen ||
+            IsBlindnessBlockingInput() ||
+            IsReloadFullyLocked() ||
+            _dashActive ||
+            IsC4ActionLocked())
         {
             return;
         }
@@ -2490,6 +2936,12 @@ public class ThirdPersonController : MonoBehaviour
         if (cardId == "sniper_3")
         {
             HandleAntiMaterialBraceInput();
+            return;
+        }
+
+        if (cardId == "demolition_1")
+        {
+            HandleExplosiveVestInput();
             return;
         }
 
@@ -2547,6 +2999,7 @@ public class ThirdPersonController : MonoBehaviour
         UpdateAntiMaterialBraceState(allowAbilityInput);
         UpdateHunterMarkState();
         UpdateCyborgRegenBoostState();
+        UpdateExplosiveVestAttachState(allowAbilityInput);
 
         if (_speedBoostRemaining > 0f)
         {
@@ -2607,6 +3060,192 @@ public class ThirdPersonController : MonoBehaviour
         _holdBreathActive = false;
         _holdBreathRemaining = 0f;
         _abilityCooldownRemaining = rangerHoldBreathCooldownSeconds;
+    }
+
+    void HandleExplosiveVestInput()
+    {
+        if (_abilityCooldownRemaining > 0f)
+        {
+            return;
+        }
+
+        if (Input.GetKey(KeyCode.E))
+        {
+            if (!_explosiveVestAttaching)
+            {
+                BeginExplosiveVestAttach();
+            }
+
+            return;
+        }
+
+        if (_explosiveVestAttaching)
+        {
+            CancelExplosiveVestAttach();
+        }
+    }
+
+    void BeginExplosiveVestAttach()
+    {
+        GameObject target = ResolveExplosiveVestTarget();
+        if (target == null || ExplosiveVestState.TryGetEquipped(target, out _))
+        {
+            return;
+        }
+
+        if (target != gameObject &&
+            HorizontalDistanceTo(target.transform.position) > explosiveVestMaxAttachDistanceMeters)
+        {
+            return;
+        }
+
+        _explosiveVestAttachTarget = target;
+        _explosiveVestAttaching = true;
+        _explosiveVestAttachTimer = explosiveVestAttachSeconds;
+    }
+
+    void CancelExplosiveVestAttach()
+    {
+        _explosiveVestAttaching = false;
+        _explosiveVestAttachTimer = 0f;
+        _explosiveVestAttachTarget = null;
+    }
+
+    void CompleteExplosiveVestAttach()
+    {
+        GameObject target = _explosiveVestAttachTarget;
+        CancelExplosiveVestAttach();
+        if (target == null || ExplosiveVestState.TryGetEquipped(target, out _))
+        {
+            return;
+        }
+
+        ExplosiveVestState.Ensure(target)?.Equip();
+        _abilityCooldownRemaining = explosiveVestCooldownSeconds;
+    }
+
+    void UpdateExplosiveVestAttachState(bool allowAbilityInput)
+    {
+        if (!_explosiveVestAttaching)
+        {
+            return;
+        }
+
+        if (!allowAbilityInput || !Input.GetKey(KeyCode.E))
+        {
+            CancelExplosiveVestAttach();
+            return;
+        }
+
+        if (_explosiveVestAttachTarget == null ||
+            ExplosiveVestState.TryGetEquipped(_explosiveVestAttachTarget, out _))
+        {
+            CancelExplosiveVestAttach();
+            return;
+        }
+
+        if (HorizontalDistanceTo(_explosiveVestAttachTarget.transform.position) >
+            explosiveVestMaxAttachDistanceMeters)
+        {
+            CancelExplosiveVestAttach();
+            return;
+        }
+
+        _explosiveVestAttachTimer -= Time.deltaTime;
+        if (_explosiveVestAttachTimer <= 0f)
+        {
+            CompleteExplosiveVestAttach();
+        }
+    }
+
+    GameObject ResolveExplosiveVestTarget()
+    {
+        Vector3 origin = transform.position;
+        float searchRadius = Mathf.Max(0.1f, explosiveVestTargetSearchRadiusMeters);
+
+        ThirdPersonController closestTeammate = null;
+        float closestTeammateDistance = float.MaxValue;
+        ThirdPersonController closestEnemy = null;
+        float closestEnemyDistance = float.MaxValue;
+        ShootingRangeDummy closestDummy = null;
+        float closestDummyDistance = float.MaxValue;
+
+        var controllers = FindObjectsByType<ThirdPersonController>(FindObjectsSortMode.None);
+        for (int i = 0; i < controllers.Length; i++)
+        {
+            ThirdPersonController controller = controllers[i];
+            if (controller == null || controller == this)
+            {
+                continue;
+            }
+
+            float distance = HorizontalDistanceTo(controller.transform.position, origin);
+            if (distance > searchRadius)
+            {
+                continue;
+            }
+
+            if (IsSameTeam(controller))
+            {
+                if (distance < closestTeammateDistance)
+                {
+                    closestTeammateDistance = distance;
+                    closestTeammate = controller;
+                }
+            }
+            else if (distance < closestEnemyDistance)
+            {
+                closestEnemyDistance = distance;
+                closestEnemy = controller;
+            }
+        }
+
+        IReadOnlyList<ShootingRangeDummy> dummies = ShootingRangeSession.Dummies;
+        for (int i = 0; i < dummies.Count; i++)
+        {
+            ShootingRangeDummy dummy = dummies[i];
+            if (dummy == null || dummy.IsDown)
+            {
+                continue;
+            }
+
+            float distance = HorizontalDistanceTo(dummy.transform.position, origin);
+            if (distance <= searchRadius && distance < closestDummyDistance)
+            {
+                closestDummyDistance = distance;
+                closestDummy = dummy;
+            }
+        }
+
+        if (closestTeammate != null)
+        {
+            return closestTeammate.gameObject;
+        }
+
+        if (closestDummy != null)
+        {
+            return closestDummy.gameObject;
+        }
+
+        if (closestEnemy != null)
+        {
+            return closestEnemy.gameObject;
+        }
+
+        return gameObject;
+    }
+
+    bool IsSameTeam(ThirdPersonController other)
+    {
+        return other != null && other != this && other._playerTeam == _playerTeam;
+    }
+
+    float HorizontalDistanceTo(Vector3 worldPosition, Vector3? origin = null)
+    {
+        Vector3 from = origin ?? transform.position;
+        Vector3 flatFrom = new Vector3(from.x, 0f, from.z);
+        Vector3 flatTo = new Vector3(worldPosition.x, 0f, worldPosition.z);
+        return Vector3.Distance(flatFrom, flatTo);
     }
 
     void HandleAntiMaterialBraceInput()
@@ -2889,6 +3528,12 @@ public class ThirdPersonController : MonoBehaviour
             : _baseCardMoveSpeed;
     }
 
+    void ClearPerCharacterGameplayEffects()
+    {
+        PlayerBulletHitFlash.Instance?.Clear();
+        SetDashBlur(0f);
+    }
+
     void ResetAbilityState()
     {
         _abilityCooldownRemaining = 0f;
@@ -2904,6 +3549,8 @@ public class ThirdPersonController : MonoBehaviour
         _antiMaterialBraceGroundNormal = Vector3.up;
         _hunterMarkRemaining = 0f;
         _cyborgRegenBoostRemaining = 0f;
+        CancelExplosiveVestAttach();
+        ExplosiveVestState.Ensure(gameObject)?.Clear();
         HunterMarkSystem.ClearAllMarks();
         ExitScopedArAds();
         EnsurePlayerHealth()?.ClearShield();
@@ -2933,6 +3580,8 @@ public class ThirdPersonController : MonoBehaviour
                 return !_antiMaterialBraceActive &&
                     _abilityCooldownRemaining <= 0f &&
                     SelectedTool == CardHotbarTool.AntiMaterialRifle;
+            case "demolition_1":
+                return !_explosiveVestAttaching && _abilityCooldownRemaining <= 0f;
             default:
                 return false;
         }
@@ -3032,6 +3681,20 @@ public class ThirdPersonController : MonoBehaviour
                 }
 
                 return 0f;
+            case "demolition_1":
+                if (_explosiveVestAttaching)
+                {
+                    return explosiveVestAttachSeconds <= 0f
+                        ? 1f
+                        : 1f - Mathf.Clamp01(_explosiveVestAttachTimer / explosiveVestAttachSeconds);
+                }
+
+                if (_abilityCooldownRemaining > 0f)
+                {
+                    return Mathf.Clamp01(_abilityCooldownRemaining / explosiveVestCooldownSeconds);
+                }
+
+                return 0f;
             default:
                 return 0f;
         }
@@ -3074,14 +3737,18 @@ public class ThirdPersonController : MonoBehaviour
     bool IsWeaponFireInputBlocked()
     {
         return !IsGameplayWeaponInputAllowed() ||
+            IsRadialSelectorOpen ||
             IsBlindnessBlockingInput() ||
+            IsC4ActionLocked() ||
+            _c4RemoteDrawTimer > 0f ||
+            (_grenadePrimed && !_grenadeSlotSelected) ||
             _blockWeaponFireUntilMouseRelease ||
             IsWeaponDrawInProgress();
     }
 
     static bool IsBlindnessBlockingInput()
     {
-        return PlayerBulletHitFlash.Instance != null && PlayerBulletHitFlash.Instance.IsBlind;
+        return PlayerBulletHitFlash.Instance != null && PlayerBulletHitFlash.Instance.BlocksGameplayInput;
     }
 
     float WeaponDrawDuration(CardHotbarTool weapon)
@@ -3117,6 +3784,11 @@ public class ThirdPersonController : MonoBehaviour
             case CardHotbarTool.CyborgLaser:
                 baseDuration = cyborgLaserDrawSeconds;
                 break;
+            case CardHotbarTool.C4Charge:
+                baseDuration = c4DrawSeconds;
+                break;
+            case CardHotbarTool.Grenade:
+                return grenadeDrawSeconds;
             default:
                 return 0f;
         }
@@ -3126,7 +3798,7 @@ public class ThirdPersonController : MonoBehaviour
 
     void BeginWeaponDraw(CardHotbarTool weapon)
     {
-        if (!IsFirearmTool(weapon))
+        if (!IsDrawBlockingTool(weapon))
         {
             _drawingWeapon = default;
             _weaponDrawTimer = 0f;
@@ -3151,7 +3823,7 @@ public class ThirdPersonController : MonoBehaviour
 
     bool IsWeaponDrawInProgress()
     {
-        return IsFirearmTool(SelectedTool) &&
+        return IsDrawBlockingTool(SelectedTool) &&
             _weaponDrawTimer > 0f &&
             _drawingWeapon == SelectedTool;
     }
@@ -3182,6 +3854,11 @@ public class ThirdPersonController : MonoBehaviour
 
     void HandleSelectedToolInput()
     {
+        if (IsRadialSelectorOpen)
+        {
+            return;
+        }
+
         if (!IsMarksmanRifleTool(SelectedTool) && SelectedTool != CardHotbarTool.AntiMaterialRifle)
         {
             ExitSniperAds();
@@ -3241,6 +3918,9 @@ public class ThirdPersonController : MonoBehaviour
             case CardHotbarTool.AntiMaterialRifle:
                 HandleAntiMaterialRifleInput();
                 break;
+            case CardHotbarTool.C4Charge:
+                HandleC4Input();
+                break;
             case CardHotbarTool.Pistol:
                 HandlePistolInput();
                 break;
@@ -3256,7 +3936,105 @@ public class ThirdPersonController : MonoBehaviour
             case CardHotbarTool.Blueprint:
                 HandleBuildingInput();
                 break;
+            case CardHotbarTool.Grenade:
+                HandleGrenadeToolInput();
+                break;
         }
+    }
+
+    void HandleGrenadeToolInput()
+    {
+        if (!IsGameplayWeaponInputAllowed() ||
+            IsRadialSelectorOpen ||
+            IsBlindnessBlockingInput() ||
+            IsC4ActionLocked() ||
+            _dashActive ||
+            IsWeaponDrawInProgress() ||
+            IsGrenadeHandCooldownActive())
+        {
+            return;
+        }
+
+        if (Input.GetMouseButtonDown(1) && !_grenadePrimed)
+        {
+            PrimeSelectedGrenade();
+            return;
+        }
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            ThrowGrenade();
+        }
+    }
+
+    void HandleC4Input()
+    {
+        if (IsWeaponFireInputBlocked())
+        {
+            return;
+        }
+
+        if (!Input.GetMouseButtonDown(0))
+        {
+            return;
+        }
+
+        if (_activeC4Charge == null)
+        {
+            if (!_c4Ammo.CanFire)
+            {
+                return;
+            }
+
+            ThrowC4Charge();
+            return;
+        }
+
+        if (_c4RemoteReady && _activeC4Charge.CanRemoteDetonate)
+        {
+            _activeC4Charge.QueueDetonation(c4RemoteDetonationDelaySeconds);
+        }
+    }
+
+    void ThrowC4Charge()
+    {
+        if (viewCamera == null)
+        {
+            return;
+        }
+
+        Ray throwRay = BuildCenterAimRay();
+        Vector3 spawnPosition = BulletSpawnPosition(throwRay);
+        var charge = new GameObject("C4 Charge");
+        charge.transform.position = spawnPosition;
+        charge.transform.rotation = Quaternion.LookRotation(throwRay.direction, Vector3.up);
+        _activeC4Charge = charge.AddComponent<C4ChargeProjectile>();
+        _activeC4Charge.Destroyed += HandleActiveC4Destroyed;
+        _activeC4Charge.Initialize(
+            throwRay.direction * c4ThrowSpeed,
+            c4FallAccelerationMetersPerSecond,
+            gameObject,
+            c4ThrowLockSeconds);
+
+        _c4Ammo.ConsumeRound();
+        MaybeStartAmmoRecharge(CardHotbarTool.C4Charge);
+        _c4ActionLockTimer = c4ThrowLockSeconds;
+        _c4RemoteReady = false;
+        _c4RemoteDrawTimer = 0f;
+        RefreshHeldToolVisibility();
+    }
+
+    void HandleActiveC4Destroyed(C4ChargeProjectile charge)
+    {
+        if (_activeC4Charge != charge)
+        {
+            return;
+        }
+
+        _activeC4Charge = null;
+        _c4RemoteReady = false;
+        _c4RemoteDrawTimer = 0f;
+        RefreshHeldToolVisibility();
     }
 
     void HandleAssaultRifleInput()
@@ -3904,6 +4682,7 @@ public class ThirdPersonController : MonoBehaviour
             gameObject);
 
         _antiMaterialAmmo.ConsumeRound();
+        MaybeStartAmmoRecharge(CardHotbarTool.AntiMaterialRifle);
         _gunKickTimer = 0.12f;
         _muzzleFlashTimer = 0.06f;
         _gunRecoilPeak = new Vector2(
@@ -3928,6 +4707,7 @@ public class ThirdPersonController : MonoBehaviour
 
         FireWeapon(BuildSniperAimRay(), muzzleSpeed, recoilScale, ProjectileWeaponType.HuntingRifle);
         _huntingRifleAmmo.ConsumeRound();
+        MaybeStartAmmoRecharge(CardHotbarTool.HuntingRifle);
         MenuUiSounds.PlayWeaponGunshot(ProjectileWeaponType.HuntingRifle);
         return true;
     }
@@ -3941,6 +4721,7 @@ public class ThirdPersonController : MonoBehaviour
 
         FireWeapon(BuildSniperAimRay(), muzzleSpeed, recoilScale, ProjectileWeaponType.SniperRifle);
         _sniperAmmo.ConsumeRound();
+        MaybeStartAmmoRecharge(CardHotbarTool.SniperRifle);
         MenuUiSounds.PlayWeaponGunshot(ProjectileWeaponType.SniperRifle);
         return true;
     }
@@ -3959,6 +4740,7 @@ public class ThirdPersonController : MonoBehaviour
 
         FireWeapon(muzzleSpeed, recoilScale, weaponType);
         pool.ConsumeRound();
+        MaybeStartAmmoRecharge(weapon);
         MenuUiSounds.PlayWeaponGunshot(weaponType);
         _weaponFireSlowTimer = WeaponFireSlowWindowSeconds;
         return true;
@@ -4490,6 +5272,11 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
+        if (_selectorOpen)
+        {
+            return;
+        }
+
         if (_mouseMovedThisFrame)
         {
             _scrollTargetLocked = false;
@@ -4497,7 +5284,6 @@ public class ThirdPersonController : MonoBehaviour
 
         HandleBuildOrientationInput();
         UpdateBuildCandidate();
-        HandleBuildSelectorInput();
 
         if (HandleRectangleBuildInput())
         {
@@ -4609,10 +5395,119 @@ public class ThirdPersonController : MonoBehaviour
         return true;
     }
 
-    void HandleBuildSelectorInput()
+    void UpdateRadialSelectorInput()
     {
+        UpdateGrenadeSelectorInput();
+        if (BuildModeActive)
+        {
+            UpdateBuildSelectorInput();
+        }
+    }
+
+    void UpdateGrenadeSelectorInput()
+    {
+        if (_selectorOpen)
+        {
+            if (_grenadeSelectorOpen)
+            {
+                _grenadeSelectorOpen = false;
+                _grenadeSelectorDirection = Vector2.zero;
+            }
+
+            if (_grenadeKeyHeld)
+            {
+                _grenadeKeyHeld = false;
+                _grenadeKeyHoldTimer = 0f;
+                _grenadeWheelOpenedFromHold = false;
+            }
+
+            return;
+        }
+
+        if (IsGrenadeInHand() || IsGrenadeHandCooldownActive())
+        {
+            if (_grenadeSelectorOpen)
+            {
+                _grenadeSelectorOpen = false;
+                _grenadeSelectorDirection = Vector2.zero;
+            }
+
+            if (_grenadeKeyHeld)
+            {
+                _grenadeKeyHeld = false;
+                _grenadeKeyHoldTimer = 0f;
+                _grenadeWheelOpenedFromHold = false;
+            }
+
+            return;
+        }
+
+        if (Input.GetKeyDown(KeyCode.Q))
+        {
+            _grenadeKeyHeld = true;
+            _grenadeKeyHoldTimer = 0f;
+            _grenadeWheelOpenedFromHold = false;
+        }
+
+        if (_grenadeKeyHeld && Input.GetKey(KeyCode.Q))
+        {
+            _grenadeKeyHoldTimer += Time.deltaTime;
+
+            if (!_grenadeWheelOpenedFromHold && _grenadeKeyHoldTimer >= GrenadeWheelHoldSeconds)
+            {
+                _grenadeWheelOpenedFromHold = true;
+                _selectorOpen = false;
+                _selectorDirection = Vector2.zero;
+                _grenadeSelectorOpen = true;
+                _grenadeSelectorDirection = Vector2.zero;
+            }
+
+            if (_grenadeSelectorOpen)
+            {
+                _grenadeSelectorDirection += new Vector2(
+                    Input.GetAxisRaw("Mouse X"),
+                    Input.GetAxisRaw("Mouse Y")) * selectorMouseScale;
+
+                if (_grenadeSelectorDirection.magnitude >= selectorActivationDistance)
+                {
+                    SelectGrenadeFromDirection(_grenadeSelectorDirection);
+                }
+            }
+        }
+
+        if (Input.GetKeyUp(KeyCode.Q))
+        {
+            if (_grenadeSelectorOpen)
+            {
+                _grenadeSelectorOpen = false;
+                _grenadeSelectorDirection = Vector2.zero;
+                SelectGrenadeHotbarSlot();
+            }
+            else if (_grenadeKeyHeld && !_grenadeWheelOpenedFromHold)
+            {
+                SelectGrenadeHotbarSlot();
+            }
+
+            _grenadeKeyHeld = false;
+            _grenadeKeyHoldTimer = 0f;
+            _grenadeWheelOpenedFromHold = false;
+        }
+    }
+
+    void UpdateBuildSelectorInput()
+    {
+        if (_grenadeSelectorOpen)
+        {
+            return;
+        }
+
         if (Input.GetMouseButtonDown(1))
         {
+            _grenadeKeyHeld = false;
+            _grenadeKeyHoldTimer = 0f;
+            _grenadeWheelOpenedFromHold = false;
+            _grenadeSelectorOpen = false;
+            _grenadeSelectorDirection = Vector2.zero;
             _selectorOpen = true;
             _selectorDirection = Vector2.zero;
         }
@@ -4632,6 +5527,206 @@ public class ThirdPersonController : MonoBehaviour
         if (_selectorOpen && Input.GetMouseButtonUp(1))
         {
             _selectorOpen = false;
+            _selectorDirection = Vector2.zero;
+        }
+    }
+
+    void PrimeSelectedGrenade()
+    {
+        _grenadePrimed = true;
+        _grenadeFuseTimer = fragGrenadeFuseSeconds;
+        RefreshHeldToolVisibility();
+    }
+
+    void CancelGrenadePrime()
+    {
+        _grenadePrimed = false;
+        _grenadeFuseTimer = 0f;
+        RefreshHeldToolVisibility();
+    }
+
+    void ThrowGrenade()
+    {
+        if (viewCamera == null)
+        {
+            return;
+        }
+
+        Ray throwRay = BuildCenterAimRay();
+        Vector3 spawnPosition = BulletSpawnPosition(throwRay);
+        float remainingFuse = _grenadePrimed ? _grenadeFuseTimer : fragGrenadeFuseSeconds;
+        CancelGrenadePrime();
+        BeginGrenadeHandCooldown();
+        ThrownGrenadeProjectile.Spawn(_selectedGrenade, spawnPosition, throwRay.direction, remainingFuse);
+    }
+
+    void UpdateGrenadeFuseState()
+    {
+        if (!_grenadePrimed)
+        {
+            return;
+        }
+
+        _grenadeFuseTimer = Mathf.Max(0f, _grenadeFuseTimer - Time.deltaTime);
+        if (_grenadeFuseTimer <= 0f)
+        {
+            DetonateHeldGrenade();
+        }
+    }
+
+    void DetonateHeldGrenade()
+    {
+        Vector3 center = transform.position + Vector3.up;
+        CancelGrenadePrime();
+        BeginGrenadeHandCooldown();
+        switch (_selectedGrenade)
+        {
+            case GrenadeType.Flashbang:
+                FlashbangBlindUtility.DetonateFlashbang(center);
+                break;
+            default:
+                GrenadeBlastUtility.DetonateFrag(center);
+                break;
+        }
+    }
+
+    void EnsureGrenadeRadialTexture()
+    {
+        int highlightIndex = GetGrenadeWheelHighlightIndex();
+        if (_grenadeRadialTexture != null && _grenadeRadialTextureHighlight == highlightIndex)
+        {
+            return;
+        }
+
+        const int size = 192;
+        if (_grenadeRadialTexture == null)
+        {
+            _grenadeRadialTexture = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            {
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+        }
+
+        _grenadeRadialTextureHighlight = highlightIndex;
+        float center = (size - 1) * 0.5f;
+        float radius = size * 0.48f;
+        float innerRadius = size * 0.16f;
+
+        for (int y = 0; y < size; y++)
+        {
+            for (int x = 0; x < size; x++)
+            {
+                Vector2 offset = new Vector2(x - center, y - center);
+                float distance = offset.magnitude;
+                if (distance > radius || distance < innerRadius)
+                {
+                    _grenadeRadialTexture.SetPixel(x, y, Color.clear);
+                    continue;
+                }
+
+                int segmentIndex = GrenadeSegmentIndexFromAngle(Mathf.Atan2(offset.y, offset.x) * Mathf.Rad2Deg);
+                bool selected = segmentIndex == highlightIndex;
+                Color color = selected
+                    ? SegmentHighlightColor(segmentIndex)
+                    : new Color(0.98f, 0.98f, 0.98f, 0.36f);
+                _grenadeRadialTexture.SetPixel(x, y, color);
+            }
+        }
+
+        _grenadeRadialTexture.Apply();
+    }
+
+    static Color SegmentHighlightColor(int segmentIndex)
+    {
+        if (segmentIndex < 0 || segmentIndex >= GrenadeOptions.Length)
+        {
+            return new Color(0.42f, 0.44f, 0.46f, 0.5f);
+        }
+
+        return GrenadeOptions[segmentIndex] == GrenadeType.Flashbang
+            ? new Color(0.36f, 0.37f, 0.38f, 0.55f)
+            : new Color(0.42f, 0.44f, 0.46f, 0.5f);
+    }
+
+    int GetGrenadeWheelHighlightIndex()
+    {
+        if (_grenadeSelectorOpen &&
+            _grenadeSelectorDirection.magnitude >= selectorActivationDistance)
+        {
+            return GrenadeSegmentIndexFromDirection(_grenadeSelectorDirection);
+        }
+
+        return GrenadeSegmentIndexForType(_selectedGrenade);
+    }
+
+    static int GrenadeSegmentIndexForType(GrenadeType grenadeType)
+    {
+        for (int i = 0; i < GrenadeOptions.Length; i++)
+        {
+            if (GrenadeOptions[i] == grenadeType)
+            {
+                return i;
+            }
+        }
+
+        return 0;
+    }
+
+    static int GrenadeSegmentIndexFromDirection(Vector2 direction)
+    {
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        return GrenadeSegmentIndexFromAngle(angle);
+    }
+
+    static int GrenadeSegmentIndexFromAngle(float angle)
+    {
+        float sectorSize = 360f / GrenadeWheelSegmentCount;
+        float normalized = Mathf.Repeat(angle + (sectorSize * 0.5f), 360f);
+        return Mathf.FloorToInt(normalized / sectorSize);
+    }
+
+    void SelectGrenadeFromDirection(Vector2 direction)
+    {
+        if (IsGrenadeInHand())
+        {
+            return;
+        }
+
+        int segmentIndex = GrenadeSegmentIndexFromDirection(direction);
+        if (segmentIndex < 0 || segmentIndex >= GrenadeOptions.Length)
+        {
+            return;
+        }
+
+        var nextGrenade = GrenadeOptions[segmentIndex];
+        if (nextGrenade != _selectedGrenade)
+        {
+            _selectedGrenade = nextGrenade;
+        }
+    }
+
+    static Color HeldGrenadeColor(GrenadeType grenadeType)
+    {
+        switch (grenadeType)
+        {
+            case GrenadeType.Flashbang:
+                return new Color(0.34f, 0.35f, 0.36f, 1f);
+            default:
+                return new Color(0.42f, 0.44f, 0.46f, 1f);
+        }
+    }
+
+    static string GrenadeDisplayName(GrenadeType grenadeType)
+    {
+        switch (grenadeType)
+        {
+            case GrenadeType.Frag:
+                return "Frag";
+            case GrenadeType.Flashbang:
+                return "Flash";
+            default:
+                return grenadeType.ToString();
         }
     }
 
@@ -5096,6 +6191,8 @@ public class ThirdPersonController : MonoBehaviour
         Material hammerMaterial = CreateHeldToolMaterial("Held Hammer Material", new Color(0.32f, 0.23f, 0.14f, 1f));
         Material metalMaterial = CreateHeldToolMaterial("Held Hammer Head Material", new Color(0.62f, 0.62f, 0.64f, 1f));
         Material blueprintMaterial = CreateHeldToolMaterial("Held Blueprint Material", new Color(0.08f, 0.22f, 0.68f, 1f));
+        Material c4Material = CreateHeldToolMaterial("Held C4 Material", new Color(0.08f, 0.08f, 0.08f, 1f));
+        Material remoteMaterial = CreateHeldToolMaterial("Held C4 Remote Material", new Color(0.12f, 0.12f, 0.13f, 1f));
         Material flashMaterial = CreateHeldToolMaterial("Muzzle Flash Material", new Color(0.82f, 0.58f, 0.12f, 1f));
 
         _pistolRoot = new GameObject("Held Pistol");
@@ -5250,6 +6347,30 @@ public class ThirdPersonController : MonoBehaviour
         CreateHeldCube(_laserSwordRoot.transform, "Sword Guard", new Vector3(0f, 0.04f, 0f), new Vector3(0.16f, 0.03f, 0.05f), metalMaterial);
         CreateHeldCube(_laserSwordRoot.transform, "Sword Blade", new Vector3(0f, 0.22f, 0.02f), new Vector3(0.05f, 0.42f, 0.02f), swordMaterial);
 
+        _c4ChargeRoot = new GameObject("Held C4 Charge");
+        _c4ChargeRoot.transform.SetParent(viewCamera.transform, false);
+        _c4ChargeRoot.transform.localPosition = new Vector3(0.32f, -0.28f, 0.56f);
+        _c4ChargeRoot.transform.localRotation = Quaternion.Euler(12f, -8f, -8f);
+        CreateHeldCube(_c4ChargeRoot.transform, "C4 Brick", Vector3.zero, new Vector3(0.32f, 0.24f, 0.1f), c4Material);
+        CreateHeldCube(_c4ChargeRoot.transform, "C4 Strap", new Vector3(0f, 0.02f, 0f), new Vector3(0.38f, 0.05f, 0.12f), metalMaterial);
+        CreateHeldCube(_c4ChargeRoot.transform, "C4 Button", new Vector3(-0.09f, 0.14f, 0f), new Vector3(0.09f, 0.04f, 0.1f), flashMaterial);
+
+        _c4RemoteRoot = new GameObject("Held C4 Remote");
+        _c4RemoteRoot.transform.SetParent(viewCamera.transform, false);
+        _c4RemoteRoot.transform.localPosition = new Vector3(0.34f, -0.27f, 0.58f);
+        _c4RemoteRoot.transform.localRotation = Quaternion.Euler(10f, -8f, -8f);
+        CreateHeldCube(_c4RemoteRoot.transform, "Remote Body", Vector3.zero, new Vector3(0.16f, 0.22f, 0.08f), remoteMaterial);
+        CreateHeldCube(_c4RemoteRoot.transform, "Remote Button", new Vector3(0f, 0.05f, 0.05f), new Vector3(0.08f, 0.08f, 0.03f), flashMaterial);
+
+        Material grenadeMaterial = CreateHeldToolMaterial("Held Frag Grenade Material", new Color(0.42f, 0.44f, 0.46f, 1f));
+        _heldFragGrenadeRoot = new GameObject("Held Grenade");
+        _heldFragGrenadeRoot.transform.SetParent(viewCamera.transform, false);
+        _heldFragGrenadeRoot.transform.localPosition = new Vector3(0.34f, -0.26f, 0.54f);
+        _heldFragGrenadeRoot.transform.localRotation = Quaternion.Euler(18f, -8f, -12f);
+        var grenadeBody = CreateHeldCube(_heldFragGrenadeRoot.transform, "Grenade Body", Vector3.zero, new Vector3(0.12f, 0.12f, 0.12f), grenadeMaterial);
+        _heldGrenadeBodyRenderer = grenadeBody.GetComponent<MeshRenderer>();
+        CreateHeldCube(_heldFragGrenadeRoot.transform, "Grenade Pin", new Vector3(0.05f, 0.06f, 0f), new Vector3(0.03f, 0.05f, 0.03f), metalMaterial);
+
         _hammerRoot = new GameObject("Held Hammer");
         _hammerRoot.transform.SetParent(viewCamera.transform, false);
         _hammerRoot.transform.localPosition = new Vector3(0.34f, -0.31f, 0.58f);
@@ -5332,6 +6453,32 @@ public class ThirdPersonController : MonoBehaviour
             _laserSwordRoot.SetActive(SelectedTool == CardHotbarTool.LaserSword);
         }
 
+        if (_c4ChargeRoot != null)
+        {
+            _c4ChargeRoot.SetActive(
+                SelectedTool == CardHotbarTool.C4Charge &&
+                _activeC4Charge == null &&
+                _c4Ammo.CanFire);
+        }
+
+        if (_c4RemoteRoot != null)
+        {
+            _c4RemoteRoot.SetActive(
+                SelectedTool == CardHotbarTool.C4Charge &&
+                _activeC4Charge != null &&
+                _activeC4Charge.CanRemoteDetonate &&
+                (_c4RemoteDrawTimer > 0f || _c4RemoteReady));
+        }
+
+        if (_heldFragGrenadeRoot != null)
+        {
+            _heldFragGrenadeRoot.SetActive(_grenadePrimed);
+            if (_heldGrenadeBodyRenderer != null && _grenadePrimed)
+            {
+                _heldGrenadeBodyRenderer.sharedMaterial.color = HeldGrenadeColor(_selectedGrenade);
+            }
+        }
+
         if (_hammerRoot != null)
         {
             _hammerRoot.SetActive(SelectedTool == CardHotbarTool.Hammer);
@@ -5372,7 +6519,7 @@ public class ThirdPersonController : MonoBehaviour
         if (_pistolRoot == null || _assaultRifleRoot == null || _scopedAssaultRifleRoot == null ||
             _sniperRifleRoot == null || _huntingRifleRoot == null || _antiMaterialRifleRoot == null ||
             _smgRoot == null || _machinePistolRoot == null || _lmgRoot == null || _cyborgLaserRoot == null ||
-            _laserSwordRoot == null || _hammerRoot == null)
+            _laserSwordRoot == null || _c4ChargeRoot == null || _c4RemoteRoot == null || _hammerRoot == null)
         {
             return;
         }
@@ -5508,6 +6655,26 @@ public class ThirdPersonController : MonoBehaviour
         Quaternion swordRotation = Quaternion.Euler(-12f - (48f * swordSwingProgress), 8f, 12f + (24f * swordSwingProgress));
         _laserSwordRoot.transform.localPosition = swordPosition;
         _laserSwordRoot.transform.localRotation = swordRotation;
+
+        Vector3 c4Position = new Vector3(0.32f, -0.28f, 0.56f);
+        Quaternion c4Rotation = Quaternion.Euler(12f, -8f, -8f);
+        ApplyWeaponDrawOffset(CardHotbarTool.C4Charge, ref c4Position);
+        _c4ChargeRoot.transform.localPosition = c4Position;
+        _c4ChargeRoot.transform.localRotation = c4Rotation;
+
+        float remoteProgress = c4RemoteDrawSeconds <= 0f || _c4RemoteReady
+            ? 1f
+            : 1f - (_c4RemoteDrawTimer / Mathf.Max(0.01f, c4RemoteDrawSeconds));
+        remoteProgress = Mathf.Clamp01(remoteProgress);
+        remoteProgress = remoteProgress * remoteProgress * (3f - (2f * remoteProgress));
+        float remoteHiddenBlend = 1f - remoteProgress;
+        Vector3 c4RemotePosition = new Vector3(
+            0.34f,
+            -0.27f + (weaponDrawHiddenLocalY * remoteHiddenBlend),
+            0.58f + (0.05f * remoteHiddenBlend));
+        Quaternion c4RemoteRotation = Quaternion.Euler(10f, -8f, -8f);
+        _c4RemoteRoot.transform.localPosition = c4RemotePosition;
+        _c4RemoteRoot.transform.localRotation = c4RemoteRotation;
 
         bool showPistolFlash = _muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.Pistol;
         bool showArFlash = _muzzleFlashTimer > 0f && SelectedTool == CardHotbarTool.AssaultRifle;

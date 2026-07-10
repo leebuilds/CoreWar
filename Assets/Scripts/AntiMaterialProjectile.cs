@@ -16,7 +16,6 @@ public class AntiMaterialProjectile : MonoBehaviour
     const float MaxCenterDamage = 100f;
     const float BuildPenetrationSpeedRetention = 0.5f;
     const float MinApparentSizeDistanceMeters = 50f;
-    const float ExplosionBlindnessMultiplier = 2f;
     const float GroundSnapRaycastHeight = 0.5f;
     const float GroundSnapRaycastDistance = 50f;
 
@@ -103,15 +102,28 @@ public class AntiMaterialProjectile : MonoBehaviour
 
         Vector3 direction = segment / distance;
         RaycastHit[] hits = Physics.RaycastAll(
-            start, direction, distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            start, direction, distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
         System.Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
 
         for (int i = 0; i < hits.Length; i++)
         {
             RaycastHit hit = hits[i];
-            if (hit.collider.transform.IsChildOf(transform))
+            if (hit.collider == null || hit.collider.transform.IsChildOf(transform))
             {
                 continue;
+            }
+
+            var c4Charge = hit.collider.GetComponentInParent<C4ChargeProjectile>();
+            if (c4Charge != null)
+            {
+                float damage = ProjectileDamage.ComputeDamage(
+                    _velocity.magnitude,
+                    _muzzleSpeed,
+                    ProjectileWeaponType.AntiMaterialRifle,
+                    headshot: false);
+                c4Charge.DetonateFromBullet(hit.point, damage, headshot: false);
+                Destroy(gameObject);
+                return;
             }
 
             var hitZone = hit.collider.GetComponent<ShootingRangeHitZone>();
@@ -229,7 +241,7 @@ public class AntiMaterialProjectile : MonoBehaviour
         var health = _stickTarget.GetComponentInParent<PlayerHealth>();
         if (health != null)
         {
-            return health.CurrentHealth <= 0f;
+            return !health.IsAlive;
         }
 
         return !_stickTarget.gameObject.activeInHierarchy;
@@ -264,111 +276,20 @@ public class AntiMaterialProjectile : MonoBehaviour
 
     void Detonate(Vector3 center)
     {
-        ApplyExplosionDamage(center);
-        DestroyBuildPiecesNear(center);
-        AntiMaterialExplosionEffect.Spawn(center);
+        ExplosionBlastUtility.Detonate(center, AntiMaterialExplosionProfile());
         Destroy(gameObject);
     }
 
-    static void ApplyExplosionDamage(Vector3 center)
+    static ExplosionBlastUtility.Profile AntiMaterialExplosionProfile()
     {
-        var damagedRoots = new HashSet<GameObject>();
-        Collider[] hits = Physics.OverlapSphere(
-            center, BlastRadiusMeters, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-
-        for (int i = 0; i < hits.Length; i++)
+        return new ExplosionBlastUtility.Profile
         {
-            Collider hit = hits[i];
-            if (hit == null)
-            {
-                continue;
-            }
-
-            var dummy = hit.GetComponentInParent<ShootingRangeDummy>();
-            if (dummy != null)
-            {
-                if (!damagedRoots.Add(dummy.gameObject))
-                {
-                    continue;
-                }
-
-                float distance = Vector3.Distance(center, dummy.transform.position);
-                float damage = ExplosionDamageAtDistance(distance);
-                if (damage > 0f)
-                {
-                    dummy.ApplyDirectDamage(damage, false);
-                }
-
-                continue;
-            }
-
-            var controller = hit.GetComponentInParent<ThirdPersonController>();
-            if (controller == null)
-            {
-                continue;
-            }
-
-            if (!damagedRoots.Add(controller.gameObject))
-            {
-                continue;
-            }
-
-            float playerDistance = Vector3.Distance(center, controller.transform.position);
-            float playerDamage = ExplosionDamageAtDistance(playerDistance);
-            bool inFire = playerDistance <= AntiMaterialExplosionEffect.FireRadiusMeters;
-            var health = controller.GetComponent<PlayerHealth>();
-            if (health == null)
-            {
-                continue;
-            }
-
-            float blindDuration = 0f;
-            if (playerDamage > 0f)
-            {
-                blindDuration = health.ApplyDamageWithoutBlindness(
-                    playerDamage, false, ExplosionBlindnessMultiplier);
-            }
-
-            if (controller == ThirdPersonController.Local && (inFire || blindDuration > 0f))
-            {
-                PlayerBulletHitFlash.Instance?.BlindFromExplosionFire(blindDuration, inFire);
-            }
-        }
-    }
-
-    static float ExplosionDamageAtDistance(float distanceMeters)
-    {
-        if (distanceMeters >= BlastRadiusMeters)
-        {
-            return 0f;
-        }
-
-        float closeness = 1f - (distanceMeters / BlastRadiusMeters);
-        return MinEdgeDamage * Mathf.Pow(MaxCenterDamage / MinEdgeDamage, closeness);
-    }
-
-    static void DestroyBuildPiecesNear(Vector3 center)
-    {
-        var world = Object.FindFirstObjectByType<VoxelLightingWorld>();
-        if (world == null)
-        {
-            return;
-        }
-
-        var removed = new HashSet<PlayerBuiltVoxel>();
-        Collider[] hits = Physics.OverlapSphere(
-            center, BuildDestroyRadiusMeters, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
-
-        for (int i = 0; i < hits.Length; i++)
-        {
-            var marker = hits[i].GetComponentInParent<PlayerBuiltVoxel>();
-            if (marker == null || !removed.Add(marker))
-            {
-                continue;
-            }
-
-            world.TryRemovePlayerBuiltObject(marker);
-        }
+            damageRadiusMeters = BlastRadiusMeters,
+            buildDestroyRadiusMeters = BuildDestroyRadiusMeters,
+            minEdgeDamage = MinEdgeDamage,
+            maxCenterDamage = MaxCenterDamage,
+            falloff = ExplosionBlastUtility.DamageFalloff.Exponential
+        };
     }
 
     void EnsureVisual()

@@ -135,6 +135,7 @@ public class ShootingRangeDummy : MonoBehaviour
 
         _currentHealth = ShootingRangeSession.DummyMaxHealth;
         _isDown = false;
+        ExplosiveVestState.Ensure(gameObject)?.Clear();
         transform.position = _standPosition;
         transform.rotation = _standRotation;
         SetVisualActive(true);
@@ -162,6 +163,10 @@ public class ShootingRangeDummy : MonoBehaviour
         }
 
         float damage = ComputeDamage(impactSpeed, muzzleSpeed, weaponType, zoneType);
+        damage = ExplosiveVestState.ApplyBodyDamageReduction(
+            damage,
+            zoneType == ShootingRangeHitZoneType.Head,
+            gameObject);
         if (damage <= 0f)
         {
             return false;
@@ -174,9 +179,7 @@ public class ShootingRangeDummy : MonoBehaviour
 
         if (_currentHealth <= 0f)
         {
-            _isDown = true;
-            SetVisualActive(false);
-            _respawnRoutine = StartCoroutine(RespawnAfterDelay());
+            HandleDowned();
         }
 
         return true;
@@ -189,18 +192,36 @@ public class ShootingRangeDummy : MonoBehaviour
             return false;
         }
 
+        damage = ExplosiveVestState.ApplyBodyDamageReduction(damage, headshot, gameObject);
         _currentHealth = Mathf.Max(0f, _currentHealth - damage);
         MenuUiSounds.PlayRangeDing(headshot);
         FlashHit(headshot);
 
         if (_currentHealth <= 0f)
         {
-            _isDown = true;
-            SetVisualActive(false);
-            _respawnRoutine = StartCoroutine(RespawnAfterDelay());
+            HandleDowned();
         }
 
         return true;
+    }
+
+    public void KillFromExplosion()
+    {
+        if (_isDown)
+        {
+            return;
+        }
+
+        _currentHealth = 0f;
+        HandleDowned();
+    }
+
+    void HandleDowned()
+    {
+        _isDown = true;
+        GetComponent<ExplosiveVestState>()?.DetonateOnDeath();
+        SetVisualActive(false);
+        _respawnRoutine = StartCoroutine(RespawnAfterDelay());
     }
 
     IEnumerator RespawnAfterDelay()

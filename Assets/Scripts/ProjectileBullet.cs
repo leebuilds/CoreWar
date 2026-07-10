@@ -119,15 +119,28 @@ public class ProjectileBullet : MonoBehaviour
 
         Vector3 direction = segment / distance;
         RaycastHit[] hits = Physics.RaycastAll(
-            start, direction, distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Ignore);
+            start, direction, distance, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide);
         Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
 
         for (int i = 0; i < hits.Length; i++)
         {
             RaycastHit hit = hits[i];
-            if (hit.collider.transform.IsChildOf(transform))
+            if (hit.collider == null || hit.collider.transform.IsChildOf(transform))
             {
                 continue;
+            }
+
+            var c4Charge = hit.collider.GetComponentInParent<C4ChargeProjectile>();
+            if (c4Charge != null)
+            {
+                float damage = ProjectileDamage.ComputeDamage(
+                    _velocity.magnitude,
+                    _muzzleSpeed,
+                    _weaponType,
+                    headshot: false);
+                c4Charge.DetonateFromBullet(hit.point, damage, headshot: false);
+                DestroyAt(hit.point);
+                return;
             }
 
             var hitZone = hit.collider.GetComponent<ShootingRangeHitZone>();

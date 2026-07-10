@@ -505,7 +505,7 @@ Every player carries a standard sabotage tool.
 - Assault: Riot Trooper → Water Cannon Officer → Granny with a Shotgun
 - Assassin: Mafia → Secret Agent (or Operative) → Koroshiya (or Phantom / Ghost)
 - Heavy: Heavy → Cyborg → Frankenstein
-- Demolition: Explosion Specialist (or Demolition Expert / Demolitionist / Sapper) → Bazooka → Missile Operator
+- Demolition: Explosion Specialist (or Demolition Expert / Demolitionist / Kamikaze) → Bazooka → Missile Operator
 - Saboteur: Saboteur → Hacker → Drone Pilot (or Drone Commander)
 - Gunner: Gunner → Lazerman (or Laser Gunner) → Machine Gunner (placement TBD)
 

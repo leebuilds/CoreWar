@@ -17,10 +17,14 @@ public static class HotbarIconDrawer
     static readonly Dictionary<int, Texture2D> HunterMarkAbilityCache = new Dictionary<int, Texture2D>();
     static readonly Dictionary<int, Texture2D> CyborgRegenAbilityCache = new Dictionary<int, Texture2D>();
     static readonly Dictionary<int, Texture2D> AntiMaterialBraceAbilityCache = new Dictionary<int, Texture2D>();
+    static readonly Dictionary<int, Texture2D> ExplosiveVestAbilityCache = new Dictionary<int, Texture2D>();
+    static readonly Dictionary<int, Texture2D> C4RemoteIconCache = new Dictionary<int, Texture2D>();
+    static readonly Dictionary<int, Texture2D> GrenadeIconCache = new Dictionary<int, Texture2D>();
     static readonly Color GunMetal = new Color(0.1f, 0.1f, 0.11f, 1f);
     static readonly Color HammerWood = new Color(0.34f, 0.24f, 0.15f, 1f);
     static readonly Color HammerMetal = new Color(0.58f, 0.58f, 0.6f, 1f);
     static readonly Color BlueprintBlue = new Color(0.08f, 0.22f, 0.68f, 1f);
+    static readonly Color GrenadeGray = new Color(0.42f, 0.44f, 0.46f, 1f);
     static readonly Color BootBrown = new Color(0.28f, 0.18f, 0.12f, 1f);
     static readonly Color WingGray = new Color(0.42f, 0.42f, 0.44f, 1f);
     static readonly Color ScopeRed = new Color(0.92f, 0.12f, 0.1f, 1f);
@@ -68,6 +72,9 @@ public static class HotbarIconDrawer
             case CardHotbarTool.AntiMaterialRifle:
                 RasterAntiMaterialRifleIcon(texture, alpha);
                 break;
+            case CardHotbarTool.C4Charge:
+                RasterC4ChargeIcon(texture, alpha);
+                break;
             case CardHotbarTool.LaserSword:
                 RasterLaserSwordIcon(texture, alpha);
                 break;
@@ -77,10 +84,52 @@ public static class HotbarIconDrawer
             case CardHotbarTool.Blueprint:
                 RasterBlueprintIcon(texture, alpha);
                 break;
+            case CardHotbarTool.Grenade:
+                RasterFragGrenadeIcon(texture, alpha);
+                break;
         }
 
         texture.Apply();
         ToolIconCache[key] = texture;
+        return texture;
+    }
+
+    public static Texture2D GetC4RemoteIconTexture(bool dimmed = false)
+    {
+        int key = dimmed ? 1 : 0;
+        if (C4RemoteIconCache.TryGetValue(key, out Texture2D cached))
+        {
+            return cached;
+        }
+
+        var texture = CreateIconTexture();
+        RasterC4RemoteIcon(texture, dimmed ? 0.55f : 1f);
+        texture.Apply();
+        C4RemoteIconCache[key] = texture;
+        return texture;
+    }
+
+    public static Texture2D GetGrenadeIconTexture(GrenadeType grenadeType, bool dimmed = false)
+    {
+        int key = (((int)grenadeType + 1) << 1) | (dimmed ? 1 : 0);
+        if (GrenadeIconCache.TryGetValue(key, out Texture2D cached))
+        {
+            return cached;
+        }
+
+        var texture = CreateIconTexture();
+        switch (grenadeType)
+        {
+            case GrenadeType.Frag:
+                RasterFragGrenadeIcon(texture, dimmed ? 0.55f : 1f);
+                break;
+            case GrenadeType.Flashbang:
+                RasterFlashbangIcon(texture, dimmed ? 0.55f : 1f);
+                break;
+        }
+
+        texture.Apply();
+        GrenadeIconCache[key] = texture;
         return texture;
     }
 
@@ -186,6 +235,21 @@ public static class HotbarIconDrawer
         RasterAntiMaterialBraceIcon(texture, dimmed ? 0.55f : 1f);
         texture.Apply();
         AntiMaterialBraceAbilityCache[key] = texture;
+        return texture;
+    }
+
+    public static Texture2D GetExplosiveVestAbilityIconTexture(bool dimmed = false)
+    {
+        int key = dimmed ? 1 : 0;
+        if (ExplosiveVestAbilityCache.TryGetValue(key, out Texture2D cached))
+        {
+            return cached;
+        }
+
+        var texture = CreateIconTexture();
+        RasterExplosiveVestIcon(texture, dimmed ? 0.55f : 1f);
+        texture.Apply();
+        ExplosiveVestAbilityCache[key] = texture;
         return texture;
     }
 
@@ -323,6 +387,24 @@ public static class HotbarIconDrawer
         RasterBox(texture, 0.36f, 0.5f, 0.22f, 0.04f, body);
     }
 
+    static void RasterC4ChargeIcon(Texture2D texture, float alpha)
+    {
+        Color32 body = ToColor32(WithAlpha(GunMetal, alpha));
+        Color32 strap = ToColor32(WithAlpha(HammerMetal, alpha));
+        RasterBox(texture, 0.22f, 0.3f, 0.56f, 0.42f, body);
+        RasterBox(texture, 0.18f, 0.44f, 0.64f, 0.08f, strap);
+        RasterBox(texture, 0.28f, 0.24f, 0.16f, 0.12f, ToColor32(WithAlpha(ScopeRed, alpha)));
+    }
+
+    static void RasterC4RemoteIcon(Texture2D texture, float alpha)
+    {
+        Color32 body = ToColor32(WithAlpha(GunMetal, alpha));
+        Color32 button = ToColor32(WithAlpha(ScopeRed, alpha));
+        RasterBox(texture, 0.34f, 0.24f, 0.32f, 0.52f, body);
+        RasterBox(texture, 0.42f, 0.34f, 0.16f, 0.16f, button);
+        RasterBox(texture, 0.42f, 0.6f, 0.16f, 0.06f, ToColor32(WithAlpha(HammerMetal, alpha)));
+    }
+
     static void RasterHammerIcon(Texture2D texture, float alpha)
     {
         RasterBox(texture, 0.44f, 0.34f, 0.12f, 0.5f, ToColor32(WithAlpha(HammerWood, alpha)));
@@ -336,6 +418,23 @@ public static class HotbarIconDrawer
         RasterBox(texture, 0.58f, 0.22f, 0.12f, 0.12f, ToColor32(WithAlpha(Color.white, alpha * 0.35f)));
         RasterBox(texture, 0.24f, 0.38f, 0.34f, 0.04f, ToColor32(WithAlpha(Color.white, alpha * 0.45f)));
         RasterBox(texture, 0.24f, 0.48f, 0.28f, 0.04f, ToColor32(WithAlpha(Color.white, alpha * 0.45f)));
+    }
+
+    static void RasterFragGrenadeIcon(Texture2D texture, float alpha)
+    {
+        Color32 body = ToColor32(WithAlpha(GrenadeGray, alpha));
+        Color32 pin = ToColor32(WithAlpha(HammerMetal, alpha));
+        RasterBox(texture, 0.34f, 0.3f, 0.32f, 0.32f, body);
+        RasterBox(texture, 0.56f, 0.54f, 0.1f, 0.14f, pin);
+    }
+
+    static void RasterFlashbangIcon(Texture2D texture, float alpha)
+    {
+        Color32 body = ToColor32(WithAlpha(new Color(0.34f, 0.35f, 0.36f, 1f), alpha));
+        Color32 band = ToColor32(WithAlpha(new Color(0.48f, 0.49f, 0.5f, 1f), alpha));
+        RasterBox(texture, 0.34f, 0.3f, 0.32f, 0.32f, body);
+        RasterBox(texture, 0.34f, 0.44f, 0.32f, 0.06f, band);
+        RasterBox(texture, 0.56f, 0.54f, 0.1f, 0.14f, ToColor32(WithAlpha(HammerMetal, alpha)));
     }
 
     static void RasterBootWithWingsIcon(Texture2D texture, float alpha)
@@ -379,6 +478,55 @@ public static class HotbarIconDrawer
         RasterBox(texture, 0.34f, 0.18f, 0.08f, 0.52f, ink);
         RasterBox(texture, 0.58f, 0.18f, 0.08f, 0.52f, ink);
         RasterBox(texture, 0.24f, 0.42f, 0.52f, 0.08f, metal);
+    }
+
+    static void RasterExplosiveVestIcon(Texture2D texture, float alpha)
+    {
+        Color32 strap = ToColor32(WithAlpha(HammerMetal, alpha));
+        Color32 pocket = ToColor32(WithAlpha(GunMetal, alpha));
+        Color32 button = ToColor32(WithAlpha(ScopeRed, alpha));
+        RasterRing(texture, 0.5f, 0.5f, 0.4f, 0.3f, strap);
+        RasterRing(texture, 0.5f, 0.5f, 0.3f, 0.24f, strap);
+
+        const int pocketCount = 8;
+        for (int i = 0; i < pocketCount; i++)
+        {
+            float angle = (i / (float)pocketCount) * Mathf.PI * 2f;
+            float centerX = 0.5f + (Mathf.Cos(angle) * 0.33f);
+            float centerY = 0.5f + (Mathf.Sin(angle) * 0.28f);
+            RasterBox(texture, centerX - 0.05f, centerY - 0.04f, 0.1f, 0.08f, pocket);
+            RasterBox(texture, centerX - 0.02f, centerY + 0.01f, 0.04f, 0.03f, button);
+        }
+    }
+
+    static void RasterRing(Texture2D texture, float centerX, float centerY, float outerRadius,
+        float innerRadius, Color32 color)
+    {
+        int size = texture.width;
+        float px = centerX * size;
+        float py = (1f - centerY) * size;
+        float outer = outerRadius * size;
+        float inner = innerRadius * size;
+        float outerSq = outer * outer;
+        float innerSq = inner * inner;
+        int xMin = Mathf.Clamp(Mathf.FloorToInt(px - outer), 0, size - 1);
+        int xMax = Mathf.Clamp(Mathf.CeilToInt(px + outer), 0, size - 1);
+        int yMin = Mathf.Clamp(Mathf.FloorToInt(py - outer), 0, size - 1);
+        int yMax = Mathf.Clamp(Mathf.CeilToInt(py + outer), 0, size - 1);
+
+        for (int y = yMin; y <= yMax; y++)
+        {
+            float dy = y - py;
+            for (int x = xMin; x <= xMax; x++)
+            {
+                float dx = x - px;
+                float distSq = (dx * dx) + (dy * dy);
+                if (distSq <= outerSq && distSq >= innerSq)
+                {
+                    texture.SetPixel(x, y, color);
+                }
+            }
+        }
     }
 
     static void RasterCyborgRegenIcon(Texture2D texture, float alpha)

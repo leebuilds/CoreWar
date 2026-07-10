@@ -120,6 +120,7 @@ and restored every launch.
 - Mouse to look (first-person camera)
 - Space to jump
 - Mouse wheel cycles equippable hotbar slots; `1`, `2`, `F`, and `H` select slots directly
+- **Q** tap equips the grenade slot; **Q** hold opens the grenade radial wheel
 - **E** — class ability (not equippable via scroll)
 - **Esc** — pause menu (reloads, cooldowns, and ability timers keep running; player input blocked until pause closes; layered submenus for Settings / Dummy Stats / exit confirm; back restores main pause); **Exit Match** asks for confirmation; respawn is locked during prep
 - **Exit Match** — fully ends the match and returns to the main menu
@@ -142,21 +143,55 @@ Interactive overlays use nested canvas sort orders so buttons receive clicks abo
 
 ### Hotbar
 
-Five on-screen slots in three groups (ability, weapons, tools) in the
+Six on-screen slots in four groups (ability, weapons, grenade, tools) in the
 **lower-left** corner at **~200% scale** (crosshair ~**250%**), with procedural
 icons, thin black slot borders, and key labels in each slot corner. While
 holding a firearm, a small white ammo panel with a thin black border appears
 just above the row (never overlapping slots) showing `reserve / mag` (left =
 reserve, right = magazine).
 
+Layout: **`E` · `1` `2` · `Q` · `F` `H`**
+
 | Key | Slot | Action |
 |-----|------|--------|
 | `E` | Ability | Class ability (cooldown overlay; not equippable via scroll) |
 | `1` | Primary | Class primary (AR, Sniper, Hunting Rifle, Scoped AR, LMG, …) |
-| `2` | Secondary | Pistol |
+| `2` | Secondary | Pistol (or class secondary) |
+| `Q` | Grenade | Tap to equip grenade slot; hold to open grenade wheel |
 | `F` | Build | Enables build mode while selected |
 | `H` | Hammer | Left click swings and destroys one owned build piece |
 | `R` | — | Reload the held firearm (blocked during draw/reload) |
+
+**Grenades**
+
+| Input | Action |
+|-------|--------|
+| **Q tap** | Equip grenade slot (last selected type) |
+| **Q hold** + drag | Radial wheel — frag or flashbang (even sectors per type count) |
+| **Left click** | Throw immediately (**5 s** fuse) |
+| **Right click** | Prime in hand (**5 s** fuse); left click throws with remaining fuse |
+
+- **0.5 s** draw after equipping grenade slot before prime/throw
+- **3 s** cooldown after a grenade leaves your hand before another can be pulled out
+- While **primed** in hand: hotbar, **Q**, and grenade wheel are blocked
+- Build and grenade wheels are mutually exclusive; either wheel blocks other input and hides the crosshair
+
+**Frag grenade**
+
+- Thrown at **30 m/s** with **9.81 m/s²** gravity (rigidbody physics, high ground friction, low roll)
+- **5 s** fuse; **70** damage at **0 m** → **15** at **8 m** (line of sight)
+- Gray smoke **0.5 s**; gun-style black blindness (not fiery explosion blindness)
+
+**Flashbang**
+
+- Same throw physics and **5 s** fuse; **no damage**
+- **150°** view cone, **30 m** range, line of sight
+- White screen: **0–4 s** full white within **15 m**, then **4 s** fade (peak alpha **100%** near → **20%** at max range)
+- Second flash while blind keeps the **longer** total duration without restarting the animation
+- White blindness is **visual only** — does not block reload, hotbar, or other input
+
+**Blindness overlay order (back → front):** white (flashbang) → black → fire → red.
+Black gun/explosion blindness always renders above white and **does** block input.
 
 **Tier 1 kits**
 
@@ -175,6 +210,7 @@ reserve, right = magazine).
 | Skirmisher (`infantry_3`) | AR (full auto) | Machine pistol (semi-auto) | Build · Hammer |
 | Heavy (`heavy_1`) | LMG (full auto) | Pistol | Build · Hammer |
 | Cyborg (`heavy_2`) | Laser LMG (overheating beam) | Laser sword | Build · Hammer |
+| Kamikaze (`demolition_1`) | SMG (full auto) | C4 charge + remote | Build · Hammer |
 
 **E abilities**
 
@@ -188,6 +224,7 @@ reserve, right = magazine).
 | Skirmisher | Dash — **8 m** over **0.2 s** with full-screen blur | 8 s |
 | Heavy | Shield — **120** shield HP, decays **12/s**; blue flash on health bar | 30 s after break |
 | Cyborg | Regen boost — **20% HP/s** for **6 s** | 35 s |
+| Kamikaze | Explosive vest — hold **E** for **5 s** within **1 m** of a teammate, enemy, or dummy (self if alone); wearer takes **5%** less body-shot damage; on death detonates (**130** at 0 m → **10** at 10 m, **8 m** build break) | 120 s |
 
 **Ammo (per weapon, separate pools)**
 
@@ -200,6 +237,14 @@ reserve, right = magazine).
 | Anti-material rifle | 40 / 1 | **8 s** unbraced · **6 s** braced (single round) |
 | Machine pistol | 150 / 18 | 1.2 s full mag |
 | LMG | 200 / 55 | 4.5 s full mag |
+| SMG | 150 / 25 | 1.275 s full mag |
+| C4 (Kamikaze) | **0 / 1** charge | — (no reload; **50 s** recharge when empty) |
+
+When a weapon runs completely dry (magazine and reserve both **0** for that weapon),
+reserve refills to its starting maximum after **30 s** without loading the magazine —
+press **R** to load rounds into the gun. Pistol-family and rifle-family weapons share
+reserve pools but recharge independently per weapon when that weapon's pool is empty.
+C4 recharges after **50 s** when spent and **automatically** restores the ready charge (no reload key).
 
 Reload blocks shooting, hotbar swap, and E ability (sniper and hunting rifle
 fully locked through reload). Gun dips during reload; sniper per-round reload adds
@@ -230,6 +275,21 @@ walls, and **cannot damage the shooter**.
 
 **Hammer:** destroys the first player-built object hit within **1.5 voxels** of
 any part of the player's body (measured from the capsule surface).
+
+**Kamikaze C4:** secondary slot pulls out C4 in **0.8 s** (held model hidden when out of
+charges). Left click throws one charge at **10 m/s** with **8 m/s²** downward fall
+acceleration; it sticks flat to surfaces or players. Throwing blocks reload, slot
+switching, and other weapon actions for **1 s** but you can still move and look.
+Keeping the secondary selected after the charge has armed (**2 s** attached) pulls a
+remote in **0.5 s**; pressing it queues a **1 s** detonation. The blast breaks player builds within **8 m** and
+deals player/dummy damage linearly from **130 at 0 m** to **5 at 10 m**. A C4 blast also
+detonates equipped explosive vests within **10 m**. Shot damage treats C4 as an entity:
+only **body-shot** damage counts, and **30** accumulated damage detonates the charge
+(headshots ignored). Uses the same
+fiery explosion blindness as anti-material rounds (orange fireball, black follow-up, input block).
+C4 detonates when shot, attaches to players/dummies who touch it while it is falling, and
+drops if the attached player or dummy is eliminated before detonation. The thrower cannot
+stick a charge to themselves for **1 s** after throwing.
 
 **Build:** full build-mode toolset (see below).
 
@@ -276,8 +336,12 @@ and accuracy penalties per hit.
 | LMG | 800 m/s | 30 | 60 |
 | Cyborg laser | Hitscan beam | 10 | 15 |
 
+**Explosions (anti-material, C4, future):** shared fiery blindness — **2×** damage-based
+duration, orange/red fireball overlay inside **4 m**, black follow-up, input blocked while
+blind; **7 s** max total blindness.
+
 **Anti-material explosion:** **10 m** radius, **10–100** exponential damage; **4.5 m** build
-destruction; **2 s** stick fuse; fiery blindness overlay on detonation.
+destruction; **2 s** stick fuse.
 
 **Damage formula:** `maxDamage × Lerp(0.5, 1.0, impactSpeed / muzzleSpeed)` —
 50% of max at 0 m/s, 100% at muzzle velocity.
@@ -321,7 +385,7 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/UI/RespawnClassPicker.cs` — respawn class selection
 - `Assets/Scripts/UI/ShootingRangeCharacterPicker.cs` — owned-card collection overlay for range character swaps
 - `Assets/Scripts/UI/ShootingRangeDummyStatsPanel.cs` — logarithmic dummy HP slider + moving dummies toggle
-- `Assets/Scripts/UI/PlayerBulletHitFlash.cs` — full-screen red/black blindness on player bullet hits
+- `Assets/Scripts/UI/PlayerBulletHitFlash.cs` — full-screen blindness (white flashbang, black gun hits, fire, red fade); `BlocksGameplayInput` vs visual-only white
 - `Assets/Scripts/UI/PlayerDamageDebugPanel.cs` — pause-menu test damage slider (debug blindness tuning)
 - `Assets/Scripts/UI/DecksCollectionView.cs` — shared owned-card scroll builder
 - `Assets/Scripts/UI/CardTileView.cs` — collection card tiles (compact + deck-row sizing), spawn selection visuals
@@ -337,7 +401,14 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid of white voxels (32×32 standard; 48×680 shooting range), grippy floor + slippery wall physics materials, lighting
 - `Assets/Scripts/ShootingRange/` — merged terrain + firing-line fence, spread dummies (optional patrol movement), hit zones, session state (bullets, reset)
 - `Assets/Scripts/VoxelMaterialUtility.cs` — solid-color materials for range props and hit flashes
-- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, ammo/reload, all class weapons/build/hammer, sniper/hunting rifle/anti-material/scoped AR ADS, scope sway, E abilities, movement slows, pause
+- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, ammo/reload, all class weapons/build/hammer/grenades, sniper/hunting rifle/anti-material/scoped AR ADS, scope sway, E abilities, movement slows, pause
+- `Assets/Scripts/GrenadeType.cs` — frag and flashbang enum
+- `Assets/Scripts/ThrownGrenadeProjectile.cs` — shared grenade rigidbody throw physics
+- `Assets/Scripts/FragGrenadeProjectile.cs` / `FlashbangGrenadeProjectile.cs` — type-specific detonation
+- `Assets/Scripts/GrenadeBlastUtility.cs` — frag damage, LOS, gun-style blindness
+- `Assets/Scripts/FlashbangBlindUtility.cs` — flashbang cone, range, white-blind duration/alpha
+- `Assets/Scripts/FragGrenadeSmokeEffect.cs` / `FlashbangBurstEffect.cs` — grenade VFX
+- `Assets/Scripts/ExplosionBlastUtility.cs` — shared explosion damage, fiery blindness, build break, VFX
 - `Assets/Scripts/AntiMaterialProjectile.cs` — sticky explosive anti-material round
 - `Assets/Scripts/AntiMaterialExplosionEffect.cs` — detonation fireball VFX
 - `Assets/Scripts/HunterMarkSystem.cs` — Hunter mark target scan and apply/clear
@@ -361,6 +432,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/First_Person_Shooter_Game_Design_v2.md)
+- [Grenades, flashbangs, and blindness layering session recap](docs/chats/2026-07-09-grenades-flashbang-and-blindness-session.md)
 - [Anti-Material sniper, scope sway, Cyborg, and Infantry ability session recap](docs/chats/2026-07-09-anti-material-sway-and-infantry-session.md)
 - [Hunter, Ranger, Skirmisher, Heavy, and shooting range polish session recap](docs/chats/2026-07-09-hunter-ranger-skirmisher-heavy-session.md)
 - [Unified game UI, HUD polish, and combat tuning session recap](docs/chats/2026-07-08-unified-game-ui-hud-and-combat-tuning-session.md)

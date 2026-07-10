@@ -250,6 +250,12 @@ public static class ProfileSession
             profile.profileDataVersion = 7;
         }
 
+        if (profile.profileDataVersion < 8)
+        {
+            MergeOwnedCards(profile, new[] { "demolition_1" });
+            profile.profileDataVersion = 8;
+        }
+
         SanitizeLoadout(profile);
     }
 

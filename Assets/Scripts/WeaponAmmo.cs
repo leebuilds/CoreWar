@@ -119,4 +119,10 @@ public static class WeaponAmmoDefaults
     public const int AntiMaterialMaxTotal = 45;
     public const int AntiMaterialStartReserve = 40;
     public const float AntiMaterialReloadSeconds = 8f;
+
+    public const int C4MagSize = 1;
+    public const int C4MaxTotal = 1;
+
+    public const float AmmoRechargeSeconds = 30f;
+    public const float C4RechargeSeconds = 50f;
 }

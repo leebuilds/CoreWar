@@ -29,14 +29,45 @@ public class PlayerBulletHitFlash : MonoBehaviour
     Image _fireImage;
     Image _redImage;
     Image _blackImage;
+    Image _whiteImage;
     float _remaining;
     float _totalDuration;
     bool _skipFadeIn;
     float _fireRemaining;
     float _fireTotal;
     float _fireQueuedBlackRemaining;
+    float _flashbangRemaining;
+    float _flashbangTotal;
+    float _flashbangCompleteWhiteSeconds;
+    float _flashbangFadeSeconds;
+    float _flashbangPeakAlpha;
 
-    public bool IsBlind => _fireRemaining > 0f || _remaining > 0f || _fireQueuedBlackRemaining > 0f;
+    public bool IsBlind =>
+        _fireRemaining > 0f ||
+        _remaining > 0f ||
+        _fireQueuedBlackRemaining > 0f ||
+        _flashbangRemaining > 0f;
+
+    public bool BlocksGameplayInput =>
+        _fireRemaining > 0f ||
+        _remaining > 0f ||
+        _fireQueuedBlackRemaining > 0f;
+
+    public void Clear()
+    {
+        _remaining = 0f;
+        _totalDuration = 0f;
+        _skipFadeIn = false;
+        _fireRemaining = 0f;
+        _fireTotal = 0f;
+        _fireQueuedBlackRemaining = 0f;
+        _flashbangRemaining = 0f;
+        _flashbangTotal = 0f;
+        _flashbangCompleteWhiteSeconds = 0f;
+        _flashbangFadeSeconds = 0f;
+        _flashbangPeakAlpha = 0f;
+        SetVisible(false);
+    }
 
     public static PlayerBulletHitFlash Create()
     {
@@ -46,7 +77,7 @@ public class PlayerBulletHitFlash : MonoBehaviour
         }
 
         GameUICanvas.EnsureExists();
-        var layer = GameUICanvas.CreateLayer("Hit Flash");
+        var layer = GameUICanvas.CreateInteractionLayer("Hit Flash", 300);
         var hostRect = GameUICanvas.CreateScreenHost(layer, "Player Bullet Hit Flash");
         return hostRect.gameObject.AddComponent<PlayerBulletHitFlash>();
     }
@@ -67,12 +98,14 @@ public class PlayerBulletHitFlash : MonoBehaviour
 
     void Build()
     {
+        _whiteImage = CreateFlashImage("White Flash", new Color(1f, 0.98f, 0.94f, 0f));
         _blackImage = CreateFlashImage("Black Flash", new Color(Blackout.r, Blackout.g, Blackout.b, 0f));
         _fireImage = CreateFlashImage("Fire Flash", new Color(FireOrange.r, FireOrange.g, FireOrange.b, 0f));
         _redImage = CreateFlashImage("Red Flash", new Color(RedFlash.r, RedFlash.g, RedFlash.b, 0f));
         _fireImage.raycastTarget = false;
         _redImage.raycastTarget = false;
         _blackImage.raycastTarget = false;
+        _whiteImage.raycastTarget = false;
         SetVisible(false);
     }
 
@@ -90,83 +123,149 @@ public class PlayerBulletHitFlash : MonoBehaviour
 
     void Update()
     {
-        if (_fireRemaining > 0f)
+        bool flashbangActive = TickFlashbangPhase();
+        bool fireActive = TickFirePhase();
+        bool blackActive = TickBlackPhase();
+
+        if (!flashbangActive && !fireActive && !blackActive)
         {
-            TickFirePhase();
+            SetVisible(false);
             return;
         }
 
-        if (_remaining > 0f)
-        {
-            TickBlackPhase();
-            return;
-        }
-
-        SetVisible(false);
+        RenderComposite(flashbangActive, fireActive, blackActive);
     }
 
-    void TickFirePhase()
+    bool TickFlashbangPhase()
     {
+        if (_flashbangRemaining <= 0f)
+        {
+            return false;
+        }
+
+        _flashbangRemaining = Mathf.Max(0f, _flashbangRemaining - Time.deltaTime);
+        if (_flashbangRemaining <= 0f)
+        {
+            _flashbangTotal = 0f;
+            _flashbangCompleteWhiteSeconds = 0f;
+            _flashbangFadeSeconds = 0f;
+            _flashbangPeakAlpha = 0f;
+            return false;
+        }
+
+        return true;
+    }
+
+    float CurrentFlashbangAlpha()
+    {
+        if (_flashbangRemaining <= 0f)
+        {
+            return 0f;
+        }
+
+        float elapsed = _flashbangTotal - _flashbangRemaining;
+        if (elapsed < _flashbangCompleteWhiteSeconds)
+        {
+            return 1f;
+        }
+
+        float fadeElapsed = elapsed - _flashbangCompleteWhiteSeconds;
+        float fadeT = _flashbangFadeSeconds > 0f
+            ? Mathf.Clamp01(fadeElapsed / _flashbangFadeSeconds)
+            : 1f;
+        return Mathf.Clamp01(_flashbangPeakAlpha * (1f - fadeT));
+    }
+
+    void RenderComposite(bool flashbangActive, bool fireActive, bool blackActive)
+    {
+        if (transform.parent != null)
+        {
+            GameUICanvas.BringLayerToFront(transform.parent as RectTransform);
+        }
+
+        float whiteAlpha = flashbangActive ? CurrentFlashbangAlpha() : 0f;
+        float blackAlpha = 0f;
+        float redAlpha = 0f;
+        float fireAlpha = 0f;
+        Color fireColor = FireOrange;
+
+        if (fireActive)
+        {
+            float elapsed = Mathf.Max(0f, _fireTotal - _fireRemaining);
+            float flicker = Mathf.Sin(elapsed * 34f) * 0.05f;
+            float colorPulse = 0.5f + (Mathf.Sin(elapsed * 19f) * 0.5f);
+            fireColor = Color.Lerp(FireOrange, FireRed, colorPulse);
+            fireAlpha = Mathf.Clamp01(FireOverlayAlpha + flicker);
+            blackAlpha = FireBlackAlpha;
+        }
+        else if (blackActive)
+        {
+            ComputeBlindnessAlphas(
+                _totalDuration,
+                _remaining,
+                _skipFadeIn,
+                out blackAlpha,
+                out redAlpha);
+        }
+
+        SetVisible(whiteAlpha > 0f || blackAlpha > 0f || redAlpha > 0f || fireAlpha > 0f);
+
+        _whiteImage.gameObject.SetActive(whiteAlpha > 0f);
+        _whiteImage.color = new Color(1f, 1f, 0.98f, whiteAlpha);
+
+        _blackImage.gameObject.SetActive(blackAlpha > 0f);
+        _blackImage.color = new Color(Blackout.r, Blackout.g, Blackout.b, blackAlpha);
+
+        _fireImage.gameObject.SetActive(fireAlpha > 0f);
+        _fireImage.color = new Color(fireColor.r, fireColor.g, fireColor.b, fireAlpha);
+
+        _redImage.gameObject.SetActive(redAlpha > 0f);
+        _redImage.color = new Color(RedFlash.r, RedFlash.g, RedFlash.b, redAlpha);
+
+        _whiteImage.transform.SetSiblingIndex(0);
+        _blackImage.transform.SetSiblingIndex(1);
+        _fireImage.transform.SetSiblingIndex(2);
+        _redImage.transform.SetAsLastSibling();
+    }
+
+    bool TickFirePhase()
+    {
+        if (_fireRemaining <= 0f)
+        {
+            return false;
+        }
+
         _fireRemaining = Mathf.Max(0f, _fireRemaining - Time.deltaTime);
-        float elapsed = Mathf.Max(0f, _fireTotal - _fireRemaining);
-        float flicker = Mathf.Sin(elapsed * 34f) * 0.05f;
-        float colorPulse = 0.5f + (Mathf.Sin(elapsed * 19f) * 0.5f);
-        Color fireColor = Color.Lerp(FireOrange, FireRed, colorPulse);
-        float alpha = Mathf.Clamp01(FireOverlayAlpha + flicker);
-
-        SetVisible(true);
-        _fireImage.gameObject.SetActive(true);
-        _blackImage.color = new Color(Blackout.r, Blackout.g, Blackout.b, FireBlackAlpha);
-        _fireImage.color = new Color(fireColor.r, fireColor.g, fireColor.b, alpha);
-        _redImage.color = new Color(RedFlash.r, RedFlash.g, RedFlash.b, 0f);
-
         if (_fireRemaining > 0f)
         {
-            return;
+            return true;
         }
 
         _fireTotal = 0f;
-        _fireImage.gameObject.SetActive(false);
-        _fireImage.color = new Color(FireOrange.r, FireOrange.g, FireOrange.b, 0f);
-
         if (_fireQueuedBlackRemaining > 0f)
         {
             BeginBlackPhase(_fireQueuedBlackRemaining, skipFadeIn: true);
             _fireQueuedBlackRemaining = 0f;
-            RenderBlackPhase();
         }
-        else
-        {
-            SetVisible(false);
-        }
+
+        return false;
     }
 
-    void TickBlackPhase()
+    bool TickBlackPhase()
     {
+        if (_remaining <= 0f)
+        {
+            return false;
+        }
+
         _remaining = Mathf.Max(0f, _remaining - Time.deltaTime);
         if (_remaining <= 0f)
         {
             _skipFadeIn = false;
-            SetVisible(false);
-            return;
+            return false;
         }
 
-        RenderBlackPhase();
-    }
-
-    void RenderBlackPhase()
-    {
-        ComputeBlindnessAlphas(
-            _totalDuration,
-            _remaining,
-            _skipFadeIn,
-            out float blackAlpha,
-            out float redAlpha);
-
-        SetVisible(true);
-        _fireImage.gameObject.SetActive(false);
-        _redImage.color = new Color(RedFlash.r, RedFlash.g, RedFlash.b, redAlpha);
-        _blackImage.color = new Color(Blackout.r, Blackout.g, Blackout.b, blackAlpha);
+        return true;
     }
 
     static void ComputeBlindnessAlphas(float totalDuration, float remaining, bool skipFadeIn,
@@ -229,6 +328,45 @@ public class PlayerBulletHitFlash : MonoBehaviour
         {
             _blackImage.gameObject.SetActive(visible);
         }
+
+        if (_whiteImage != null)
+        {
+            _whiteImage.gameObject.SetActive(visible && _flashbangRemaining > 0f);
+        }
+    }
+
+    public void BlindFromFlashbang(float completeWhiteSeconds, float fadeSeconds, float peakAlpha)
+    {
+        completeWhiteSeconds = Mathf.Max(0f, completeWhiteSeconds);
+        fadeSeconds = Mathf.Max(0f, fadeSeconds);
+        peakAlpha = Mathf.Clamp01(peakAlpha);
+        if (fadeSeconds <= 0f || peakAlpha <= 0f)
+        {
+            return;
+        }
+
+        float totalDuration = completeWhiteSeconds + fadeSeconds;
+        if (_flashbangRemaining > 0f)
+        {
+            if (totalDuration <= _flashbangTotal)
+            {
+                return;
+            }
+
+            float elapsed = _flashbangTotal - _flashbangRemaining;
+            _flashbangCompleteWhiteSeconds = completeWhiteSeconds;
+            _flashbangFadeSeconds = fadeSeconds;
+            _flashbangPeakAlpha = peakAlpha;
+            _flashbangTotal = totalDuration;
+            _flashbangRemaining = Mathf.Max(_flashbangRemaining, totalDuration - elapsed);
+            return;
+        }
+
+        _flashbangCompleteWhiteSeconds = completeWhiteSeconds;
+        _flashbangFadeSeconds = fadeSeconds;
+        _flashbangPeakAlpha = peakAlpha;
+        _flashbangTotal = totalDuration;
+        _flashbangRemaining = totalDuration;
     }
 
     public void Blind(float duration)

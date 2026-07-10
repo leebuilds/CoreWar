@@ -19,9 +19,11 @@ public class PlayerHealth : MonoBehaviour
     float _regenDelaySeconds = DefaultRegenDelaySeconds;
     float _abilityRegenFractionPerSecond;
     bool _maxHealthBoostActive;
+    bool _isDead;
 
     public float CurrentHealth => _currentHealth;
     public float MaxHealth => _maxHealth;
+    public bool IsAlive => !_isDead;
     public float BaseMaxHealth => _cardMaxHealth;
     public float ShieldHealth => _shieldHealth;
     public bool HasShield => _shieldHealth > 0f;
@@ -46,6 +48,7 @@ public class PlayerHealth : MonoBehaviour
 
     public void RefillHealth()
     {
+        _isDead = false;
         var card = CardCatalog.Get(GameSession.ActiveCardId);
         _cardMaxHealth = Mathf.Max(1f, card?.preview.health ?? BaselineMaxHealth);
         _maxHealthBoostActive = false;
@@ -96,7 +99,7 @@ public class PlayerHealth : MonoBehaviour
 
     void TickHealthRegeneration()
     {
-        if (_currentHealth >= _maxHealth || _maxHealth <= 0f)
+        if (_isDead || _currentHealth >= _maxHealth || _maxHealth <= 0f)
         {
             return;
         }
@@ -166,6 +169,26 @@ public class PlayerHealth : MonoBehaviour
         _currentHealth = debugMaxHealth;
     }
 
+    public void KillAndRespawn()
+    {
+        if (_isDead)
+        {
+            return;
+        }
+
+        _isDead = true;
+        _currentHealth = 0f;
+        ClearShield();
+        ClearMaxHealthBoost();
+        SetAbilityRegeneration(0f);
+
+        ThirdPersonController controller = GetComponent<ThirdPersonController>();
+        if (controller != null)
+        {
+            controller.HandlePlayerDeath();
+        }
+    }
+
     public void ApplyDamage(float damage, bool headshot, float blindnessMultiplier = 1f, bool applyBlindness = true)
     {
         float blindDuration = ApplyDamageInternal(damage, headshot, blindnessMultiplier);
@@ -182,12 +205,12 @@ public class PlayerHealth : MonoBehaviour
 
     float ApplyDamageInternal(float damage, bool headshot, float blindnessMultiplier)
     {
-        if (damage <= 0f || _maxHealth <= 0f)
+        if (_isDead || damage <= 0f || _maxHealth <= 0f)
         {
             return 0f;
         }
 
-        float healthDamage = damage;
+        float healthDamage = ExplosiveVestState.ApplyBodyDamageReduction(damage, headshot, gameObject);
         if (_shieldHealth > 0f)
         {
             float absorbed = Mathf.Min(_shieldHealth, healthDamage);
@@ -204,12 +227,19 @@ public class PlayerHealth : MonoBehaviour
         _currentHealth = Mathf.Max(0f, _currentHealth - healthDamage);
         _secondsSinceHealthDamage = 0f;
 
+        if (_currentHealth <= 0f)
+        {
+            GetComponent<ExplosiveVestState>()?.DetonateOnDeath();
+            KillAndRespawn();
+            return 0f;
+        }
+
         float blindDuration = ProjectileDamage.ComputeBlindnessDuration(healthFraction, headshot);
         return blindDuration * Mathf.Max(0f, blindnessMultiplier);
     }
 
     static bool IsBlindnessBlockingRegen()
     {
-        return PlayerBulletHitFlash.Instance != null && PlayerBulletHitFlash.Instance.IsBlind;
+        return PlayerBulletHitFlash.Instance != null && PlayerBulletHitFlash.Instance.BlocksGameplayInput;
     }
 }

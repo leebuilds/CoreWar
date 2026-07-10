@@ -114,6 +114,8 @@ public static class ShootingRangeSession
         ProjectileBullet.DestroyAll();
         AntiMaterialProjectile.DestroyAll();
         AntiMaterialExplosionEffect.DestroyAll();
+        FragGrenadeProjectile.DestroyAll();
+        FragGrenadeSmokeEffect.DestroyAll();
     }
 
     public static void ResetMap()
