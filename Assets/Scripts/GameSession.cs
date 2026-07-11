@@ -33,6 +33,42 @@ public static class GameSession
 
     static double _matchStartUtcSeconds;
 
+    public static bool HasAuthorizedGameEntry =>
+        IsMatchActive &&
+        GameSessionLifetime.Instance != null &&
+        GameSessionLifetime.Instance.matchActive;
+
+    public static void LogDiagnostics(string context)
+    {
+        var life = GameSessionLifetime.Instance;
+        Debug.Log(
+            $"[GameSession] {context} " +
+            $"IsMatchActive={IsMatchActive} " +
+            $"mode={SelectedGameModeId ?? "null"} " +
+            $"prep={IsInPrepPhase} " +
+            $"lifetime={(life == null ? "null" : $"active={life.matchActive} token={life.entryToken} mode={life.gameModeId ?? "null"}")}");
+    }
+
+    public static void RestoreFromLifetimeIfNeeded()
+    {
+        var life = GameSessionLifetime.Instance;
+        if (life == null || !life.matchActive || IsMatchActive)
+        {
+            return;
+        }
+
+        Debug.LogWarning(
+            "[GameSession] Restoring static match state from persistent GameSessionLifetime object.");
+        IsMatchActive = true;
+        SelectedGameModeId = life.gameModeId;
+        IsInPrepPhase = life.inPrepPhase;
+    }
+
+    public static void SetLocalTeam(Team team)
+    {
+        SelectedTeam = team;
+    }
+
     public static Color TeamColor(Team team)
     {
         switch (team)
@@ -101,6 +137,40 @@ public static class GameSession
         {
             MarkMatchStarted();
         }
+
+        SyncLifetime(inPrepPhase, gameModeId);
+        LogDiagnostics("BeginMatch");
+    }
+
+    static void SyncLifetime(bool inPrepPhase, string gameModeId)
+    {
+        EnsureLifetime();
+        var life = GameSessionLifetime.Instance;
+        life.matchActive = true;
+        life.inPrepPhase = inPrepPhase;
+        life.gameModeId = gameModeId;
+        life.entryToken++;
+    }
+
+    static void EnsureLifetime()
+    {
+        if (GameSessionLifetime.Instance != null)
+        {
+            return;
+        }
+
+        var go = new GameObject("GameSession Lifetime");
+        go.AddComponent<GameSessionLifetime>();
+    }
+
+    static void DestroyLifetime()
+    {
+        if (GameSessionLifetime.Instance == null)
+        {
+            return;
+        }
+
+        UnityEngine.Object.Destroy(GameSessionLifetime.Instance.gameObject);
     }
 
     public static void MarkPrepReady(string activeCardId)
@@ -190,6 +260,8 @@ public static class GameSession
         ActiveKit = null;
         _matchStartUtcSeconds = 0d;
         ShootingRangeSession.Clear();
+        DestroyLifetime();
+        LogDiagnostics("EndMatch");
     }
 
     static double GetUtcNowSeconds()

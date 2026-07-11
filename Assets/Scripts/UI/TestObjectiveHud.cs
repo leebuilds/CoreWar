@@ -121,9 +121,10 @@ public class TestObjectiveHud : MonoBehaviour
             ? "OBJECTIVE COMPLETE"
             : $"{TestMapObjectiveManager.MapName.ToUpperInvariant()}  {Mathf.FloorToInt(objective.LocalTeamProgress)}/100";
 
-        if (objective.ActiveUseDrill != null)
+        if (objective.ActiveUseDrill != null && !string.IsNullOrEmpty(objective.ActiveInteractionLabel))
         {
-            _interactionText.text = $"HOLD T {Mathf.CeilToInt(objective.ActiveUseFraction * 100f)}%";
+            _interactionText.text =
+                $"HOLD T {objective.ActiveInteractionLabel} {Mathf.CeilToInt(objective.ActiveUseFraction * 100f)}%";
         }
         else
         {

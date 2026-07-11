@@ -7,10 +7,13 @@ public class MainMenuController : MonoBehaviour
 {
     void Awake()
     {
+        BootTrace.Log("BOOT", "MainMenuController.Awake begin");
         SceneFlow.InitializeMainMenuScene();
         CreateCamera();
         MenuUiFactory.EnsureEventSystem();
+        BootTrace.Log("UI", "MainMenuController creating MenuNavigator");
         MenuNavigator.Create();
+        BootTrace.Log("BOOT", "MainMenuController.Awake complete");
     }
 
     void CreateCamera()

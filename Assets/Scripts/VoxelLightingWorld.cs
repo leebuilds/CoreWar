@@ -953,6 +953,29 @@ public class VoxelLightingWorld : MonoBehaviour
     static Material CreateBuildMaterial(string materialName, Color color)
     {
         var shader = Shader.Find("Standard");
+        BootTrace.Log(
+            "VOXELS",
+            $"CreateBuildMaterial '{materialName}' Shader.Find(Standard)={BootTrace.DescribeShaderFind("Standard")}");
+
+        if (shader == null)
+        {
+            BootTrace.LogError(
+                "VOXELS",
+                "Shader.Find(\"Standard\") returned null (stripped from build). " +
+                "Falling back so map generation can continue. " +
+                "Fix: keep Standard in GraphicsSettings > Always Included Shaders.");
+            shader = Shader.Find("Legacy Shaders/Diffuse") ?? Shader.Find("CoreWar/VoxelFaceLit");
+        }
+
+        if (shader == null)
+        {
+            BootTrace.LogError(
+                "VOXELS",
+                $"No usable shader for build material '{materialName}'. " +
+                "Standard, Legacy Shaders/Diffuse, and CoreWar/VoxelFaceLit are all missing from the build.");
+            return null;
+        }
+
         var material = new Material(shader)
         {
             name = materialName,

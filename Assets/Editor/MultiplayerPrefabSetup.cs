@@ -1,21 +1,31 @@
+using System.Collections.Generic;
 using System.IO;
 using Unity.Netcode;
 using Unity.Netcode.Components;
+using Unity.Netcode.Transports.UTP;
 using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Creates the NetworkPlayer prefab required by Netcode from the existing runtime player components.
+/// Creates the multiplayer prefabs required by Netcode for standalone and editor builds.
 /// </summary>
 [InitializeOnLoad]
 public static class MultiplayerPrefabSetup
 {
     const string ResourcesPath = "Assets/Resources";
-    const string PrefabPath = "Assets/Resources/NetworkPlayer.prefab";
+    const string PlayerPrefabPath = "Assets/Resources/NetworkPlayer.prefab";
+    const string NetworkManagerPrefabPath = "Assets/Resources/NetworkManager.prefab";
+    const string DefaultNetworkPrefabsPath = "Assets/DefaultNetworkPrefabs.asset";
 
     static MultiplayerPrefabSetup()
     {
-        EditorApplication.delayCall += EnsureNetworkPlayerPrefab;
+        EditorApplication.delayCall += EnsureMultiplayerPrefabs;
+    }
+
+    [MenuItem("CoreWar/Multiplayer/Rebuild Multiplayer Prefabs")]
+    public static void RebuildAllMultiplayerPrefabs()
+    {
+        EnsureMultiplayerPrefabs(force: true);
     }
 
     [MenuItem("CoreWar/Multiplayer/Rebuild Network Player Prefab")]
@@ -24,28 +34,39 @@ public static class MultiplayerPrefabSetup
         EnsureNetworkPlayerPrefab(force: true);
     }
 
-    static void EnsureNetworkPlayerPrefab()
+    static void EnsureMultiplayerPrefabs()
     {
-        EnsureNetworkPlayerPrefab(force: false);
+        EnsureMultiplayerPrefabs(force: false);
     }
 
-    static void EnsureNetworkPlayerPrefab(bool force)
+    static void EnsureMultiplayerPrefabs(bool force)
     {
-        if (!force && AssetDatabase.LoadAssetAtPath<GameObject>(PrefabPath) != null)
+        EnsureResourcesFolder();
+        EnsureNetworkPlayerPrefab(force);
+        EnsureNetworkManagerPrefab(force);
+    }
+
+    static void EnsureResourcesFolder()
+    {
+        if (AssetDatabase.IsValidFolder(ResourcesPath))
         {
             return;
         }
 
-        if (!AssetDatabase.IsValidFolder(ResourcesPath))
+        if (Directory.Exists(ResourcesPath))
         {
-            if (Directory.Exists(ResourcesPath))
-            {
-                AssetDatabase.ImportAsset(ResourcesPath);
-            }
-            else
-            {
-                AssetDatabase.CreateFolder("Assets", "Resources");
-            }
+            AssetDatabase.ImportAsset(ResourcesPath);
+            return;
+        }
+
+        AssetDatabase.CreateFolder("Assets", "Resources");
+    }
+
+    static void EnsureNetworkPlayerPrefab(bool force)
+    {
+        if (!force && AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath) != null)
+        {
+            return;
         }
 
         var root = new GameObject("NetworkPlayer");
@@ -73,9 +94,60 @@ public static class MultiplayerPrefabSetup
             controller.hideLocalCharacterVisual = false;
             root.AddComponent<NetworkPlayerAvatar>();
 
-            PrefabUtility.SaveAsPrefabAsset(root, PrefabPath);
+            PrefabUtility.SaveAsPrefabAsset(root, PlayerPrefabPath);
             AssetDatabase.SaveAssets();
-            Debug.Log($"[Multiplayer] Network player prefab ready: {PrefabPath}");
+            Debug.Log($"[Multiplayer] Network player prefab ready: {PlayerPrefabPath}");
+        }
+        finally
+        {
+            Object.DestroyImmediate(root);
+        }
+    }
+
+    static void EnsureNetworkManagerPrefab(bool force)
+    {
+        if (!force && AssetDatabase.LoadAssetAtPath<GameObject>(NetworkManagerPrefabPath) != null)
+        {
+            return;
+        }
+
+        var playerPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(PlayerPrefabPath);
+        if (playerPrefab == null)
+        {
+            Debug.LogError("[Multiplayer] Cannot build NetworkManager prefab because NetworkPlayer.prefab is missing.");
+            return;
+        }
+
+        if (playerPrefab.GetComponent<NetworkObject>() == null)
+        {
+            Debug.LogError("[Multiplayer] NetworkPlayer.prefab is missing NetworkObject.");
+            return;
+        }
+
+        var defaultPrefabs = AssetDatabase.LoadAssetAtPath<NetworkPrefabsList>(DefaultNetworkPrefabsPath);
+        var root = new GameObject("NetworkManager");
+        try
+        {
+            var transport = root.AddComponent<UnityTransport>();
+            var manager = root.AddComponent<NetworkManager>();
+            manager.NetworkConfig = new NetworkConfig
+            {
+                NetworkTransport = transport,
+                PlayerPrefab = playerPrefab,
+                EnableSceneManagement = true,
+                ConnectionApproval = true,
+                ForceSamePrefabs = true,
+                AutoSpawnPlayerPrefabClientSide = false
+            };
+
+            if (defaultPrefabs != null)
+            {
+                manager.NetworkConfig.Prefabs.NetworkPrefabsLists = new List<NetworkPrefabsList> { defaultPrefabs };
+            }
+
+            PrefabUtility.SaveAsPrefabAsset(root, NetworkManagerPrefabPath);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[Multiplayer] Network manager prefab ready: {NetworkManagerPrefabPath}");
         }
         finally
         {

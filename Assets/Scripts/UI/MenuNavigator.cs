@@ -81,11 +81,17 @@ public class MenuNavigator : MonoBehaviour
         }
 
         _bootstrapped = true;
+        BootTrace.Log("UI", "MenuNavigator.Bootstrap begin");
         MenuUiFactory.EnsureEventSystem();
         MenuSettings.EnsureLoaded();
         ApplyMenuBackground();
         ProfileSession.EnsureInitialized();
         ProfileSession.ValidateSessionOrLogout();
+        BootTrace.Log(
+            "BOOT",
+            $"ProfileSession signedIn={ProfileSession.IsSignedIn} " +
+            $"user={ProfileSession.ActiveProfile?.username ?? "null"} " +
+            $"loadoutComplete={ProfileSession.HasCompleteLoadout}");
         MenuSettings.Changed += HandleSettingsChanged;
 
         MatchmakingSession.BindRunner(this);
@@ -95,12 +101,15 @@ public class MenuNavigator : MonoBehaviour
 
         if (ProfileSession.IsSignedIn)
         {
+            BootTrace.Log("UI", "MenuNavigator -> Hub");
             ShowScreen(ScreenId.Hub, pushHistory: false);
         }
         else
         {
+            BootTrace.Log("UI", "MenuNavigator -> SignIn");
             ShowScreen(ScreenId.SignIn, pushHistory: false);
         }
+        BootTrace.Log("UI", "MenuNavigator.Bootstrap complete");
     }
 
     void OnDestroy()
@@ -447,6 +456,16 @@ public class MenuNavigator : MonoBehaviour
             return;
         }
 
+        Debug.Log($"[MenuNavigator] OnGameModeSelected mode={mode.id}");
+        BootTrace.Log("UI", $"OnGameModeSelected mode={mode.id} requiredPlayers={mode.requiredPlayers} skipPrep={mode.skipPrepPhase}");
+
+        if (mode.requiresOnlineMultiplayer)
+        {
+            BootTrace.Log("UI", $"Opening multiplayer panel for online mode={mode.id}");
+            MultiplayerSessionPanel.Create(_screenRoot.transform, mode);
+            return;
+        }
+
         if (_activeModeId == mode.id && IsInMatchFlow())
         {
             return;
@@ -510,14 +529,27 @@ public class MenuNavigator : MonoBehaviour
         _matchmakingPanel.Hide();
         StopActiveModeFx();
 
+        Debug.Log($"[MenuNavigator] HandleMatchmakingCompleted activeModeId={_activeModeId ?? "null"}");
+        BootTrace.Log("UI", $"HandleMatchmakingCompleted activeModeId={_activeModeId ?? "null"}");
+
         var mode = GameModeDefinition.Get(_activeModeId);
         if (mode == null || !mode.IsPlayable())
         {
+            Debug.LogWarning(
+                $"[MenuNavigator] Matchmaking completed but mode is not playable. mode={_activeModeId ?? "null"}");
             CleanupMatchFlow();
             return;
         }
 
         var profile = ProfileSession.ActiveProfile;
+        if (profile?.loadoutCardIds == null || profile.loadoutCardIds.Length < 2 ||
+            string.IsNullOrEmpty(profile.loadoutCardIds[0]) || string.IsNullOrEmpty(profile.loadoutCardIds[1]))
+        {
+            Debug.LogError("[MenuNavigator] Cannot start match: complete two-slot loadout is required.");
+            CleanupMatchFlow();
+            return;
+        }
+
         ProfileSession.TouchActivity();
 
         if (mode.skipPrepPhase)
@@ -530,6 +562,7 @@ public class MenuNavigator : MonoBehaviour
                 _activeModeId,
                 mode.requiredPlayers);
 
+            GameSession.LogDiagnostics("HandleMatchmakingCompleted after BeginMatch");
             MatchmakingSession.Reset();
             _activeModeId = null;
             SceneFlow.EnterGame();
@@ -544,6 +577,7 @@ public class MenuNavigator : MonoBehaviour
             _activeModeId,
             mode.requiredPlayers);
 
+        GameSession.LogDiagnostics("HandleMatchmakingCompleted after BeginMatchForPrep");
         MatchmakingSession.Reset();
         _activeModeId = null;
         SceneFlow.EnterGameForPrep();

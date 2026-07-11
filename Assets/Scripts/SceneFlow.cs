@@ -61,6 +61,7 @@ public static class SceneFlow
     /// </summary>
     public static void InitializeMainMenuScene()
     {
+        BootTrace.Log("SCENES", "InitializeMainMenuScene");
         ApplyMenuInputState();
         ResetTransientUiInfrastructure();
         MenuUiFactory.EnsureEventSystem();
@@ -72,6 +73,9 @@ public static class SceneFlow
     /// </summary>
     public static void InitializeGameScene()
     {
+        BootTrace.Log(
+            "SCENES",
+            $"InitializeGameScene prep={GameSession.IsInPrepPhase} mode={GameSession.SelectedGameModeId ?? "null"}");
         if (GameSession.IsInPrepPhase)
         {
             ApplyMenuInputState();
@@ -91,6 +95,7 @@ public static class SceneFlow
     /// </summary>
     public static void EnterMainMenu()
     {
+        BootTrace.Log("SCENES", "EnterMainMenu -> LoadScene(MainMenu)");
         ProfileSession.TouchActivity();
         GameSession.EndMatch();
         ApplyMenuInputState();
@@ -102,8 +107,21 @@ public static class SceneFlow
     /// </summary>
     public static void EnterGame()
     {
+        BootTrace.Log("SCENES", "EnterGame begin");
+        GameSession.LogDiagnostics("EnterGame (before guard)");
+        if (!GameSession.HasAuthorizedGameEntry)
+        {
+            BootTrace.LogError(
+                "SCENES",
+                "EnterGame blocked: no authorized match entry. BeginMatch must run before loading Game.");
+            return;
+        }
+
         ProfileSession.TouchActivity();
         ApplyGameInputState();
+        GameSession.LogDiagnostics("EnterGame (before LoadScene)");
+        LogCanLoadGameScene("EnterGame");
+        BootTrace.Log("SCENES", "EnterGame -> LoadScene(Game)");
         SceneManager.LoadScene(GameSceneName, LoadSceneMode.Single);
     }
 
@@ -112,8 +130,69 @@ public static class SceneFlow
     /// </summary>
     public static void EnterGameForPrep()
     {
+        BootTrace.Log("SCENES", "EnterGameForPrep begin");
+        GameSession.LogDiagnostics("EnterGameForPrep (before guard)");
+        if (!GameSession.HasAuthorizedGameEntry)
+        {
+            BootTrace.LogError(
+                "SCENES",
+                "EnterGameForPrep blocked: no authorized match entry. BeginMatchForPrep must run before loading Game.");
+            return;
+        }
+
         ProfileSession.TouchActivity();
         ApplyMenuInputState();
+        GameSession.LogDiagnostics("EnterGameForPrep (before LoadScene)");
+        LogCanLoadGameScene("EnterGameForPrep");
+        BootTrace.Log("SCENES", "EnterGameForPrep -> LoadScene(Game)");
         SceneManager.LoadScene(GameSceneName, LoadSceneMode.Single);
+    }
+
+    static void LogCanLoadGameScene(string context)
+    {
+        bool canLoad = Application.CanStreamedLevelBeLoaded(GameSceneName);
+        BootTrace.Log("SCENES", $"{context} CanStreamedLevelBeLoaded('{GameSceneName}') = {canLoad}");
+        if (!canLoad)
+        {
+            BootTrace.LogError(
+                "SCENES",
+                $"Scene '{GameSceneName}' is not loadable in this build. " +
+                "Check Build Profile scene list (MainMenu=0, Game=1).");
+        }
+    }
+
+    /// <summary>
+    /// Returns to the main menu when the Game scene loads without an active match
+    /// (e.g. opening Game.unity directly in the editor).
+    /// </summary>
+    public static bool TryBlockUnauthorizedGameScene()
+    {
+        if (!IsGameActive)
+        {
+            return false;
+        }
+
+        GameSession.RestoreFromLifetimeIfNeeded();
+        GameSession.LogDiagnostics("TryBlockUnauthorizedGameScene");
+
+        bool networkActive = MultiplayerSessionManager.IsNetworkSessionActive;
+        if (GameSession.HasAuthorizedGameEntry)
+        {
+            BootTrace.Log(
+                "SCENES",
+                "Game entry ACCEPTED: menu-started match. " +
+                $"mode={GameSession.SelectedGameModeId ?? "null"} " +
+                $"IsMatchActive={GameSession.IsMatchActive} networkActive={networkActive}");
+            return false;
+        }
+
+        BootTrace.LogError(
+            "SCENES",
+            "Game entry REJECTED -> redirecting to MainMenu. " +
+            $"reason={(GameSession.IsMatchActive ? "lifetime object missing (state lost across scene load)" : "no BeginMatch ran (scene opened directly, not via menu)")} " +
+            $"mode={GameSession.SelectedGameModeId ?? "null"} " +
+            $"IsMatchActive={GameSession.IsMatchActive} networkActive={networkActive}");
+        EnterMainMenu();
+        return true;
     }
 }

@@ -38,6 +38,7 @@ public class NetworkPlayerAvatar : NetworkBehaviour
     int _builtJersey = -1;
 
     public bool IsServerInstance => IsSpawned && IsServer;
+    public GameSession.Team PlayerTeam => (GameSession.Team)Mathf.Clamp(_teamIndex.Value, 0, 3);
 
     void Awake()
     {
@@ -106,7 +107,9 @@ public class NetworkPlayerAvatar : NetworkBehaviour
             return;
         }
 
-        _teamIndex.Value = Mathf.Abs(spawnIndex) % 4;
+        _teamIndex.Value = GameSession.RequiredPlayers <= 2
+            ? Mathf.Clamp(spawnIndex, 0, 1)
+            : Mathf.Abs(spawnIndex) % 4;
         _jerseyNumber.Value = Mathf.Clamp((int)((ownerClientId + 7) % 100), 1, 99);
     }
 
@@ -344,5 +347,9 @@ public class NetworkPlayerAvatar : NetworkBehaviour
     void HandleTeamChanged(int previous, int current)
     {
         ApplyTeamVisual();
+        if (IsOwner)
+        {
+            GameSession.SetLocalTeam(PlayerTeam);
+        }
     }
 }

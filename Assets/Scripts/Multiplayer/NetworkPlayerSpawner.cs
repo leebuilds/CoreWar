@@ -120,11 +120,13 @@ public class NetworkPlayerSpawner : MonoBehaviour
 
         if (_playerPrefab == null)
         {
+            BootTrace.LogError("PLAYER", "Cannot spawn player: NetworkPlayer prefab is missing.");
             Debug.LogError("[Multiplayer] Cannot spawn player: NetworkPlayer prefab is missing.");
             return;
         }
 
         Vector3 spawnPosition = SpawnPositionFor(clientId);
+        BootTrace.Log("PLAYER", $"SpawnPlayerForClient id={clientId} pos={spawnPosition}");
         var player = Instantiate(_playerPrefab, spawnPosition, Quaternion.identity);
         var avatar = player.GetComponent<NetworkPlayerAvatar>();
         if (avatar != null)

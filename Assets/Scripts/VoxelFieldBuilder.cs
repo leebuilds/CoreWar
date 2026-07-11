@@ -5,6 +5,7 @@ using UnityEngine.Rendering;
 /// Builds the flat playing field as a grid of white voxel cubes,
 /// plus lighting and a first-person player when the Game scene loads.
 /// </summary>
+[DefaultExecutionOrder(-100)]
 public class VoxelFieldBuilder : MonoBehaviour
 {
     [Header("Field")]
@@ -13,13 +14,45 @@ public class VoxelFieldBuilder : MonoBehaviour
     public float voxelSize = 1f;
     public int maxBuildHeight = 8;
 
+    [Header("Materials")]
+    [SerializeField] Material voxelMaterialSource;
+
     void Awake()
     {
+        BootTrace.Log("MAP", "VoxelFieldBuilder.Awake begin");
+        GameSession.RestoreFromLifetimeIfNeeded();
+        GameSession.LogDiagnostics("VoxelFieldBuilder.Awake (start)");
+
+        if (SceneFlow.TryBlockUnauthorizedGameScene())
+        {
+            BootTrace.LogError("MAP", "VoxelFieldBuilder aborted: unauthorized Game scene");
+            enabled = false;
+            return;
+        }
+
+        BootTrace.ProbeCriticalShaders("VoxelFieldBuilder.Awake pre-material");
+
+        if (!TryResolveVoxelMaterial(out Material voxelMaterial))
+        {
+            BootTrace.LogError(
+                "MAP",
+                "VoxelFieldBuilder aborted: voxel material unresolved. Returning to MainMenu instead of freezing.");
+            enabled = false;
+            SceneFlow.EnterMainMenu();
+            return;
+        }
+
+        BootTrace.Log(
+            "VOXELS",
+            $"voxelMaterial ok name='{voxelMaterial.name}' shader='{voxelMaterial.shader?.name ?? "null"}'");
+
         SceneFlow.InitializeGameScene();
         GameUICanvas.EnsureExists();
+        BootTrace.Log("UI", "GameUICanvas ensured");
 
         bool isRange = GameSession.IsShootingRange;
         bool isTestMap = !isRange;
+        BootTrace.Log("MAP", $"mode isRange={isRange} isTestMap={isTestMap}");
         if (isRange)
         {
             gridWidth = 48;
@@ -31,7 +64,6 @@ public class VoxelFieldBuilder : MonoBehaviour
             gridLength = 56;
         }
 
-        var voxelMaterial = CreateVoxelMaterial();
         var slipperyColliderMaterial = CreateSlipperyColliderMaterial();
         var floorColliderMaterial = CreateGrippyFloorColliderMaterial();
         Vector3 gridOrigin = ComputeCenteredGridOrigin();
@@ -42,6 +74,7 @@ public class VoxelFieldBuilder : MonoBehaviour
 
         var fieldRoot = new GameObject("Voxel Field").transform;
         var builtRoot = new GameObject("Built Voxels").transform;
+        BootTrace.Log("VOXELS", "VoxelLightingWorld.Initialize begin");
         var voxelWorld = gameObject.AddComponent<VoxelLightingWorld>();
         voxelWorld.Initialize(
             gridWidth,
@@ -52,14 +85,19 @@ public class VoxelFieldBuilder : MonoBehaviour
             voxelMaterial,
             slipperyColliderMaterial,
             builtRoot);
+        BootTrace.Log("VOXELS", "VoxelLightingWorld.Initialize complete");
 
         if (isTestMap)
         {
+            BootTrace.Log("MAP", "BuildTestMapOne begin");
             BuildTestMapOne(voxelMaterial, floorColliderMaterial, voxelWorld, fieldRoot, gridOrigin);
+            BootTrace.Log("MAP", "BuildTestMapOne complete");
         }
         else
         {
+            BootTrace.Log("MAP", "BuildField begin");
             BuildField(voxelMaterial, floorColliderMaterial, voxelWorld, fieldRoot, gridOrigin, isRange);
+            BootTrace.Log("MAP", "BuildField complete");
         }
 
         if (isRange)
@@ -97,13 +135,17 @@ public class VoxelFieldBuilder : MonoBehaviour
         GameObject player = null;
         if (MultiplayerSessionManager.IsNetworkSessionActive)
         {
+            BootTrace.Log("PLAYER", "NetworkPlayerSpawner.Create (network session)");
             NetworkPlayerSpawner.Create(voxelWorld);
         }
         else
         {
+            BootTrace.Log("PLAYER", "CreatePlayer (local session)");
             player = CreatePlayer(voxelWorld, isRange);
+            BootTrace.Log("PLAYER", $"CreatePlayer done player={(player == null ? "null" : player.name)}");
         }
 
+        BootTrace.Log("UI", "Creating gameplay HUD overlays");
         GameplayHud.Create();
         if (MultiplayerSessionManager.IsNetworkSessionActive)
         {
@@ -119,6 +161,7 @@ public class VoxelFieldBuilder : MonoBehaviour
 
         if (GameSession.IsInPrepPhase)
         {
+            BootTrace.Log("UI", "MatchPrepController.Create");
             MatchPrepController.Create();
         }
         else
@@ -131,6 +174,8 @@ public class VoxelFieldBuilder : MonoBehaviour
             var controller = player.GetComponent<ThirdPersonController>();
             ShootingRangeSession.SetPlayer(controller);
         }
+
+        BootTrace.Log("MAP", "VoxelFieldBuilder.Awake complete — gameplay ready");
     }
 
     Vector3 ComputeCenteredGridOrigin()
@@ -172,7 +217,7 @@ public class VoxelFieldBuilder : MonoBehaviour
     {
         if (!GameSession.IsMatchActive)
         {
-            GameSession.BeginMatch(GameSession.Team.Red);
+            return null;
         }
 
         var spawnPosition = isRange
@@ -315,6 +360,8 @@ public class VoxelFieldBuilder : MonoBehaviour
             var drillPosition = new Vector3(islandCenter.x, 0.5f, islandCenter.y);
             TestMapDrill.Create(drillsRoot, TestMapObjectiveManager.TeamAt(i), drillPosition);
         }
+
+        NetworkTestMapObjectiveSync.CreateIfNeeded();
     }
 
     void BuildIsland(
@@ -389,24 +436,33 @@ public class VoxelFieldBuilder : MonoBehaviour
         voxelWorld.RegisterBaseVoxel(cell, voxel);
     }
 
-    static Material CreateVoxelMaterial()
+    bool TryResolveVoxelMaterial(out Material voxelMaterial)
     {
-        var shader = Shader.Find("CoreWar/VoxelFaceLit");
-        if (shader == null)
+        voxelMaterial = null;
+
+        if (voxelMaterialSource == null)
         {
-            shader = Shader.Find("Standard");
+            Debug.LogError(
+                "[VoxelFieldBuilder] voxelMaterialSource is not assigned. " +
+                "Open Assets/Scenes/Game.unity, select the VoxelFieldBuilder object, " +
+                "and drag Assets/Materials/VoxelWhiteGrid.mat into the Voxel Material Source field.");
+            return false;
         }
 
-        var material = new Material(shader)
+        Debug.Log(
+            $"[VoxelFieldBuilder] Using material '{voxelMaterialSource.name}' " +
+            $"shader='{voxelMaterialSource.shader?.name ?? "null"}'.");
+
+        if (voxelMaterialSource.shader == null)
         {
-            name = "Voxel White Grid",
-            mainTexture = CreateGridTexture()
-        };
-        if (material.HasProperty("_Glossiness"))
-        {
-            material.SetFloat("_Glossiness", 0.05f);
+            Debug.LogError(
+                $"[VoxelFieldBuilder] Material '{voxelMaterialSource.name}' has a null shader. " +
+                "Rebuild Assets/Materials/VoxelWhiteGrid.mat so it references Assets/Scripts/VoxelFaceLit.shader.");
+            return false;
         }
-        return material;
+
+        voxelMaterial = voxelMaterialSource;
+        return true;
     }
 
     static PhysicsMaterial CreateSlipperyColliderMaterial()
@@ -433,30 +489,5 @@ public class VoxelFieldBuilder : MonoBehaviour
             frictionCombine = PhysicsMaterialCombine.Minimum,
             bounceCombine = PhysicsMaterialCombine.Minimum
         };
-    }
-
-    static Texture2D CreateGridTexture()
-    {
-        const int size = 32;
-        var texture = new Texture2D(size, size, TextureFormat.RGBA32, false)
-        {
-            filterMode = FilterMode.Point,
-            wrapMode = TextureWrapMode.Repeat
-        };
-
-        var fill = new Color(0.99f, 0.99f, 0.99f);
-        var line = new Color(0.62f, 0.62f, 0.66f);
-
-        for (int y = 0; y < size; y++)
-        {
-            for (int x = 0; x < size; x++)
-            {
-                bool isEdge = x == 0 || y == 0 || x == size - 1 || y == size - 1;
-                texture.SetPixel(x, y, isEdge ? line : fill);
-            }
-        }
-
-        texture.Apply();
-        return texture;
     }
 }

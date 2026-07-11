@@ -280,3 +280,5 @@ MonoBehaviour:
   gridWidth: 32
   gridLength: 32
   voxelSize: 1
+  maxBuildHeight: 8
+  voxelMaterialSource: {fileID: 2100000, guid: 9f3b6d8e2c1a4f5b7e0d9c8a6b4e2f13, type: 2}

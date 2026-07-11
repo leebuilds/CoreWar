@@ -19,6 +19,7 @@ public class GameModeDefinition
     public bool skipMatchmakingDelay;
     public bool skipPrepPhase;
     public bool isLocallyPlayable = true;
+    public bool requiresOnlineMultiplayer;
 
     static readonly List<GameModeDefinition> All = new List<GameModeDefinition>
     {
@@ -42,7 +43,7 @@ public class GameModeDefinition
             id = "test_two_player",
             displayName = "TEST TWO PLAYER",
             requiredPlayers = 2,
-            isLocallyPlayable = false
+            requiresOnlineMultiplayer = true
         }
     };
 
@@ -68,11 +69,6 @@ public class GameModeDefinition
 
     public bool IsPlayable()
     {
-        if (!isLocallyPlayable)
-        {
-            return false;
-        }
-
         switch (loadoutRequirement)
         {
             case LoadoutRequirement.None:

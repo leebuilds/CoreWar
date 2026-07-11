@@ -529,6 +529,7 @@ public class ThirdPersonController : MonoBehaviour
 
     public static ThirdPersonController Local { get; private set; }
 
+    public GameSession.Team PlayerTeam => _playerTeam;
     public float NetworkAimYaw => _yaw;
     public float NetworkAimPitch => _pitch;
     public bool HasLocalAuthority => _localAuthority;

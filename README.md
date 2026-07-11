@@ -88,7 +88,7 @@ and restored every launch.
   are silent (back arrow still clicks)
 - **READY** on the match prep screen locks your spawn class and dismisses the card window; a small top banner counts down while you look around and cycle hotbar (no crosshair or build previews until prep ends)
 - During matchmaking, a bottom panel shows live status plus **Settings**; **Cancel matchmaking** or back/ESC warns before stopping search
-- **Game modes:** **SHOOTING RANGE** requires loadout slot 1 only; **TEST ONE PLAYER** requires both slots and loads **Test Map 1** (scripted drill objectives); **TEST TWO PLAYER** is locked on the modes list — use hub **MULTIPLAYER** for the 2-player Relay test instead
+- **Game modes:** **SHOOTING RANGE** requires loadout slot 1 only; **TEST ONE PLAYER** requires both slots and loads **Test Map 1** (scripted drill objectives); **TEST TWO PLAYER** opens the online host/join panel (Red vs Blue teams, Relay join codes)
 - Hub **PLAY** is always available to browse modes even when some modes are locked
 
 ### Shooting Range (solo)
@@ -116,31 +116,69 @@ and restored every launch.
 Non–shooting-range matches load a **56×56** voxel arena with **five islands**
 (one large center + four smaller outer islands) and team-colored **mining drills**.
 
-- Each active team gets a drill on an outer island (up to **4** teams)
+- Each active team gets a drill on an outer island (up to **4** teams; **2** for online two-player)
 - Working drills earn **1 victory point/s** toward a **100**-point win target
-- Hold **T** within **2.5 m** of a drill for **5 s** to toggle it on/off
 - Upper-left **objective HUD** shows your team's progress (`X/100`)
 - Match ends with a win/loss modal; **CONTINUE** returns to the main menu
 - Player spawn: center island approach at `(0, 1.1, -3)`
 
+**Solo / 1-player:** hold **T** within **2.5 m** of a drill for **5 s** to toggle it on/off.
+
+**Two-player / online (Red vs Blue):**
+
+| Action | Who | When |
+|--------|-----|------|
+| **Sabotage** (stop enemy drill) | Enemy team only | Enemy drill is running |
+| **Restart drill** (undo sabotage) | Same team only | Own drill is stopped |
+
+HUD shows `HOLD T SABOTAGE` or `HOLD T RESTART DRILL` during the hold timer.
+Online matches sync drill state and team points server-authoritatively.
+
 This is a temporary scripted loop to validate objective UI and drill interaction
 before full sabotage / upgrade systems land.
 
-### Multiplayer test (hub → MULTIPLAYER)
+### Multiplayer (hub → MULTIPLAYER or PLAY → TEST TWO PLAYER)
 
-Experimental **2-player** online test using **Unity Netcode** + **Unity Relay**
-(Sessions API). Not the same flow as the locked **TEST TWO PLAYER** game-mode button.
+**2-player** online matches using **Unity Netcode** + **Unity Relay** (Sessions API).
+Host and joiner play on **opposing teams** (Red vs Blue) with team-based drill sabotage.
 
 | Step | Action |
 |------|--------|
-| Host | Hub → **MULTIPLAYER** → **HOST** → copy join code |
+| Host | Hub → **MULTIPLAYER** (or **PLAY → TEST TWO PLAYER**) → **HOST** → copy join code |
 | Join | Hub → **MULTIPLAYER** → enter code → **JOIN** |
+| Teams | Host = **Red**, joiner = **Blue**; each team has its own drill island |
+| Sabotage | Hold **T** on enemy drill to stop it; hold **T** on your drill to restart it |
 | In match | Small top overlay shows session status; **LEAVE** ends the session |
 | Combat | Server-authoritative bullets and health; clients see cosmetic bullet visuals |
 
-Requires Unity Services authentication (anonymous sign-in on first use). If the
-`NetworkPlayer` prefab is missing, run **CoreWar → Multiplayer → Rebuild Network
-Player Prefab** in the Unity editor.
+Local single-player modes (**SHOOTING RANGE**, **TEST ONE PLAYER**) do **not** require
+internet or Unity Services. Online modes need Unity Services authentication (anonymous
+sign-in on first use) and a linked Unity Cloud project.
+
+If multiplayer prefabs are missing, run **CoreWar → Multiplayer → Rebuild Multiplayer
+Prefabs** in the Unity editor (creates `Resources/NetworkManager.prefab` and
+`Resources/NetworkPlayer.prefab`).
+
+### Standalone builds (macOS / Windows)
+
+The game must start at **MainMenu** (build index 0). Enter gameplay only through the
+menu — opening `Game.unity` directly redirects to MainMenu.
+
+**Build requirements:**
+
+- Build Profile scenes: **MainMenu** (0), **Game** (1)
+- `Game.unity` → VoxelFieldBuilder → **Voxel Material Source** = `Assets/Materials/VoxelWhiteGrid.mat`
+- Shaders `Standard`, `Unlit/Color`, and `CoreWar/VoxelFaceLit` included via
+  `GraphicsSettings` Always Included Shaders (build-piece materials use runtime shader lookup)
+
+**Player logs** (for diagnosing menu→game issues):
+
+| Platform | Path |
+|----------|------|
+| macOS | `~/Library/Logs/DefaultCompany/CoreWar/Player.log` |
+| Windows | `%USERPROFILE%\AppData\LocalLow\DefaultCompany\CoreWar\Player.log` |
+
+Boot tracing (`BootTrace.cs`) logs `[BOOT] [SCENES] [MAP] [VOXELS] [NETWORK]` tags at startup.
 
 ### In the field scene (standard modes)
 
@@ -410,7 +448,9 @@ The menu UI and the voxel field are generated from code at runtime:
 
 **Menu & profiles**
 
-- `Assets/Scripts/SceneFlow.cs` — scene transitions, cursor/input resets, EventSystem cleanup
+- `Assets/Scripts/SceneFlow.cs` — scene transitions, cursor/input resets, EventSystem cleanup, game-scene authorization guard
+- `Assets/Scripts/GameSessionLifetime.cs` — DontDestroyOnLoad match authorization across scene loads
+- `Assets/Scripts/BootTrace.cs` — temporary Editor-vs-standalone boot diagnostics (`[BOOT]`, `[SCENES]`, shader/Resources probes)
 - `Assets/Scripts/MainMenuController.cs` — menu scene bootstrap (camera, audio listener, navigator)
 - `Assets/Scripts/UI/MenuNavigator.cs` — sign-in, hub, game modes, matchmaking flow, decks, settings routing; theme backdrop
 - `Assets/Scripts/Matchmaking/` — `GameModeDefinition`, `MatchmakingSession`, `IMatchmakingBackend`, local sim backend (per-mode playability and instant matchmaking for shooting range)
@@ -443,7 +483,8 @@ The menu UI and the voxel field are generated from code at runtime:
 **Gameplay**
 
 - `Assets/Scripts/GameSession.cs` — team, loadout, game mode, match clock, and active card into the game scene
-- `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid (shooting range) or **Test Map 1** islands + drills; solo or network player bootstrap
+- `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid (shooting range) or **Test Map 1** islands + drills; solo or network player bootstrap; serialized voxel material
+- `Assets/Materials/VoxelWhiteGrid.mat` — floor voxel material for standalone builds (`CoreWar/VoxelFaceLit`)
 - `Assets/Scripts/ShootingRange/` — merged terrain + firing-line fence, spread dummies (optional patrol movement), hit zones, session state (bullets, reset)
 - `Assets/Scripts/VoxelMaterialUtility.cs` — solid-color materials for range props and hit flashes
 - `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, ammo/reload, all class weapons/build/hammer/grenades, sniper/hunting rifle/anti-material/scoped AR ADS, scope sway, E abilities, movement slows, pause, network authority split
@@ -469,16 +510,19 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/ProjectileDamage.cs` — per-weapon velocity damage, air drag constants, player hit threshold
 - `Assets/Scripts/SniperScopePostEffect.cs` + `Assets/Scripts/SniperScopePost.shader` — sniper ADS blur overlay (magnified: blur + vignette; local-owner instance in multiplayer)
 - `Assets/Scripts/PlayerHealth.cs` — player HP, shield, blindness triggers; server-owned in multiplayer (`NetworkBehaviour`)
-- `Assets/Scripts/TestMapObjectiveManager.cs` — scripted Test Map 1 drill points and win detection
+- `Assets/Scripts/TestMapObjectiveManager.cs` — scripted Test Map 1 drill points, team sabotage rules, win detection
 - `Assets/Scripts/TestMapDrill.cs` — team drill visuals and on/off state
+- `Assets/Scripts/NetworkTestMapObjectiveSync.cs` — server-authoritative networked drill/points state (online 2-player)
 - `Assets/Scripts/UI/TestObjectiveHud.cs` — upper-left objective progress bar
 - `Assets/Scripts/UI/TestMatchResultPanel.cs` — win/loss modal after scripted test matches
-- `Assets/Scripts/Multiplayer/MultiplayerSessionManager.cs` — Relay host/join/leave test flow
+- `Assets/Scripts/Multiplayer/MultiplayerSessionManager.cs` — Relay host/join/leave; loads `Resources/NetworkManager.prefab`
+- `Assets/Resources/NetworkManager.prefab` — serialized NetworkConfig + UnityTransport for standalone builds
+- `Assets/Resources/NetworkPlayer.prefab` — networked player prefab
 - `Assets/Scripts/Multiplayer/NetworkPlayerSpawner.cs` — Netcode player spawn per client
 - `Assets/Scripts/Multiplayer/NetworkPlayerAvatar.cs` — ownership, aim replication, projectile RPCs
 - `Assets/Scripts/UI/MultiplayerSessionPanel.cs` — hub multiplayer host/join overlay
 - `Assets/Scripts/UI/MultiplayerSessionHud.cs` — in-match multiplayer status + leave
-- `Assets/Editor/MultiplayerPrefabSetup.cs` — rebuild `Resources/NetworkPlayer.prefab`
+- `Assets/Editor/MultiplayerPrefabSetup.cs` — rebuild `Resources/NetworkManager.prefab` and `Resources/NetworkPlayer.prefab`
 - `Assets/Scripts/CapsuleRobotVisual.cs` + `Assets/Scripts/JerseyInkUtility.cs` — capsule robot with jersey
 - `Assets/Scripts/VoxelLightingWorld.cs` — voxel occupancy, build rules, hammer removal
 - `Assets/Scripts/PenInkShadowEffect.cs` + `Assets/Scripts/PenInkShadowPost.shader` — pen-and-ink shadows
@@ -490,6 +534,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/First_Person_Shooter_Game_Design_v2.md)
+- [Standalone build fixes, menu→game diagnosis, and two-player sabotage session recap](docs/chats/2026-07-11-standalone-build-two-player-sabotage-session.md)
 - [Test Map 1, relay multiplayer, prep fixes, and sniper scope session recap](docs/chats/2026-07-11-test-map-multiplayer-sniper-session.md)
 - [Gunner, universal grenades, C4/vest explosions, and Ranger fix session recap](docs/chats/2026-07-10-gunner-grenades-c4-ranger-session.md)
 - [Grenades, flashbangs, and blindness layering session recap](docs/chats/2026-07-09-grenades-flashbang-and-blindness-session.md)

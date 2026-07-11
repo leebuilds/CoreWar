@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using Unity.Netcode;
@@ -14,15 +15,18 @@ using UnityEngine.SceneManagement;
 /// </summary>
 public class MultiplayerSessionManager : MonoBehaviour
 {
-    public const string PlayerPrefabResourceName = "NetworkPlayer";
     const int MaxPlayers = 2;
     const string SessionType = "corewar-relay-test";
+    public const string PlayerPrefabResourceName = "NetworkPlayer";
 
     static MultiplayerSessionManager _instance;
 
+    [SerializeField] GameObject networkManagerPrefab;
+    [SerializeField] GameObject playerPrefab;
+
     ISession _activeSession;
     NetworkManager _networkManager;
-    GameObject _playerPrefab;
+    bool _networkManagerConfigured;
     bool _isBusy;
 
     public static MultiplayerSessionManager Instance => EnsureExists();
@@ -62,7 +66,6 @@ public class MultiplayerSessionManager : MonoBehaviour
 
         _instance = this;
         DontDestroyOnLoad(gameObject);
-        EnsureNetworkManager();
     }
 
     void OnDestroy()
@@ -91,9 +94,20 @@ public class MultiplayerSessionManager : MonoBehaviour
         SetBusy("initializing services");
         try
         {
+            BootTrace.Log("SERVICES", "HostAsync EnsureServicesAsync begin");
             await EnsureServicesAsync();
+            BootTrace.Log("SERVICES", "HostAsync EnsureServicesAsync complete");
             PrepareLocalGameSession();
-            EnsureNetworkManager();
+            BootTrace.Log("NETWORK", "HostAsync TryEnsureNetworkManager begin");
+            if (!TryEnsureNetworkManager())
+            {
+                BootTrace.LogError("NETWORK", "HostAsync TryEnsureNetworkManager FAILED");
+                _isBusy = false;
+                RaiseChanged();
+                return;
+            }
+            BootTrace.Log("NETWORK", "HostAsync TryEnsureNetworkManager ok");
+
             ConfigureConnectionPayload();
 
             Status = "creating session";
@@ -108,8 +122,10 @@ public class MultiplayerSessionManager : MonoBehaviour
                 Type = SessionType
             }.WithRelayNetwork();
 
+            BootTrace.Log("SERVICES", "CreateSessionAsync begin");
             _activeSession = await MultiplayerService.Instance.CreateSessionAsync(options);
             JoinCode = _activeSession.Code;
+            BootTrace.Log("NETWORK", $"Session created JoinCode={JoinCode}");
             Debug.Log($"[Multiplayer] Session created. Join code: {JoinCode}");
 
             Status = $"hosting {JoinCode}";
@@ -120,6 +136,7 @@ public class MultiplayerSessionManager : MonoBehaviour
         }
         catch (Exception ex)
         {
+            BootTrace.LogError("NETWORK", $"HostAsync exception: {ex}");
             Fail("Host failed", ex);
         }
     }
@@ -149,9 +166,20 @@ public class MultiplayerSessionManager : MonoBehaviour
         SetBusy("initializing services");
         try
         {
+            BootTrace.Log("SERVICES", "JoinAsync EnsureServicesAsync begin");
             await EnsureServicesAsync();
+            BootTrace.Log("SERVICES", "JoinAsync EnsureServicesAsync complete");
             PrepareLocalGameSession();
-            EnsureNetworkManager();
+            BootTrace.Log("NETWORK", "JoinAsync TryEnsureNetworkManager begin");
+            if (!TryEnsureNetworkManager())
+            {
+                BootTrace.LogError("NETWORK", "JoinAsync TryEnsureNetworkManager FAILED");
+                _isBusy = false;
+                RaiseChanged();
+                return;
+            }
+            BootTrace.Log("NETWORK", "JoinAsync TryEnsureNetworkManager ok");
+
             ConfigureConnectionPayload();
 
             Status = "joining session";
@@ -163,8 +191,10 @@ public class MultiplayerSessionManager : MonoBehaviour
                 Type = SessionType
             }.WithNetworkOptions(new NetworkOptions());
 
+            BootTrace.Log("SERVICES", $"JoinSessionByCodeAsync begin code={joinCode}");
             _activeSession = await MultiplayerService.Instance.JoinSessionByCodeAsync(joinCode, options);
             JoinCode = _activeSession.Code;
+            BootTrace.Log("NETWORK", $"Joined session code={JoinCode}; waiting for host-driven Game scene load");
             Debug.Log($"[Multiplayer] Joined session with code: {JoinCode}");
 
             Status = $"joined {JoinCode}";
@@ -173,6 +203,7 @@ public class MultiplayerSessionManager : MonoBehaviour
         }
         catch (Exception ex)
         {
+            BootTrace.LogError("NETWORK", $"JoinAsync exception: {ex}");
             Fail("Join failed", ex);
         }
     }
@@ -224,68 +255,168 @@ public class MultiplayerSessionManager : MonoBehaviour
 
     async Task EnsureServicesAsync()
     {
+        BootTrace.Log("SERVICES", $"UnityServices.State={UnityServices.State}");
         if (UnityServices.State != ServicesInitializationState.Initialized)
         {
             await UnityServices.InitializeAsync();
+            BootTrace.Log("SERVICES", "UnityServices.InitializeAsync complete");
             Debug.Log("[Multiplayer] Unity Services initialized.");
         }
 
+        BootTrace.Log("SERVICES", $"Auth signedIn={AuthenticationService.Instance.IsSignedIn}");
         if (!AuthenticationService.Instance.IsSignedIn)
         {
             await AuthenticationService.Instance.SignInAnonymouslyAsync();
+            BootTrace.Log("SERVICES", $"Auth anonymous ok playerId={AuthenticationService.Instance.PlayerId}");
             Debug.Log($"[Multiplayer] Authentication successful: {AuthenticationService.Instance.PlayerId}");
         }
     }
 
-    void EnsureNetworkManager()
+    bool TryEnsureNetworkManager()
     {
-        if (_networkManager != null)
+        if (_networkManagerConfigured && _networkManager != null)
         {
-            ConfigureNetworkManager(_networkManager);
-            return;
+            return ConfigureNetworkManager(_networkManager);
         }
 
         _networkManager = NetworkManager.Singleton;
-        if (_networkManager == null)
-        {
-            var go = new GameObject("NetworkManager");
-            DontDestroyOnLoad(go);
-            _networkManager = go.AddComponent<NetworkManager>();
-            go.AddComponent<UnityTransport>();
-        }
-        else
+        if (_networkManager != null)
         {
             DontDestroyOnLoad(_networkManager.gameObject);
+            if (ConfigureNetworkManager(_networkManager))
+            {
+                _networkManagerConfigured = true;
+                return true;
+            }
+
+            ClearInvalidNetworkManager("Existing NetworkManager.Singleton failed validation.");
+            return false;
         }
 
-        ConfigureNetworkManager(_networkManager);
+        GameObject prefab = networkManagerPrefab != null
+            ? networkManagerPrefab
+            : Resources.Load<GameObject>("NetworkManager");
+        BootTrace.Log(
+            "NETWORK",
+            $"TryEnsureNetworkManager prefabSource={(networkManagerPrefab != null ? "serialized" : "Resources.Load")} " +
+            $"prefab={(prefab == null ? "NULL" : prefab.name)}");
+        if (prefab == null)
+        {
+            Error = "Missing NetworkManager prefab. Assign it on MultiplayerSessionManager or place Assets/Resources/NetworkManager.prefab in the project.";
+            Debug.LogError($"[Multiplayer] {Error} Rebuild with CoreWar/Multiplayer/Rebuild Multiplayer Prefabs in the Unity Editor.");
+            BootTrace.LogError("NETWORK", Error);
+            return false;
+        }
+
+        var instance = Instantiate(prefab);
+        instance.name = "NetworkManager";
+        DontDestroyOnLoad(instance);
+        _networkManager = instance.GetComponent<NetworkManager>();
+        if (_networkManager == null)
+        {
+            Error = $"NetworkManager prefab '{prefab.name}' is missing a NetworkManager component.";
+            Debug.LogError($"[Multiplayer] {Error}");
+            Destroy(instance);
+            _networkManager = null;
+            return false;
+        }
+
+        if (!ConfigureNetworkManager(_networkManager))
+        {
+            ClearInvalidNetworkManager("Instantiated NetworkManager prefab failed validation.");
+            return false;
+        }
+
+        _networkManagerConfigured = true;
+        return true;
     }
 
-    void ConfigureNetworkManager(NetworkManager manager)
+    void ClearInvalidNetworkManager(string reason)
     {
-        var transport = manager.GetComponent<UnityTransport>();
-        if (transport == null)
+        Debug.LogError($"[Multiplayer] {reason} Destroying invalid NetworkManager instance.");
+        UnsubscribeNetworkEvents();
+        _networkManagerConfigured = false;
+
+        if (_networkManager == null)
         {
-            transport = manager.gameObject.AddComponent<UnityTransport>();
+            return;
         }
 
-        _playerPrefab = Resources.Load<GameObject>(PlayerPrefabResourceName);
-        if (_playerPrefab == null)
+        if (_networkManager.IsListening)
         {
-            Error = "Missing Resources/NetworkPlayer.prefab. Use CoreWar/Multiplayer/Rebuild Network Player Prefab in Unity.";
+            _networkManager.Shutdown();
+        }
+
+        Destroy(_networkManager.gameObject);
+        _networkManager = null;
+    }
+
+    bool ConfigureNetworkManager(NetworkManager manager)
+    {
+        if (manager == null)
+        {
+            Error = "NetworkManager reference is null.";
+            Debug.LogError("[Multiplayer] ConfigureNetworkManager called with a null NetworkManager.");
+            return false;
+        }
+
+        if (manager.NetworkConfig == null)
+        {
+            Error = "NetworkManager.NetworkConfig is null. Runtime AddComponent<NetworkManager>() does not create NetworkConfig in standalone builds. Use Assets/Resources/NetworkManager.prefab.";
+            Debug.LogError($"[Multiplayer] {Error} GameObject='{manager.gameObject.name}'.");
+            return false;
+        }
+
+        UnityTransport transport = manager.GetComponent<UnityTransport>();
+        if (transport == null)
+        {
+            Error = "UnityTransport is missing on the NetworkManager GameObject.";
+            Debug.LogError($"[Multiplayer] {Error} GameObject='{manager.gameObject.name}'. Add UnityTransport to the same object as NetworkManager in the prefab.");
+            return false;
+        }
+
+        GameObject resolvedPlayerPrefab = ResolvePlayerPrefab(manager);
+        if (resolvedPlayerPrefab == null)
+        {
+            Error = "Player prefab is missing. Assign it on MultiplayerSessionManager, on NetworkManager.NetworkConfig.PlayerPrefab, or place Assets/Resources/NetworkPlayer.prefab in the project.";
             Debug.LogError($"[Multiplayer] {Error}");
+            return false;
+        }
+
+        if (resolvedPlayerPrefab.GetComponent<NetworkObject>() == null)
+        {
+            Error = $"Player prefab '{resolvedPlayerPrefab.name}' is missing a NetworkObject component.";
+            Debug.LogError($"[Multiplayer] {Error}");
+            return false;
         }
 
         manager.NetworkConfig.NetworkTransport = transport;
-        manager.NetworkConfig.PlayerPrefab = _playerPrefab;
+        manager.NetworkConfig.PlayerPrefab = resolvedPlayerPrefab;
         manager.NetworkConfig.EnableSceneManagement = true;
         manager.NetworkConfig.ConnectionApproval = true;
         manager.NetworkConfig.ForceSamePrefabs = true;
+        manager.NetworkConfig.AutoSpawnPlayerPrefabClientSide = false;
         manager.ConnectionApprovalCallback = ApproveConnection;
 
         UnsubscribeNetworkEvents();
         manager.OnClientConnectedCallback += HandleClientConnected;
         manager.OnClientDisconnectCallback += HandleClientDisconnected;
+        return true;
+    }
+
+    GameObject ResolvePlayerPrefab(NetworkManager manager)
+    {
+        if (playerPrefab != null)
+        {
+            return playerPrefab;
+        }
+
+        if (manager != null && manager.NetworkConfig != null && manager.NetworkConfig.PlayerPrefab != null)
+        {
+            return manager.NetworkConfig.PlayerPrefab;
+        }
+
+        return Resources.Load<GameObject>(PlayerPrefabResourceName);
     }
 
     void UnsubscribeNetworkEvents()
@@ -310,7 +441,7 @@ public class MultiplayerSessionManager : MonoBehaviour
 
     void ConfigureConnectionPayload()
     {
-        if (_networkManager == null)
+        if (_networkManager == null || _networkManager.NetworkConfig == null)
         {
             return;
         }
@@ -341,6 +472,7 @@ public class MultiplayerSessionManager : MonoBehaviour
             activeCard,
             "test_two_player",
             MaxPlayers);
+        GameSession.LogDiagnostics("MultiplayerSessionManager.PrepareLocalGameSession after BeginMatch");
     }
 
     void LoadGameForHost()
@@ -355,6 +487,8 @@ public class MultiplayerSessionManager : MonoBehaviour
             return;
         }
 
+        GameSession.LogDiagnostics("MultiplayerSessionManager.LoadGameForHost (before Netcode LoadScene)");
+        BootTrace.Log("SCENES", "LoadGameForHost -> Netcode SceneManager.LoadScene(Game)");
         Debug.Log("[Multiplayer] Loading gameplay scene through Netcode scene management.");
         SceneFlow.ApplyGameInputState();
         _networkManager.SceneManager.LoadScene(SceneFlow.GameSceneName, LoadSceneMode.Single);
