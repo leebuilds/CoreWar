@@ -327,15 +327,18 @@ public class MenuNavigator : MonoBehaviour
             MenuUiFactory.BodyFontSize, FontStyle.Normal, TextAnchor.MiddleCenter, new Vector2(0f, 170f), new Vector2(420f, 40f));
 
         MenuUiFactory.CreateButton(_window.Body, "Play Button", "PLAY",
-            new Vector2(0f, 70f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.GameModes));
+            new Vector2(0f, 80f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.GameModes));
         MenuUiFactory.CreateButton(_window.Body, "Decks Button", "DECKS",
-            new Vector2(0f, -10f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.Decks));
+            new Vector2(0f, 20f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.Decks));
+        MenuUiFactory.CreateButton(_window.Body, "Multiplayer Button", "MULTIPLAYER",
+            new Vector2(0f, -40f), MenuUiFactory.StandardButtonSize,
+            () => MultiplayerSessionPanel.Create(_screenRoot.transform));
         MenuUiFactory.CreateButton(_window.Body, "Settings Button", "SETTINGS",
-            new Vector2(0f, -90f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.Settings));
+            new Vector2(0f, -100f), MenuUiFactory.StandardButtonSize, () => ShowScreen(ScreenId.Settings));
         MenuUiFactory.CreateButton(_window.Body, "Logout Button", "LOGOUT",
-            new Vector2(0f, -170f), MenuUiFactory.StandardButtonSize, Logout);
+            new Vector2(0f, -160f), MenuUiFactory.StandardButtonSize, Logout);
         MenuUiFactory.CreateButton(_window.Body, "Quit Button", "QUIT",
-            new Vector2(0f, -250f), MenuUiFactory.StandardButtonSize, MenuUiFactory.QuitApplication);
+            new Vector2(0f, -220f), MenuUiFactory.StandardButtonSize, MenuUiFactory.QuitApplication);
     }
 
     void BuildSettings()

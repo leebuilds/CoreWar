@@ -9,6 +9,8 @@ using UnityEngine.Rendering;
 /// </summary>
 public class VoxelLightingWorld : MonoBehaviour
 {
+    public static VoxelLightingWorld Active { get; private set; }
+
     readonly Dictionary<Vector3Int, GameObject> _voxels = new Dictionary<Vector3Int, GameObject>();
     readonly HashSet<Vector3Int> _occupiedCells = new HashSet<Vector3Int>();
     readonly HashSet<Vector3Int> _playerPlaced = new HashSet<Vector3Int>();
@@ -110,6 +112,7 @@ public class VoxelLightingWorld : MonoBehaviour
         PhysicsMaterial colliderMaterial,
         Transform builtRoot)
     {
+        Active = this;
         _gridWidth = gridWidth;
         _gridLength = gridLength;
         _maxBuildHeight = maxBuildHeight;
@@ -124,6 +127,14 @@ public class VoxelLightingWorld : MonoBehaviour
         _ladderMaterial = CreateBuildMaterial("Built Ladder", new Color(0.28f, 0.2f, 0.12f, 1f));
         _colliderMaterial = colliderMaterial;
         _builtRoot = builtRoot;
+    }
+
+    void OnDestroy()
+    {
+        if (Active == this)
+        {
+            Active = null;
+        }
     }
 
     public void RegisterBaseVoxel(Vector3Int cell, GameObject voxel)

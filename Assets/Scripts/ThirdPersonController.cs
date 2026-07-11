@@ -59,6 +59,7 @@ public class ThirdPersonController : MonoBehaviour
     public float eyeHeight = 1.62f;
     public float fieldOfView = 75f;
     public bool hideLocalCharacterVisual = true;
+    public bool deferStartUntilNetworkSpawn;
     public float minPitch = -85f;
     public float maxPitch = 85f;
 
@@ -303,6 +304,8 @@ public class ThirdPersonController : MonoBehaviour
     float _dashTimer;
     Vector3 _dashDirection;
     PlayerHealth _playerHealth;
+    bool _initialized;
+    bool _localAuthority = true;
     GameSession.Team _playerTeam = GameSession.Team.Red;
     float _gunKickTimer;
     float _muzzleFlashTimer;
@@ -369,6 +372,7 @@ public class ThirdPersonController : MonoBehaviour
     float _sniperRoundPulseTimer;
     bool _blockWeaponFireUntilMouseRelease;
     bool _weaponMouseHeldDuringPrep;
+    float _postPrepWeaponLockTimer;
     CardHotbarTool _drawingWeapon;
     float _weaponDrawTimer;
     float _weaponDrawDuration;
@@ -525,12 +529,16 @@ public class ThirdPersonController : MonoBehaviour
 
     public static ThirdPersonController Local { get; private set; }
 
+    public float NetworkAimYaw => _yaw;
+    public float NetworkAimPitch => _pitch;
+    public bool HasLocalAuthority => _localAuthority;
     public bool IsHudOverlayBlocking => IsUiOverlayBlocking();
     public bool IsHudGameplayBlocked => IsGameplayBlocked();
     public CardKitDefinition ActiveKit => _activeKit ?? CardKitDefinition.DefaultInfantryPlaceholder();
     public int SelectedHotbarIndex => _selectedHotbarIndex;
     public int EquippableHotbarCount => HotbarSlotCount;
     public float HotbarReloadOverlayFill => ReloadOverlayFill();
+    public float HotbarSwitchLockOverlayFill => SwitchLockOverlayFill();
     public float HotbarAbilityOverlayFill => AbilityCooldownOverlayFill();
     public float HotbarWeaponOverlayFill(CardHotbarTool tool) => WeaponOverlayFill(tool);
     public bool IsAbilityReadyForHud => IsAbilityReady();
@@ -905,6 +913,28 @@ public class ThirdPersonController : MonoBehaviour
         return _playerHealth;
     }
 
+    public void InitializeNetworkController(bool localAuthority)
+    {
+        InitializeController(localAuthority);
+    }
+
+    public void SetRemoteAim(float yaw, float pitch)
+    {
+        if (_localAuthority)
+        {
+            return;
+        }
+
+        _yaw = yaw;
+        _pitch = Mathf.Clamp(pitch, minPitch, maxPitch);
+        UpdateCharacterAimFromYaw();
+    }
+
+    public void SetNetworkTeam(GameSession.Team team)
+    {
+        _playerTeam = team;
+    }
+
     void OnDestroy()
     {
         if (Local == this)
@@ -913,7 +943,10 @@ public class ThirdPersonController : MonoBehaviour
         }
 
         MenuSettings.Changed -= ApplyMenuSettings;
-        ProfileSession.TouchActivity();
+        if (_localAuthority)
+        {
+            ProfileSession.TouchActivity();
+        }
     }
 
     void ApplyMenuSettings()
@@ -955,6 +988,17 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
+        if (!_initialized)
+        {
+            return;
+        }
+
+        if (!_localAuthority)
+        {
+            UpdateCharacterAimFromYaw();
+            return;
+        }
+
         if (IsUiOverlayBlocking())
         {
             _selectorOpen = false;
@@ -986,7 +1030,24 @@ public class ThirdPersonController : MonoBehaviour
 
     void Start()
     {
+        if (deferStartUntilNetworkSpawn)
+        {
+            return;
+        }
+
+        InitializeController(localAuthority: true);
+    }
+
+    void InitializeController(bool localAuthority)
+    {
         EnsurePlayerHealth();
+        if (_initialized)
+        {
+            return;
+        }
+
+        _initialized = true;
+        _localAuthority = localAuthority;
         _initialSpawnPosition = transform.position;
 
         if (viewCamera != null)
@@ -1000,7 +1061,7 @@ public class ThirdPersonController : MonoBehaviour
             _scopedArFovTransitionStart = fieldOfView;
         }
 
-        if (hideLocalCharacterVisual && characterVisual != null)
+        if (_localAuthority && hideLocalCharacterVisual && characterVisual != null)
         {
             foreach (var renderer in characterVisual.GetComponentsInChildren<Renderer>())
             {
@@ -1013,35 +1074,41 @@ public class ThirdPersonController : MonoBehaviour
         _weaponMouseHeldDuringPrep = false;
         _blockWeaponFireUntilMouseRelease = false;
         _sniperScopeIndex = DefaultSniperMagnificationIndex;
-        ProfileSession.EnsureInitialized();
-        ProfileSession.TouchActivity();
+        if (_localAuthority)
+        {
+            ProfileSession.EnsureInitialized();
+            ProfileSession.TouchActivity();
+        }
         _wasInPrepPhase = GameSession.IsInPrepPhase;
         _wasPrepReady = GameSession.IsPrepReady;
 
-        _respawnPicker = RespawnClassPicker.Create(transform, cardId =>
+        if (_localAuthority)
         {
-            GameSession.SetActiveCard(cardId);
-            ApplyKitFromSession();
-            RespawnAtValidMapPosition();
-        });
-
-        if (GameSession.IsShootingRange)
-        {
-            _characterPicker = ShootingRangeCharacterPicker.Create(transform, cardId =>
+            _respawnPicker = RespawnClassPicker.Create(transform, cardId =>
             {
                 GameSession.SetActiveCard(cardId);
                 ApplyKitFromSession();
-                ResetToSpawn();
+                RespawnAtValidMapPosition();
             });
+
+            if (GameSession.IsShootingRange)
+            {
+                _characterPicker = ShootingRangeCharacterPicker.Create(transform, cardId =>
+                {
+                    GameSession.SetActiveCard(cardId);
+                    ApplyKitFromSession();
+                    ResetToSpawn();
+                });
+            }
+
+            _pauseMenu = GamePauseMenu.Create(transform, _respawnPicker, _characterPicker, this);
+
+            Local = this;
+            _playerTeam = GameSession.SelectedTeam;
+            CreateHeldToolVisuals();
+            RefreshHeldToolVisibility();
+            BeginWeaponDraw(SelectedTool);
         }
-
-        _pauseMenu = GamePauseMenu.Create(transform, _respawnPicker, _characterPicker, this);
-
-        Local = this;
-        _playerTeam = GameSession.SelectedTeam;
-        CreateHeldToolVisuals();
-        RefreshHeldToolVisibility();
-        BeginWeaponDraw(SelectedTool);
     }
 
     void ApplyKitFromSession()
@@ -1267,6 +1334,11 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
+        if (!_initialized || !_localAuthority)
+        {
+            return;
+        }
+
         if (_wasInPrepPhase && !GameSession.IsInPrepPhase)
         {
             ApplyKitFromSession();
@@ -1364,6 +1436,11 @@ public class ThirdPersonController : MonoBehaviour
     void FixedUpdate()
     {
         if (!GameSession.IsMatchActive || !SceneFlow.IsGameActive)
+        {
+            return;
+        }
+
+        if (!_initialized || !_localAuthority)
         {
             return;
         }
@@ -1954,13 +2031,36 @@ public class ThirdPersonController : MonoBehaviour
 
     void UpdateCharacterAim()
     {
-        if (characterVisual == null || viewCamera == null)
+        if (characterVisual == null)
         {
+            return;
+        }
+
+        if (viewCamera == null)
+        {
+            UpdateCharacterAimFromYaw();
             return;
         }
 
         Vector3 aimDirection = viewCamera.transform.forward;
         aimDirection.y = 0f;
+        if (aimDirection.sqrMagnitude <= 0.0001f)
+        {
+            return;
+        }
+
+        var targetRotation = Quaternion.LookRotation(aimDirection.normalized, Vector3.up);
+        characterVisual.rotation = Quaternion.Slerp(characterVisual.rotation, targetRotation, turnSpeed * Time.deltaTime);
+    }
+
+    void UpdateCharacterAimFromYaw()
+    {
+        if (characterVisual == null)
+        {
+            return;
+        }
+
+        Vector3 aimDirection = Quaternion.Euler(0f, _yaw, 0f) * Vector3.forward;
         if (aimDirection.sqrMagnitude <= 0.0001f)
         {
             return;
@@ -2424,11 +2524,78 @@ public class ThirdPersonController : MonoBehaviour
 
     float WeaponOverlayFill(CardHotbarTool tool)
     {
+        float fill = 0f;
+
+        if (_drawingWeapon == tool && _weaponDrawDuration > 0f && _weaponDrawTimer > 0f)
+        {
+            fill = Mathf.Max(fill, Mathf.Clamp01(_weaponDrawTimer / _weaponDrawDuration));
+        }
+
         if (tool == CardHotbarTool.LaserSword && _laserSwordCooldownTimer > 0f)
         {
-            return laserSwordCooldownSeconds <= 0f
+            fill = Mathf.Max(fill, laserSwordCooldownSeconds <= 0f
                 ? 0f
+                : Mathf.Clamp01(_laserSwordCooldownTimer / laserSwordCooldownSeconds));
+        }
+
+        if (tool == CardHotbarTool.C4Charge && _c4ActionLockTimer > 0f)
+        {
+            fill = Mathf.Max(fill, c4ThrowLockSeconds <= 0f
+                ? 1f
+                : Mathf.Clamp01(_c4ActionLockTimer / c4ThrowLockSeconds));
+        }
+
+        if (tool == CardHotbarTool.Grenade)
+        {
+            if (_grenadeHandCooldownTimer > 0f)
+            {
+                fill = Mathf.Max(fill, GrenadeHandCooldownSeconds <= 0f
+                    ? 1f
+                    : Mathf.Clamp01(_grenadeHandCooldownTimer / GrenadeHandCooldownSeconds));
+            }
+
+            if (_grenadePostThrowSlotSwitchTimer > 0f)
+            {
+                fill = Mathf.Max(fill, GrenadePostThrowSlotSwitchSeconds <= 0f
+                    ? 1f
+                    : Mathf.Clamp01(_grenadePostThrowSlotSwitchTimer / GrenadePostThrowSlotSwitchSeconds));
+            }
+        }
+
+        return fill;
+    }
+
+    float SwitchLockOverlayFill()
+    {
+        if (IsRadialSelectorOpen || IsBlindnessBlockingInput() || _antiMaterialBraceActive)
+        {
+            return 1f;
+        }
+
+        if (IsC4ActionLocked())
+        {
+            return c4ThrowLockSeconds <= 0f
+                ? 1f
+                : Mathf.Clamp01(_c4ActionLockTimer / c4ThrowLockSeconds);
+        }
+
+        if (IsReloadFullyLocked())
+        {
+            return Mathf.Max(0.001f, ReloadOverlayFill());
+        }
+
+        if (IsLaserSwordHotbarLocked())
+        {
+            return laserSwordCooldownSeconds <= 0f
+                ? 1f
                 : Mathf.Clamp01(_laserSwordCooldownTimer / laserSwordCooldownSeconds);
+        }
+
+        if (IsGrenadeInHand())
+        {
+            return _grenadePostThrowSlotSwitchTimer > 0f && GrenadePostThrowSlotSwitchSeconds > 0f
+                ? Mathf.Clamp01(_grenadePostThrowSlotSwitchTimer / GrenadePostThrowSlotSwitchSeconds)
+                : 1f;
         }
 
         return 0f;
@@ -3620,7 +3787,7 @@ public class ThirdPersonController : MonoBehaviour
             return;
         }
 
-        int nextScopeIndex = (_sniperScopeIndex + 1) % 3;
+        int nextScopeIndex = _sniperScopeIndex == 1 ? 2 : 1;
         if (SelectedTool == CardHotbarTool.SniperRifle && _sniperAimingHeld)
         {
             BeginSniperScopeSwap(nextScopeIndex);
@@ -3781,6 +3948,11 @@ public class ThirdPersonController : MonoBehaviour
 
     void SetDashBlur(float blend)
     {
+        if (!_localAuthority)
+        {
+            return;
+        }
+
         if (SniperScopePostEffect.Instance != null)
         {
             SniperScopePostEffect.Instance.SetFullScreenBlur(blend);
@@ -3804,6 +3976,11 @@ public class ThirdPersonController : MonoBehaviour
 
     void ClearPerCharacterGameplayEffects()
     {
+        if (!_localAuthority)
+        {
+            return;
+        }
+
         PlayerBulletHitFlash.Instance?.Clear();
         SetDashBlur(0f);
     }
@@ -3828,7 +4005,11 @@ public class ThirdPersonController : MonoBehaviour
         _gunnerSuppressionBoostRemaining = 0f;
         CancelExplosiveVestAttach();
         ExplosiveVestState.Ensure(gameObject)?.Clear();
-        HunterMarkSystem.ClearAllMarks();
+        if (_localAuthority)
+        {
+            HunterMarkSystem.ClearAllMarks();
+        }
+
         ExitScopedArAds();
         EnsurePlayerHealth()?.ClearShield();
         EndCyborgRegenBoost();
@@ -4008,12 +4189,21 @@ public class ThirdPersonController : MonoBehaviour
 
     void FinalizePrepWeaponInputGate()
     {
-        _blockWeaponFireUntilMouseRelease = _weaponMouseHeldDuringPrep;
+        _blockWeaponFireUntilMouseRelease = _weaponMouseHeldDuringPrep || Input.GetMouseButton(0);
         _weaponMouseHeldDuringPrep = false;
+        _postPrepWeaponLockTimer = 1f;
+        _drawingWeapon = default;
+        _weaponDrawTimer = 0f;
+        _weaponDrawDuration = 0f;
     }
 
     void UpdateWeaponFireInputGate()
     {
+        if (_postPrepWeaponLockTimer > 0f)
+        {
+            _postPrepWeaponLockTimer = Mathf.Max(0f, _postPrepWeaponLockTimer - Time.deltaTime);
+        }
+
         if (!_blockWeaponFireUntilMouseRelease)
         {
             return;
@@ -4033,6 +4223,7 @@ public class ThirdPersonController : MonoBehaviour
             IsC4ActionLocked() ||
             _c4RemoteDrawTimer > 0f ||
             (_grenadePrimed && !_grenadeSlotSelected) ||
+            _postPrepWeaponLockTimer > 0f ||
             _blockWeaponFireUntilMouseRelease ||
             IsWeaponDrawInProgress();
     }
@@ -5252,7 +5443,7 @@ public class ThirdPersonController : MonoBehaviour
 
     void BeginSniperScopeSwap(int targetScopeIndex)
     {
-        targetScopeIndex = Mathf.Clamp(targetScopeIndex, 0, 2);
+        targetScopeIndex = Mathf.Clamp(targetScopeIndex, 1, 2);
         if (targetScopeIndex == _sniperScopeIndex || !_sniperAimingHeld)
         {
             return;
@@ -5565,11 +5756,18 @@ public class ThirdPersonController : MonoBehaviour
         recoilScale = InfantrySpeedBoostRecoilScale(recoilScale);
 
         Vector3 spawnPosition = BulletSpawnPosition(shotRay);
-        var bullet = new GameObject("Projectile Bullet");
-        bullet.transform.position = spawnPosition;
-        bullet.transform.rotation = Quaternion.LookRotation(shotRay.direction, Vector3.up);
-        bullet.AddComponent<ProjectileBullet>().Initialize(
-            shotRay.direction * muzzleSpeed, weaponType, gameObject);
+        if (TryGetComponent<NetworkPlayerAvatar>(out var avatar) && avatar.IsSpawned)
+        {
+            avatar.RequestProjectileFire(spawnPosition, shotRay.direction, muzzleSpeed, weaponType);
+        }
+        else
+        {
+            var bullet = new GameObject("Projectile Bullet");
+            bullet.transform.position = spawnPosition;
+            bullet.transform.rotation = Quaternion.LookRotation(shotRay.direction, Vector3.up);
+            bullet.AddComponent<ProjectileBullet>().Initialize(
+                shotRay.direction * muzzleSpeed, weaponType, gameObject);
+        }
 
         _gunKickTimer = 0.08f;
         _muzzleFlashTimer = 0.045f;

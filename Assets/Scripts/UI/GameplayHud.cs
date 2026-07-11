@@ -605,6 +605,7 @@ public class GameplayHud : MonoBehaviour
         var kit = player.ActiveKit;
         int equippableCount = player.EquippableHotbarCount;
         float reloadOverlayFill = player.HotbarReloadOverlayFill;
+        float switchLockOverlayFill = player.HotbarSwitchLockOverlayFill;
         float abilityOverlayFill = player.HotbarAbilityOverlayFill;
         float hotbarWidth = HotbarWidthForEquippableCount(equippableCount);
 
@@ -643,7 +644,7 @@ public class GameplayHud : MonoBehaviour
             abilityReady
                 ? new Color(0.96f, 0.96f, 0.96f, 0.92f)
                 : new Color(0.34f, 0.34f, 0.36f, 0.88f),
-            Mathf.Max(abilityOverlayFill, reloadOverlayFill),
+            Mathf.Max(abilityOverlayFill, Mathf.Max(reloadOverlayFill, switchLockOverlayFill)),
             abilityReady ? 0.35f : 0.62f,
             abilityReady);
 
@@ -660,7 +661,9 @@ public class GameplayHud : MonoBehaviour
 
             var tool = kit.GetToolAt(i);
             bool selected = !player.IsGrenadeHotbarSelected && i == player.SelectedHotbarIndex;
-            float weaponOverlayFill = Mathf.Max(reloadOverlayFill, player.HotbarWeaponOverlayFill(tool));
+            float weaponOverlayFill = Mathf.Max(
+                Mathf.Max(reloadOverlayFill, switchLockOverlayFill),
+                player.HotbarWeaponOverlayFill(tool));
             ApplyHotbarSlot(
                 _equippableSlots[i],
                 CardKitDefinition.HotbarKeyLabel(i),
@@ -686,7 +689,9 @@ public class GameplayHud : MonoBehaviour
                 : player.HasAnyGrenadesRemaining
                     ? new Color(0.96f, 0.96f, 0.96f, 0.72f)
                     : new Color(0.72f, 0.72f, 0.72f, 0.45f),
-            0f,
+            Mathf.Max(
+                Mathf.Max(reloadOverlayFill, switchLockOverlayFill),
+                player.HotbarWeaponOverlayFill(CardHotbarTool.Grenade)),
             0.62f,
             player.HasAnyGrenadesRemaining);
         _grenadeSlot.Icon.texture = HotbarIconDrawer.GetGrenadeIconTexture(
@@ -716,23 +721,13 @@ public class GameplayHud : MonoBehaviour
                 slot.Icon.texture = HotbarIconDrawer.GetHunterMarkAbilityIconTexture(dimmed);
                 break;
             case "sniper_1":
-                int scopeIndex = (player.SniperScopeIndex + 1) % 3;
-                if (scopeIndex == 1 || scopeIndex == 2)
-                {
-                    slot.Icon.gameObject.SetActive(false);
-                    slot.ScopeLabel.gameObject.SetActive(true);
-                    slot.ScopeLabel.text = scopeIndex == 1 ? "4X" : "10X";
-                    slot.ScopeLabel.color = dimmed
-                        ? new Color(0.92f, 0.12f, 0.1f, 0.55f)
-                        : new Color(0.92f, 0.12f, 0.1f, 1f);
-                }
-                else
-                {
-                    slot.ScopeLabel.gameObject.SetActive(false);
-                    slot.Icon.gameObject.SetActive(true);
-                    slot.Icon.texture = HotbarIconDrawer.GetIronSightIconTexture(dimmed);
-                }
-
+                int nextScopeIndex = player.SniperScopeIndex == 1 ? 2 : 1;
+                slot.Icon.gameObject.SetActive(false);
+                slot.ScopeLabel.gameObject.SetActive(true);
+                slot.ScopeLabel.text = nextScopeIndex == 1 ? "4X" : "10X";
+                slot.ScopeLabel.color = dimmed
+                    ? new Color(0.92f, 0.12f, 0.1f, 0.55f)
+                    : new Color(0.92f, 0.12f, 0.1f, 1f);
                 break;
             case "sniper_3":
                 slot.ScopeLabel.gameObject.SetActive(false);

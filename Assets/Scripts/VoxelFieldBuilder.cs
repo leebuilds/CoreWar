@@ -19,10 +19,16 @@ public class VoxelFieldBuilder : MonoBehaviour
         GameUICanvas.EnsureExists();
 
         bool isRange = GameSession.IsShootingRange;
+        bool isTestMap = !isRange;
         if (isRange)
         {
             gridWidth = 48;
             gridLength = 680;
+        }
+        else
+        {
+            gridWidth = 56;
+            gridLength = 56;
         }
 
         var voxelMaterial = CreateVoxelMaterial();
@@ -47,7 +53,14 @@ public class VoxelFieldBuilder : MonoBehaviour
             slipperyColliderMaterial,
             builtRoot);
 
-        BuildField(voxelMaterial, floorColliderMaterial, voxelWorld, fieldRoot, gridOrigin, isRange);
+        if (isTestMap)
+        {
+            BuildTestMapOne(voxelMaterial, floorColliderMaterial, voxelWorld, fieldRoot, gridOrigin);
+        }
+        else
+        {
+            BuildField(voxelMaterial, floorColliderMaterial, voxelWorld, fieldRoot, gridOrigin, isRange);
+        }
 
         if (isRange)
         {
@@ -80,8 +93,27 @@ public class VoxelFieldBuilder : MonoBehaviour
         }
 
         CreateLight(isRange);
-        var player = CreatePlayer(voxelWorld, isRange);
+
+        GameObject player = null;
+        if (MultiplayerSessionManager.IsNetworkSessionActive)
+        {
+            NetworkPlayerSpawner.Create(voxelWorld);
+        }
+        else
+        {
+            player = CreatePlayer(voxelWorld, isRange);
+        }
+
         GameplayHud.Create();
+        if (MultiplayerSessionManager.IsNetworkSessionActive)
+        {
+            MultiplayerSessionHud.Create();
+        }
+
+        if (isTestMap)
+        {
+            TestObjectiveHud.Create();
+        }
         MatchClockHud.Create();
         PlayerBulletHitFlash.Create();
 
@@ -145,7 +177,7 @@ public class VoxelFieldBuilder : MonoBehaviour
 
         var spawnPosition = isRange
             ? ShootingRangeSession.PlayerSpawnPosition
-            : new Vector3(0f, 1.1f, -5f);
+            : new Vector3(0f, 1.1f, -3f);
 
         var player = new GameObject("Player");
         player.transform.position = spawnPosition;
@@ -238,6 +270,123 @@ public class VoxelFieldBuilder : MonoBehaviour
                 voxelWorld.RegisterBaseVoxel(new Vector3Int(x, 0, z), voxel);
             }
         }
+    }
+
+    void BuildTestMapOne(
+        Material material,
+        PhysicsMaterial colliderMaterial,
+        VoxelLightingWorld voxelWorld,
+        Transform fieldRoot,
+        Vector3 gridOrigin)
+    {
+        fieldRoot.name = TestMapObjectiveManager.MapName;
+
+        BuildIsland(material, colliderMaterial, voxelWorld, fieldRoot, gridOrigin, Vector2.zero, 9, "Center Island");
+
+        Vector2[] islandCenters =
+        {
+            new Vector2(0f, 18f),
+            new Vector2(18f, 0f),
+            new Vector2(0f, -18f),
+            new Vector2(-18f, 0f)
+        };
+
+        for (int i = 0; i < islandCenters.Length; i++)
+        {
+            BuildIsland(
+                material,
+                colliderMaterial,
+                voxelWorld,
+                fieldRoot,
+                gridOrigin,
+                islandCenters[i],
+                5,
+                $"Outer Island {i + 1}");
+        }
+
+        TestMapObjectiveManager.Create();
+        var drillsRoot = new GameObject("Test Map 1 Drills").transform;
+        drillsRoot.SetParent(transform, false);
+
+        int teamCount = TestMapObjectiveManager.ActiveTeamCount();
+        for (int i = 0; i < teamCount; i++)
+        {
+            Vector2 islandCenter = islandCenters[i % islandCenters.Length];
+            var drillPosition = new Vector3(islandCenter.x, 0.5f, islandCenter.y);
+            TestMapDrill.Create(drillsRoot, TestMapObjectiveManager.TeamAt(i), drillPosition);
+        }
+    }
+
+    void BuildIsland(
+        Material material,
+        PhysicsMaterial colliderMaterial,
+        VoxelLightingWorld voxelWorld,
+        Transform fieldRoot,
+        Vector3 gridOrigin,
+        Vector2 worldCenter,
+        int radius,
+        string islandName)
+    {
+        var islandRoot = new GameObject(islandName).transform;
+        islandRoot.SetParent(fieldRoot, false);
+
+        int centerCellX = Mathf.RoundToInt((worldCenter.x - gridOrigin.x) / voxelSize);
+        int centerCellZ = Mathf.RoundToInt((worldCenter.y - gridOrigin.z) / voxelSize);
+        int radiusSquared = radius * radius;
+
+        for (int dx = -radius; dx <= radius; dx++)
+        {
+            for (int dz = -radius; dz <= radius; dz++)
+            {
+                float edgeNoise = Mathf.PerlinNoise((worldCenter.x + dx) * 0.21f, (worldCenter.y + dz) * 0.21f);
+                int shapedRadiusSquared = radiusSquared + Mathf.RoundToInt((edgeNoise - 0.5f) * radius);
+                if ((dx * dx) + (dz * dz) > shapedRadiusSquared)
+                {
+                    continue;
+                }
+
+                int x = centerCellX + dx;
+                int z = centerCellZ + dz;
+                if (x < 0 || x >= gridWidth || z < 0 || z >= gridLength)
+                {
+                    continue;
+                }
+
+                CreateMapVoxel(
+                    material,
+                    colliderMaterial,
+                    voxelWorld,
+                    islandRoot,
+                    gridOrigin,
+                    new Vector3Int(x, 0, z),
+                    $"Island Voxel ({x},{z})");
+            }
+        }
+    }
+
+    void CreateMapVoxel(
+        Material material,
+        PhysicsMaterial colliderMaterial,
+        VoxelLightingWorld voxelWorld,
+        Transform parent,
+        Vector3 gridOrigin,
+        Vector3Int cell,
+        string name)
+    {
+        var voxel = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        voxel.name = name;
+        voxel.transform.SetParent(parent, false);
+        voxel.transform.position = new Vector3(
+            gridOrigin.x + cell.x * voxelSize,
+            gridOrigin.y + cell.y * voxelSize,
+            gridOrigin.z + cell.z * voxelSize);
+        voxel.transform.localScale = Vector3.one * (voxelSize * VoxelLightingWorld.SealOverlap);
+        var renderer = voxel.GetComponent<MeshRenderer>();
+        renderer.sharedMaterial = material;
+        renderer.shadowCastingMode = ShadowCastingMode.TwoSided;
+        renderer.receiveShadows = true;
+        voxel.GetComponent<Collider>().material = colliderMaterial;
+        voxelWorld.RegisterBaseVoxel(cell, voxel);
     }
 
     static Material CreateVoxelMaterial()

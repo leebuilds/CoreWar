@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 
 /// <summary>
@@ -24,7 +25,7 @@ public class MatchPrepController : MonoBehaviour
     void Initialize()
     {
         GameUICanvas.EnsureExists();
-        var layer = GameUICanvas.CreateInteractionLayer("Match Prep", 180);
+        var layer = GameUICanvas.CreateInteractionLayer("Match Prep", 400);
         _layer = layer;
         transform.SetParent(layer, false);
 
@@ -36,6 +37,18 @@ public class MatchPrepController : MonoBehaviour
         GameUICanvas.BringLayerToFront(_layer);
         SceneFlow.ApplyMenuInputState();
         MatchClockHud.Instance?.SetVisible(false);
+        StartCoroutine(RefreshPrepInputState());
+    }
+
+    IEnumerator RefreshPrepInputState()
+    {
+        for (int i = 0; i < 3 && GameSession.IsInPrepPhase && !GameSession.IsPrepReady; i++)
+        {
+            yield return null;
+            MenuUiFactory.EnsureEventSystem();
+            GameUICanvas.BringLayerToFront(_layer);
+            SceneFlow.ApplyMenuInputState();
+        }
     }
 
     void HandlePrepReady(int spawnSlotIndex)
@@ -52,7 +65,6 @@ public class MatchPrepController : MonoBehaviour
         }
 
         GameSession.CompletePrep(profile.loadoutCardIds[spawnSlotIndex]);
-        MenuUiSounds.PlayGunshot();
         _panel?.Hide();
         SceneFlow.ApplyGameInputState();
         MatchClockHud.Instance?.SetVisible(!GamePauseMenu.IsAnyOpen);

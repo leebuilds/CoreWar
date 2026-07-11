@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Unity.Netcode;
 using UnityEngine;
 
 /// <summary>
@@ -34,6 +35,7 @@ public class ProjectileBullet : MonoBehaviour
 
     GameObject _ownerRoot;
     bool _canHitOwner;
+    bool _visualOnly;
 
     public void Initialize(Vector3 velocity, ProjectileWeaponType weaponType, GameObject ownerRoot = null,
         bool canHitOwner = false)
@@ -49,6 +51,12 @@ public class ProjectileBullet : MonoBehaviour
         EnsureVisual();
 
         LiveBullets.Add(this);
+    }
+
+    public void InitializeVisualOnly(Vector3 velocity, ProjectileWeaponType weaponType)
+    {
+        Initialize(velocity, weaponType);
+        _visualOnly = true;
     }
 
     public static void DestroyAll()
@@ -104,6 +112,18 @@ public class ProjectileBullet : MonoBehaviour
         }
 
         Vector3 end = start + (_velocity * Time.deltaTime);
+        if (_visualOnly)
+        {
+            transform.position = end;
+            if (_velocity.sqrMagnitude > 0.0001f)
+            {
+                transform.rotation = Quaternion.LookRotation(_velocity.normalized, Vector3.up);
+            }
+
+            UpdateBulletVisualScale();
+            return;
+        }
+
         ResolveHits(start, end);
         UpdateBulletVisualScale();
     }
@@ -257,6 +277,12 @@ public class ProjectileBullet : MonoBehaviour
 
     bool ApplyPlayerDamage(ThirdPersonController controller, Vector3 hitPoint, float impactSpeed)
     {
+        var manager = NetworkManager.Singleton;
+        if (manager != null && manager.IsListening && !manager.IsServer)
+        {
+            return false;
+        }
+
         bool headshot = IsHeadshotHit(controller.transform, hitPoint);
         float damage = ProjectileDamage.ComputeDamage(impactSpeed, _muzzleSpeed, _weaponType, headshot);
         if (damage <= DamageEpsilon)

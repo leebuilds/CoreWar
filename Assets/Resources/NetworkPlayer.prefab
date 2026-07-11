@@ -1,0 +1,339 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &8455424684209156465
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3580084540072746496}
+  - component: {fileID: 317402914123013376}
+  - component: {fileID: 216225487635183313}
+  - component: {fileID: 5484744077243608307}
+  - component: {fileID: 5401325901396639035}
+  - component: {fileID: 1526151674212213630}
+  - component: {fileID: 9094565214649613624}
+  - component: {fileID: 6291961079603319363}
+  m_Layer: 0
+  m_Name: NetworkPlayer
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3580084540072746496
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8455424684209156465}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &317402914123013376
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8455424684209156465}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d5a57f767e5e46a458fc5d3c628d0cbb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.NetworkObject
+  GlobalObjectIdHash: 569737737
+  InScenePlacedSourceGlobalObjectIdHash: 0
+  DeferredDespawnTick: 0
+  Ownership: 1
+  AlwaysReplicateAsRoot: 0
+  SynchronizeTransform: 1
+  <InScenePlaced>k__BackingField: 0
+  ActiveSceneSynchronization: 0
+  SceneMigrationSynchronization: 0
+  SpawnWithObservers: 1
+  DontDestroyWithOwner: 0
+  AutoObjectParentSync: 1
+  SyncOwnerTransformWhenParented: 1
+  AllowOwnerToParent: 0
+--- !u!114 &216225487635183313
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8455424684209156465}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e96cb6065543e43c4a752faaa1468eb1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.Netcode.Runtime::Unity.Netcode.Components.NetworkTransform
+  ShowTopMostFoldoutHeaderGroup: 1
+  NetworkTransformExpanded: 0
+  AutoOwnerAuthorityTickOffset: 1
+  PositionInterpolationType: 0
+  RotationInterpolationType: 0
+  ScaleInterpolationType: 0
+  PositionLerpSmoothing: 1
+  PositionMaxInterpolationTime: 0.1
+  RotationLerpSmoothing: 1
+  RotationMaxInterpolationTime: 0.1
+  ScaleLerpSmoothing: 1
+  ScaleMaxInterpolationTime: 0.1
+  AuthorityMode: 1
+  TickSyncChildren: 0
+  UseUnreliableDeltas: 0
+  SyncPositionX: 1
+  SyncPositionY: 1
+  SyncPositionZ: 1
+  SyncRotAngleX: 1
+  SyncRotAngleY: 1
+  SyncRotAngleZ: 1
+  SyncScaleX: 1
+  SyncScaleY: 1
+  SyncScaleZ: 1
+  PositionThreshold: 0.001
+  RotAngleThreshold: 0.01
+  ScaleThreshold: 0.01
+  UseQuaternionSynchronization: 0
+  UseQuaternionCompression: 0
+  UseHalfFloatPrecision: 0
+  InLocalSpace: 0
+  SwitchTransformSpaceWhenParented: 0
+  Interpolate: 1
+  SlerpPosition: 0
+--- !u!136 &5484744077243608307
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8455424684209156465}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.35
+  m_Height: 1.8
+  m_Direction: 1
+  m_Center: {x: 0, y: 0.9, z: 0}
+--- !u!54 &5401325901396639035
+Rigidbody:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8455424684209156465}
+  serializedVersion: 5
+  m_Mass: 70
+  m_LinearDamping: 0
+  m_AngularDamping: 0.05
+  m_CenterOfMass: {x: 0, y: 0, z: 0}
+  m_InertiaTensor: {x: 1, y: 1, z: 1}
+  m_InertiaRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ImplicitCom: 1
+  m_ImplicitTensor: 1
+  m_UseGravity: 1
+  m_IsKinematic: 0
+  m_Interpolate: 1
+  m_Constraints: 112
+  m_CollisionDetection: 2
+--- !u!114 &1526151674212213630
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8455424684209156465}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 164259e92a98b4c37a6cea5687e63d65, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerHealth
+  ShowTopMostFoldoutHeaderGroup: 1
+--- !u!114 &9094565214649613624
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8455424684209156465}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 37c8b96538d34ee1bc0398f977d71aa3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ThirdPersonController
+  viewCamera: {fileID: 0}
+  cameraYawPivot: {fileID: 0}
+  cameraPitchPivot: {fileID: 0}
+  characterVisual: {fileID: 0}
+  voxelWorld: {fileID: 0}
+  moveSpeed: 8
+  acceleration: 40
+  airAcceleration: 14
+  jumpVelocity: 6
+  lookSensitivity: 2.8
+  turnSpeed: 12
+  firstPersonCameraOffset: {x: 0, y: 0, z: 0}
+  eyeHeight: 1.62
+  fieldOfView: 75
+  hideLocalCharacterVisual: 0
+  deferStartUntilNetworkSpawn: 1
+  minPitch: -85
+  maxPitch: 85
+  buildRange: 8
+  buildSnapRadius: 2
+  rectangleMaxCells: 12
+  hammerRangeVoxels: 1.5
+  pistolBulletSpeed: 325
+  assaultRifleBulletSpeed: 850
+  assaultRifleRpm: 400
+  smgBulletSpeed: 400
+  smgRpm: 540
+  lmgBulletSpeed: 935
+  lmgRpm: 320
+  machineGunBulletSpeed: 2000
+  machineGunRpm: 1500
+  machineGunDrawSeconds: 2.16
+  machineGunCrosshairRadiusPixels: 24
+  machineGunSpreadCenterBiasExponent: 4.5
+  machineGunSuppressionDurationSeconds: 1.5
+  gunnerSuppressionBoostDurationSeconds: 7
+  gunnerSuppressionBoostCooldownSeconds: 30
+  gunnerSuppressionBoostRpm: 3000
+  gunnerSuppressionBoostCrosshairRadiusMultiplier: 1.2
+  gunnerSuppressionBoostSpreadCenterBiasExponent: 0.42
+  gunnerSuppressionBoostFlickIntensityMultiplier: 2.5
+  sniperBulletSpeed: 950
+  sniperFireCooldownSeconds: 1.15
+  adsIronSightFov: 55
+  ads4xFov: 19
+  ads10xFov: 7.5
+  adsIronTransitionSeconds: 0.07
+  ads4xTransitionSeconds: 0.38
+  ads10xTransitionSeconds: 0.58
+  adsExitTransitionSeconds: 0.12
+  sniperScopeSwapDropSeconds: 0.16
+  infantrySpeedBoostMultiplier: 1.15
+  infantrySpeedBoostDurationSeconds: 10
+  infantrySpeedBoostCooldownSeconds: 30
+  heavyShieldHealth: 120
+  heavyShieldDecayPerSecond: 12
+  heavyShieldCooldownSeconds: 30
+  skirmisherDashDistanceMeters: 8
+  skirmisherDashDurationSeconds: 0.2
+  skirmisherDashCooldownSeconds: 8
+  scopedArAdsMagnification: 1.8
+  scopedArAdsTransitionSeconds: 0.22
+  rangerHoldBreathMaxSeconds: 4
+  rangerHoldBreathCooldownSeconds: 14
+  sniperHipFireCrosshairGap: 36
+  sniperHipFireCrosshairLength: 32
+  sniperScopeSwayDegrees: 0.12
+  sniperAdsMinSpreadPixels: 1.5
+  gunRecoilVerticalRandomness: 3.2
+  gunRecoilHorizontalRandomness: 0.18
+  gunRecoilKickDuration: 0.11
+  gunMuzzleForwardOffset: 0.55
+  reloadDipDegrees: 7
+  sniperRoundPulseDuration: 0.14
+  sniperRoundPulseHeight: 0.045
+  sniperRoundPulsePitch: 9
+  pistolDrawSeconds: 0.6
+  smgDrawSeconds: 0.69
+  assaultRifleDrawSeconds: 1.1
+  lmgDrawSeconds: 1.8
+  sniperDrawSeconds: 2
+  huntingRifleAdsMagnification: 6.5
+  huntingRifleHipFireCrosshairGap: 56
+  huntingRifleHipFireCrosshairLength: 44
+  hunterMarkDurationSeconds: 4
+  hunterMarkCooldownSeconds: 40
+  cyborgLaserSpeed: 600
+  cyborgLaserRpm: 500
+  cyborgLaserOverheatSeconds: 4
+  cyborgLaserOverheatCooldownSeconds: 3
+  cyborgLaserCoolSeconds: 5
+  cyborgLaserDrawSeconds: 0.8
+  laserSwordRangeMeters: 4.5
+  laserSwordArcDegrees: 135
+  laserSwordSwingSeconds: 0.5
+  laserSwordCooldownSeconds: 0.8
+  laserSwordDamage: 40
+  cyborgRegenBoostDurationSeconds: 6
+  cyborgRegenBoostCooldownSeconds: 35
+  cyborgRegenBoostFractionPerSecond: 0.2
+  cyborgMaxHealthBoostFraction: 0.15
+  antiMaterialDrawSeconds: 2
+  antiMaterialAdsTransitionSeconds: 1.05
+  antiMaterialAdsMagnification: 12
+  antiMaterialChargeSeconds: 1
+  antiMaterialBulletSpeed: 1300
+  antiMaterialBraceCooldownSeconds: 45
+  antiMaterialBraceAnchorDistanceMeters: 0.5
+  antiMaterialBraceOrbitDegreesPerSecond: 72
+  antiMaterialBraceGunTiltDegrees: 18
+  antiMaterialBraceMaxVerticalAim: 0.35
+  c4DrawSeconds: 0.8
+  c4RemoteDrawSeconds: 0.5
+  c4ThrowSpeed: 10
+  c4FallAccelerationMetersPerSecond: 8
+  c4ThrowLockSeconds: 1
+  c4RemoteDetonationDelaySeconds: 1
+  explosiveVestAttachSeconds: 5
+  explosiveVestMaxAttachDistanceMeters: 1
+  explosiveVestTargetSearchRadiusMeters: 2.5
+  explosiveVestCooldownSeconds: 120
+  weaponDrawHiddenLocalY: -0.95
+  crosshairGap: 5
+  crosshairLength: 10
+  weaponCrosshairGap: 3
+  weaponCrosshairLength: 6
+  crosshairThickness: 2
+  crosshairColor: {r: 0.08, g: 0.08, b: 0.08, a: 0.85}
+  redDotColor: {r: 0.92, g: 0.12, b: 0.1, a: 0.95}
+  redDotSize: 6
+  scopeLabelColor: {r: 0.92, g: 0.12, b: 0.1, a: 0.98}
+  scopeLabelPanelColor: {r: 0.04, g: 0.04, b: 0.04, a: 0.72}
+  validPreviewColor: {r: 0.08, g: 0.62, b: 0.16, a: 0.9}
+  invalidPreviewColor: {r: 0.72, g: 0.06, b: 0.06, a: 0.9}
+  selectorMouseScale: 20
+  selectorActivationDistance: 18
+  selectorRadius: 84
+  fragGrenadeFuseSeconds: 5
+  grenadeDrawSeconds: 0.5
+--- !u!114 &6291961079603319363
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8455424684209156465}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 33b9fb6512a24cb3817b429f8be677e0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NetworkPlayerAvatar
+  ShowTopMostFoldoutHeaderGroup: 1

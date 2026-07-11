@@ -40,6 +40,7 @@ public class SniperScopePostEffect : MonoBehaviour
     bool _active;
     float _blend;
     int _scopeIndex;
+    bool _ironSightFrame;
 
     float _fullScreenBlurBlend;
     Material _fullScreenBlurMaterial;
@@ -49,9 +50,18 @@ public class SniperScopePostEffect : MonoBehaviour
         _fullScreenBlurBlend = Mathf.Clamp01(blend);
     }
 
-    void Awake()
+    public void ClaimAsLocalInstance()
     {
         Instance = this;
+    }
+
+    void Awake()
+    {
+        var attachedCamera = GetComponent<Camera>();
+        if (attachedCamera == null || attachedCamera.enabled)
+        {
+            ClaimAsLocalInstance();
+        }
     }
 
     void OnDestroy()
@@ -65,11 +75,12 @@ public class SniperScopePostEffect : MonoBehaviour
         DestroyFullScreenBlurMaterial();
     }
 
-    public void SetActive(bool active, float blend, int scopeIndex)
+    public void SetActive(bool active, float blend, int scopeIndex, bool ironSightFrame = false)
     {
         _active = active;
         _blend = Mathf.Clamp01(blend);
         _scopeIndex = scopeIndex;
+        _ironSightFrame = ironSightFrame;
     }
 
     void OnRenderImage(RenderTexture source, RenderTexture destination)
@@ -108,7 +119,7 @@ public class SniperScopePostEffect : MonoBehaviour
             };
         }
 
-        bool ironSights = _scopeIndex == 0;
+        bool ironSights = _scopeIndex == 0 || _ironSightFrame;
         bool tenX = _scopeIndex >= 2;
         float scopeRadiusValue = ironSights ? ironSightScopeRadius : this.scopeRadius;
         float blurSize = ironSights ? blurSizeIron : (tenX ? blurSize10x : blurSize4x);
@@ -126,6 +137,11 @@ public class SniperScopePostEffect : MonoBehaviour
 
     void OnDisable()
     {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+
         DestroyMaterial();
         DestroyFullScreenBlurMaterial();
     }

@@ -55,7 +55,7 @@ public class GamePauseMenu : MonoBehaviour
         ThirdPersonController player = null)
     {
         GameUICanvas.EnsureExists();
-        var layer = GameUICanvas.CreateInteractionLayer("Pause Menu", 200);
+        var layer = GameUICanvas.CreateInteractionLayer("Pause Menu", 500);
         var hostRect = GameUICanvas.CreateScreenHost(layer, "Game Pause Menu");
         var go = hostRect.gameObject;
         var menu = go.AddComponent<GamePauseMenu>();

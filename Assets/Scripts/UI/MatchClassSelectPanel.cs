@@ -230,6 +230,7 @@ public class MatchClassSelectPanel : MonoBehaviour
 
     public void Show(UnityAction onEditDecks = null)
     {
+        gameObject.SetActive(true);
         _onEditDecks = onEditDecks;
         _isReady = false;
         _completed = false;
@@ -261,7 +262,6 @@ public class MatchClassSelectPanel : MonoBehaviour
             _readyBanner.SetActive(false);
         }
 
-        gameObject.SetActive(true);
         transform.SetAsLastSibling();
         _prepRoutine = StartCoroutine(PrepCountdown());
     }

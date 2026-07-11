@@ -74,7 +74,7 @@ and restored every launch.
 | Screen | Purpose |
 |--------|---------|
 | Sign In / Sign Up | Local username + passcode profiles (stored in `persistentDataPath`, not in git) |
-| Hub | Play, Decks, Settings, Logout, Quit — shown automatically when a session is still valid (1 hour of inactivity) |
+| Hub | Play, Decks, **Multiplayer**, Settings, Logout, Quit — shown automatically when a session is still valid (1 hour of inactivity) |
 | Game Modes | Scrollable list of modes (locked modes show a padlock); selecting one starts local matchmaking |
 | Decks | Browse all 30 class cards (vertical scroll only); each row is ~1/3 class specialty blurb + ~2/3 three tier cards; set a two-slot loadout; preview stats |
 | Match Prep | Arena loads behind card pick; press **READY** to look around and cycle hotbar; top banner counts down; movement unlocks when prep ends |
@@ -88,7 +88,7 @@ and restored every launch.
   are silent (back arrow still clicks)
 - **READY** on the match prep screen locks your spawn class and dismisses the card window; a small top banner counts down while you look around and cycle hotbar (no crosshair or build previews until prep ends)
 - During matchmaking, a bottom panel shows live status plus **Settings**; **Cancel matchmaking** or back/ESC warns before stopping search
-- **Game modes:** **SHOOTING RANGE** requires loadout slot 1 only; **TEST ONE PLAYER** requires both slots; **TEST TWO PLAYER** is locked until online play (shows padlock)
+- **Game modes:** **SHOOTING RANGE** requires loadout slot 1 only; **TEST ONE PLAYER** requires both slots and loads **Test Map 1** (scripted drill objectives); **TEST TWO PLAYER** is locked on the modes list — use hub **MULTIPLAYER** for the 2-player Relay test instead
 - Hub **PLAY** is always available to browse modes even when some modes are locked
 
 ### Shooting Range (solo)
@@ -110,6 +110,37 @@ and restored every launch.
 - **Moving dummies** (toggle in Dummy Stats): patrol side-to-side at **2.2 m/s**, reverse at lane walls; OFF snaps dummies to spawn positions
 - Choose Character opens the owned-card picker; **back** returns to pause (does not close pause)
 - No stats are saved from range sessions
+
+### Test Map 1 (standard modes / TEST ONE PLAYER)
+
+Non–shooting-range matches load a **56×56** voxel arena with **five islands**
+(one large center + four smaller outer islands) and team-colored **mining drills**.
+
+- Each active team gets a drill on an outer island (up to **4** teams)
+- Working drills earn **1 victory point/s** toward a **100**-point win target
+- Hold **T** within **2.5 m** of a drill for **5 s** to toggle it on/off
+- Upper-left **objective HUD** shows your team's progress (`X/100`)
+- Match ends with a win/loss modal; **CONTINUE** returns to the main menu
+- Player spawn: center island approach at `(0, 1.1, -3)`
+
+This is a temporary scripted loop to validate objective UI and drill interaction
+before full sabotage / upgrade systems land.
+
+### Multiplayer test (hub → MULTIPLAYER)
+
+Experimental **2-player** online test using **Unity Netcode** + **Unity Relay**
+(Sessions API). Not the same flow as the locked **TEST TWO PLAYER** game-mode button.
+
+| Step | Action |
+|------|--------|
+| Host | Hub → **MULTIPLAYER** → **HOST** → copy join code |
+| Join | Hub → **MULTIPLAYER** → enter code → **JOIN** |
+| In match | Small top overlay shows session status; **LEAVE** ends the session |
+| Combat | Server-authoritative bullets and health; clients see cosmetic bullet visuals |
+
+Requires Unity Services authentication (anonymous sign-in on first use). If the
+`NetworkPlayer` prefab is missing, run **CoreWar → Multiplayer → Rebuild Network
+Player Prefab** in the Unity editor.
 
 ### In the field scene (standard modes)
 
@@ -219,7 +250,7 @@ Black gun/explosion blindness always renders above white and **does** block inpu
 
 | Card | Ability | Cooldown |
 |------|---------|----------|
-| Sniper | Cycle scope (Iron → 4× → 10×); **E works whenever ready, even if sniper is not equipped**; while ADS with sniper held uses swap animation | None |
+| Sniper | Cycle scope (**4× ↔ 10×** only; iron sights removed from ability); **E works whenever ready, even if sniper is not equipped**; while ADS with sniper held uses swap animation | None |
 | Infantry | Speed boost — **+15%** move speed, **−20%** reload & pullout, **−15%** recoil for **10 s** | 30 s |
 | Hunter | Mark — reveals enemies within **300 m** ahead for **4 s** (red bullseye icon on head, through walls) | 40 s |
 | Anti-Material | **Brace** — toggle stabilizer pivot: orbit anchor with A/D, reduced recoil/sway, faster ADS, **6 s** reload while braced | 45 s |
@@ -265,7 +296,8 @@ per-weapon gunshot audio, and recoil kick. The AR, scoped AR, LMG, and machine g
 click for automatic fire; pistol, machine pistol, sniper, hunting rifle, and anti-material are
 semi-auto per click (anti-material requires **1 s charge** while fully ADS). Each firearm has a draw animation before you can shoot,
 reload, or ADS. Sniper and hunting rifle **right click** enters ADS (sniper
-**5×** scopes; hunting rifle **6.5×** iron sights with peripheral blur). Anti-material
+defaults to **4×**; ability toggles **4×** and **10×**; hunting rifle **6.5×**
+iron sights with peripheral blur). Anti-material
 **right click** — **12×** zoom, **no hipfire**. Ranger
 scoped AR **right click** — **1.8×** zoom.
 
@@ -411,10 +443,10 @@ The menu UI and the voxel field are generated from code at runtime:
 **Gameplay**
 
 - `Assets/Scripts/GameSession.cs` — team, loadout, game mode, match clock, and active card into the game scene
-- `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid of white voxels (32×32 standard; 48×680 shooting range), grippy floor + slippery wall physics materials, lighting
+- `Assets/Scripts/VoxelFieldBuilder.cs` — flat grid (shooting range) or **Test Map 1** islands + drills; solo or network player bootstrap
 - `Assets/Scripts/ShootingRange/` — merged terrain + firing-line fence, spread dummies (optional patrol movement), hit zones, session state (bullets, reset)
 - `Assets/Scripts/VoxelMaterialUtility.cs` — solid-color materials for range props and hit flashes
-- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, ammo/reload, all class weapons/build/hammer/grenades, sniper/hunting rifle/anti-material/scoped AR ADS, scope sway, E abilities, movement slows, pause
+- `Assets/Scripts/ThirdPersonController.cs` — first-person controller, hotbar, ammo/reload, all class weapons/build/hammer/grenades, sniper/hunting rifle/anti-material/scoped AR ADS, scope sway, E abilities, movement slows, pause, network authority split
 - `Assets/Scripts/GrenadeType.cs` — frag and flashbang enum
 - `Assets/Scripts/ThrownGrenadeProjectile.cs` — shared grenade rigidbody throw physics
 - `Assets/Scripts/FragGrenadeProjectile.cs` / `FlashbangGrenadeProjectile.cs` — type-specific detonation
@@ -435,8 +467,18 @@ The menu UI and the voxel field are generated from code at runtime:
 - `Assets/Scripts/UI/HotbarIconDrawer.cs` — procedural hotbar slot icons
 - `Assets/Scripts/ProjectileBullet.cs` — raycast bullet flight, air drag, build penetration, sniper player penetration, owner ignore (no self-damage)
 - `Assets/Scripts/ProjectileDamage.cs` — per-weapon velocity damage, air drag constants, player hit threshold
-- `Assets/Scripts/SniperScopePostEffect.cs` + `Assets/Scripts/SniperScopePost.shader` — sniper ADS blur overlay (iron sights: blur only; magnified: blur + vignette)
-- `Assets/Scripts/PlayerHealth.cs` — local player HP, shield, blindness triggers (no death flow yet)
+- `Assets/Scripts/SniperScopePostEffect.cs` + `Assets/Scripts/SniperScopePost.shader` — sniper ADS blur overlay (magnified: blur + vignette; local-owner instance in multiplayer)
+- `Assets/Scripts/PlayerHealth.cs` — player HP, shield, blindness triggers; server-owned in multiplayer (`NetworkBehaviour`)
+- `Assets/Scripts/TestMapObjectiveManager.cs` — scripted Test Map 1 drill points and win detection
+- `Assets/Scripts/TestMapDrill.cs` — team drill visuals and on/off state
+- `Assets/Scripts/UI/TestObjectiveHud.cs` — upper-left objective progress bar
+- `Assets/Scripts/UI/TestMatchResultPanel.cs` — win/loss modal after scripted test matches
+- `Assets/Scripts/Multiplayer/MultiplayerSessionManager.cs` — Relay host/join/leave test flow
+- `Assets/Scripts/Multiplayer/NetworkPlayerSpawner.cs` — Netcode player spawn per client
+- `Assets/Scripts/Multiplayer/NetworkPlayerAvatar.cs` — ownership, aim replication, projectile RPCs
+- `Assets/Scripts/UI/MultiplayerSessionPanel.cs` — hub multiplayer host/join overlay
+- `Assets/Scripts/UI/MultiplayerSessionHud.cs` — in-match multiplayer status + leave
+- `Assets/Editor/MultiplayerPrefabSetup.cs` — rebuild `Resources/NetworkPlayer.prefab`
 - `Assets/Scripts/CapsuleRobotVisual.cs` + `Assets/Scripts/JerseyInkUtility.cs` — capsule robot with jersey
 - `Assets/Scripts/VoxelLightingWorld.cs` — voxel occupancy, build rules, hammer removal
 - `Assets/Scripts/PenInkShadowEffect.cs` + `Assets/Scripts/PenInkShadowPost.shader` — pen-and-ink shadows
@@ -448,6 +490,7 @@ Local profile, session, and settings JSON are written to
 ## Documentation
 
 - [Full game design document](docs/First_Person_Shooter_Game_Design_v2.md)
+- [Test Map 1, relay multiplayer, prep fixes, and sniper scope session recap](docs/chats/2026-07-11-test-map-multiplayer-sniper-session.md)
 - [Gunner, universal grenades, C4/vest explosions, and Ranger fix session recap](docs/chats/2026-07-10-gunner-grenades-c4-ranger-session.md)
 - [Grenades, flashbangs, and blindness layering session recap](docs/chats/2026-07-09-grenades-flashbang-and-blindness-session.md)
 - [Anti-Material sniper, scope sway, Cyborg, and Infantry ability session recap](docs/chats/2026-07-09-anti-material-sway-and-infantry-session.md)
